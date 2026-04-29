@@ -1,0 +1,13 @@
+{
+  "success": false,
+  "requestId": "req_20260412_134149113_b0e2d41e",
+  "data": null,
+  "error": {
+    "code": "INVALID_REQUEST",
+    "message": "bizParams.opportunityId must not be empty.",
+    "httpStatus": 400,
+    "stage": "request-validate",
+    "retryable": false,
+    "details": null
+  }
+}

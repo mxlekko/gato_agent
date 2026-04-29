@@ -1,0 +1,30 @@
+{
+  "name": "sales-opportunity-api-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API skeleton for sales opportunity advisor",
+  "scripts": {
+    "start": "node server.js",
+    "start:api": "node server.js",
+    "start:helper": "node ContextHelper/server.js",
+    "start:directdb-runner": "node DirectDbRunner/server.js",
+    "start:model-tool": "node ModelTool/server.js",
+    "lint:platform-configs": "node scripts/validate_platform_configs.js",
+    "mysql:ping": "node scripts/verify_mysql_connection.js",
+    "mysql:schema:apply": "node scripts/manage_mysql_config_schema.js apply",
+    "mysql:schema:inspect": "node scripts/manage_mysql_config_schema.js inspect",
+    "mysql:store:verify": "node scripts/verify_config_store.js",
+    "mysql:import-config": "node scripts/import_config_to_mysql.js import",
+    "mysql:import-config:verify": "node scripts/import_config_to_mysql.js verify",
+    "regression:self-contained": "node scripts/run_self_contained_regression.js",
+    "service:install": "zsh scripts/install_launch_agents.sh install",
+    "service:start": "zsh scripts/install_launch_agents.sh start",
+    "service:stop": "zsh scripts/install_launch_agents.sh stop",
+    "service:restart": "zsh scripts/install_launch_agents.sh restart",
+    "service:status": "zsh scripts/install_launch_agents.sh status"
+  },
+  "dependencies": {
+    "mssql": "^12.2.1",
+    "mysql2": "^3.22.0"
+  }
+}

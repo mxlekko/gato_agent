@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "requestId": "req_example_success_001",
+  "data": {
+    "opportunityId": "2041340312877535232",
+    "summary": "机会「测试1」处于未判定阶段，客户为玺瑞通达（北京）电子技术有限公司，金额15,000元，预计投标日期2026-04-10，赢率50%，预算与需求细节待确认。",
+    "adviceText": "当前阶段首要任务是完成项目判定与客户需求核实，同步确认预算落实情况。距离预计投标日期较近，需快速推进需求澄清与招标准备，避免时间窗口流失。",
+    "nextActions": [
+      "安排客户访谈，确认项目真实需求与决策链，核实预算审批状态",
+      "梳理招标要求并制定倒排时间表",
+      "评估竞争对手情况，准备差异化方案与核心卖点"
+    ],
+    "basisFields": [
+      "salesStage",
+      "predictTenderDate",
+      "amount",
+      "winRate",
+      "customerName",
+      "opportunityName"
+    ]
+  },
+  "error": null
+}

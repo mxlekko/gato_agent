@@ -1,0 +1,13 @@
+{
+  "success": false,
+  "requestId": "req_example_error_001",
+  "data": null,
+  "error": {
+    "code": "OPPORTUNITY_NOT_FOUND",
+    "message": "未查询到对应的销售机会记录",
+    "httpStatus": 404,
+    "stage": "context-query",
+    "retryable": false,
+    "details": null
+  }
+}

@@ -1,0 +1,136 @@
+apiVersion: agent.platform/v1alpha1
+kind: BusinessSkill
+metadata:
+  name: sales-opportunity-advisor
+  version: v1
+  title: 销售机会推进建议
+  status: draft
+spec:
+  scene: sales-opportunity-advisor
+  templateRef:
+    name: grounded-structured-advisory
+    version: v1
+  runtimeContract:
+    requestKind: sales_opportunity_advisor_request
+    messageVersion: '1.0'
+    requestMarkers:
+      begin: "<<<SALES_OPPORTUNITY_ADVISOR_REQUEST_JSON_BEGIN>>>"
+      end: "<<<SALES_OPPORTUNITY_ADVISOR_REQUEST_JSON_END>>>"
+    resultMarkers:
+      begin: "<<<SALES_OPPORTUNITY_ADVISOR_RESULT_JSON_BEGIN>>>"
+      end: "<<<SALES_OPPORTUNITY_ADVISOR_RESULT_JSON_END>>>"
+    responseFormat:
+      type: json
+      schemaVersion: '1.0'
+  inputContract:
+    bizParams:
+      opportunityId:
+        type: opportunityId
+        required: true
+        sourcePath: request.bizParams.opportunityId
+  outputContract:
+    envelope:
+      successField: success
+      sceneField: scene
+      requestIdField: requestId
+      payloadField: payload
+      errorField: error
+    schemaRef: schema://sales-opportunity-advisor/output@v1
+  assetRefs:
+    prompts:
+      draftBusinessOutput:
+        promptRef: prompt://sales-opportunity-advisor/draft-business-output@v1
+        source:
+          type: local-file
+          path: "/Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-advisor.draft-business-output.v1.md"
+    schemas:
+      output:
+        schemaRef: schema://sales-opportunity-advisor/output@v1
+        source:
+          type: local-file
+          path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json"
+    dictionaries:
+      salesOpportunityFields:
+        dictionaryRef: dictionary://sales-opportunity-advisor/fields@v1
+        source:
+          type: local-file
+          path: "/Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_dictionary.tsv"
+    rules:
+      decisionRules:
+        rulesRef: rules://sales-opportunity-advisor/decision-rules@v1
+        source:
+          type: local-file
+          path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md"
+  toolBindings:
+    context_fetcher:
+      toolRef: tool://data/generic-query-runner@v1
+      purpose: execute controlled query profile and fetch sales opportunity data
+    advisory_llm:
+      toolRef: tool://llm/openclaw-sales-agent-default@v1
+      purpose: draft grounded business advice payload
+    output_validator:
+      toolRef: tool://validation/model-tool-structured-output@v1
+      purpose: validate and lightly normalize structured output
+  dataBindings:
+    queryProfileRef: query://sales-opportunity/by-opportunity-id@v1
+    inputMapping:
+      opportunityId: request.bizParams.opportunityId
+    expectedResultPath: artifacts.context.raw.rawRow
+  nodeOverrides:
+    resolve_data_plan:
+      enabled: true
+      timeoutMs: 1000
+      retry:
+        maxAttempts: 1
+    fetch_business_context:
+      toolRole: context_fetcher
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 1
+    load_reference_bundle:
+      enabled: true
+      timeoutMs: 1000
+      assetRefs:
+        prompts:
+        - prompt://sales-opportunity-advisor/draft-business-output@v1
+        schemas:
+        - schema://sales-opportunity-advisor/output@v1
+        dictionaries:
+        - dictionary://sales-opportunity-advisor/fields@v1
+        rules:
+        - rules://sales-opportunity-advisor/decision-rules@v1
+    select_basis_fields:
+      timeoutMs: 1000
+      maxBasisFields: 8
+    draft_business_output:
+      toolRole: advisory_llm
+      promptRef: prompt://sales-opportunity-advisor/draft-business-output@v1
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 1
+    validate_output:
+      toolRole: output_validator
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 2
+    repair_output:
+      enabled: true
+      timeoutMs: 5000
+      retry:
+        maxAttempts: 1
+  nodeOrderOverrides:
+    data:
+    - resolve_data_plan
+    - fetch_business_context
+    - load_reference_bundle
+  security:
+    mode: controlled
+    deny:
+      inlineSql: true
+      inlineScript: true
+      inlinePromptText: true
+      inlineSchemaText: true
+      unregisteredToolRef: true
+      externalNetworkEndpoint: true
+      crossPhaseReorder: true
+      arbitraryNodeInsertion: true

@@ -1,0 +1,37 @@
+apiVersion: agent.platform/v1alpha1
+kind: ToolDefinition
+metadata:
+  name: local-rag-search
+  version: v1
+  title: Local RAG Semantic Search
+  status: draft
+spec:
+  ref: tool://knowledge/local-rag-search@v1
+  toolRole: knowledge_retriever
+  category: knowledge
+  driver:
+    type: http
+    endpoint: http://127.0.0.1:19104/internal/rag/search
+    networkPolicy: loopback-only
+  requestContract:
+    requiredFields:
+      - requestId
+      - query
+    inputSources:
+      requestId: runtime.request_id
+      query: artifacts.knowledge.query
+      topK: artifacts.knowledge.top_k
+      docId: artifacts.knowledge.doc_id
+  responseContract:
+    successField: success
+    resultPath: data.matches
+    errorPath: error
+  limits:
+    timeoutMsDefault: 30000
+    timeoutMsMax: 30000
+    retryMaxAttempts: 1
+  policy:
+    deny:
+      endpointOverride: true
+      inlineCredential: true
+      externalNetwork: true

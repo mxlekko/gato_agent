@@ -1,0 +1,10 @@
+{
+  "scene": "sales-opportunity-advisor-directdb",
+  "skillId": "sales-opportunity-advisor-directdb",
+  "skillPath": "/Users/gato-pm/.openclaw/workspace-sales-agent/skills/sales-opportunity-advisor-directdb/SKILL.md",
+  "skillHash": "b83ad61f3d530896223b34653a55307ce09ea57ef015cc02212e471da5dce58f",
+  "businessDefinition": "查询销售机会表 `t_sales_opportunity` 中 `opportunityId` 等于传入参数 `opportunityId` 的单条记录，并返回该记录的全部字段。\nSQL 必须使用参数化占位符 `@opportunityId`。\nSQL 必须是单条 `SELECT TOP 1` 语句。\n不允许联表，不允许子查询，不允许排序，不允许任何写操作。",
+  "sql": "SELECT TOP 1 opportunityId,opportunityName,customerName,salesStage,opportunityStatus,businessType,amount,budgetAmount,budgetConfirmed,winRate,predictCloseDate,predictTenderDate,tenderType,tenderStatus,canControlBid,competitor,customerPainPoint,customerConcern,opportunitySource,industry,productCategory,salesScene,latestFollowTime,isClosed,remark FROM t_sales_opportunity WHERE opportunityId=@opportunityId",
+  "generatedAt": "2026-04-10T05:50:53.375Z",
+  "model": "kimi-k2-turbo-preview"
+}

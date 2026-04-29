@@ -1,0 +1,44 @@
+apiVersion: agent.platform/v1alpha1
+kind: ToolDefinition
+metadata:
+  name: model-tool-structured-output
+  version: v1
+  title: Model Tool Structured Output Validator
+  status: draft
+spec:
+  ref: tool://validation/model-tool-structured-output@v1
+  toolRole: output_validator
+  category: validation
+  driver:
+    type: http
+    endpoint: http://127.0.0.1:19103/internal/model/validate-structured-output
+    networkPolicy: loopback-only
+  requestContract:
+    requiredFields:
+    - requestId
+    - scene
+    - payload
+    - schema
+    inputSources:
+      requestId: runtime.request_id
+      scene: request.scene
+      payload: draft.payload
+      schema: references.output_schema
+  responseContract:
+    successField: success
+    resultPath: data.payload
+    errorPath: error
+  limits:
+    timeoutMsDefault: 31000
+    timeoutMsMax: 35000
+    retryMaxAttempts: 2
+  policy:
+    allowedScenes:
+    - sales-opportunity-advisor
+    - sales-opportunity-advisor-directdb
+    - sales-opportunity-smart-entry
+    - special-custom-product-solution
+    deny:
+      endpointOverride: true
+      inlineCredential: true
+      externalNetwork: true

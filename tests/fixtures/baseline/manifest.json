@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-12T13:42:24+08:00",
+  "sourceScene": "sales-opportunity-advisor",
+  "requestIdRule": "req_<YYYYMMDD>_<HHmmssSSS>_<uuidPrefix8>",
+  "cases": [
+    {
+      "id": "sales-opportunity-advisor.success",
+      "kind": "api",
+      "route": "POST /api/agent/run",
+      "scene": "sales-opportunity-advisor",
+      "observedAt": "2026-04-12T13:41:49.043+08:00",
+      "requestFile": "sales-opportunity-advisor.success.request.json",
+      "responseFile": "sales-opportunity-advisor.success.response.json",
+      "dynamicFields": [
+        "requestId"
+      ],
+      "notes": [
+        "真实 API 成功回放结果",
+        "用于后续黄金输出比对"
+      ]
+    },
+    {
+      "id": "sales-opportunity-advisor.invalid-empty-opportunity-id",
+      "kind": "api",
+      "route": "POST /api/agent/run",
+      "scene": "sales-opportunity-advisor",
+      "observedAt": "2026-04-12T13:41:49.113+08:00",
+      "requestFile": "sales-opportunity-advisor.invalid-empty-opportunity-id.request.json",
+      "responseFile": "sales-opportunity-advisor.invalid-empty-opportunity-id.response.json",
+      "dynamicFields": [
+        "requestId"
+      ],
+      "notes": [
+        "bizParams.opportunityId 为空字符串的参数校验失败样例"
+      ]
+    },
+    {
+      "id": "sales-opportunity-advisor.not-found",
+      "kind": "api",
+      "route": "POST /api/agent/run",
+      "scene": "sales-opportunity-advisor",
+      "observedAt": "2026-04-12T13:41:49.116+08:00",
+      "requestFile": "sales-opportunity-advisor.not-found.request.json",
+      "responseFile": "sales-opportunity-advisor.not-found.response.json",
+      "dynamicFields": [
+        "requestId"
+      ],
+      "notes": [
+        "使用 opportunityId=0 固化的查无数据样例"
+      ]
+    },
+    {
+      "id": "sales-opportunity-advisor.model-tool-invalid-payload",
+      "kind": "tool",
+      "route": "POST /internal/model/validate-structured-output",
+      "scene": "sales-opportunity-advisor",
+      "observedAt": "2026-04-12T13:41:49.120+08:00",
+      "requestFile": "sales-opportunity-advisor.model-tool-invalid-payload.request.json",
+      "responseFile": "sales-opportunity-advisor.model-tool-invalid-payload.response.json",
+      "dynamicFields": [
+        "requestId"
+      ],
+      "notes": [
+        "tool-level 结构校验失败样例",
+        "当前主 API 无稳定无侵入方式强制触发 schema fail，因此先在 ModelTool 层固化"
+      ]
+    }
+  ]
+}

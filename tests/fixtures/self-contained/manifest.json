@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-13T14:00:00+08:00",
+  "suite": "self-contained-regression",
+  "requestIdRule": "req_<YYYYMMDD>_<HHmmssSSS>_<uuidPrefix8>",
+  "cases": [
+    {
+      "id": "payment-info-split.smoke",
+      "scene": "payment-info-split",
+      "route": "POST /api/agent/run",
+      "requestFile": "payment-info-split.smoke.request.json",
+      "expectation": {
+        "type": "success",
+        "requiredDataFields": [
+          "data.payeeName",
+          "data.payeeAccount",
+          "data.bankName"
+        ]
+      }
+    },
+    {
+      "id": "sales-opportunity-advisor.smoke",
+      "scene": "sales-opportunity-advisor",
+      "route": "POST /api/agent/run",
+      "requestFile": "sales-opportunity-advisor.smoke.request.json",
+      "expectation": {
+        "type": "success",
+        "requiredDataFields": [
+          "data.opportunityId",
+          "data.summary",
+          "data.adviceText",
+          "data.nextActions",
+          "data.basisFields"
+        ]
+      }
+    },
+    {
+      "id": "sales-opportunity-advisor-directdb.smoke",
+      "scene": "sales-opportunity-advisor-directdb",
+      "route": "POST /api/agent/run",
+      "requestFile": "sales-opportunity-advisor-directdb.gateway-boundary.request.json",
+      "expectation": {
+        "type": "success",
+        "requiredDataFields": [
+          "data.opportunityId",
+          "data.summary",
+          "data.adviceText",
+          "data.nextActions",
+          "data.basisFields"
+        ]
+      }
+    }
+  ]
+}

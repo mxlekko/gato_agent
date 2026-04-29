@@ -1,0 +1,39 @@
+apiVersion: agent.platform/v1alpha1
+kind: ToolDefinition
+metadata:
+  name: generic-query-runner
+  version: v1
+  title: Generic Query Runner
+  status: draft
+spec:
+  ref: tool://data/generic-query-runner@v1
+  toolRole: context_fetcher
+  category: data
+  driver:
+    type: http
+    endpoint: http://127.0.0.1:3100/internal/query/execute
+    networkPolicy: loopback-only
+  requestContract:
+    requiredFields:
+      - requestId
+      - queryProfileRef
+    inputSources:
+      requestId: runtime.request_id
+  responseContract:
+    successField: success
+    resultPath: data
+    errorPath: error
+  limits:
+    timeoutMsDefault: 30000
+    timeoutMsMax: 30000
+    retryMaxAttempts: 1
+  policy:
+    allowedScenes:
+      - sales-opportunity-advisor
+      - sales-opportunity-advisor-directdb
+      - sales-opportunity-smart-entry
+    deny:
+      endpointOverride: true
+      inlineCredential: true
+      rawSqlInput: true
+      externalNetwork: true

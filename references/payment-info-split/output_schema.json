@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "required": [
+    "payeeName",
+    "payeeAccount",
+    "bankName"
+  ],
+  "properties": {
+    "payeeName": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 200
+    },
+    "payeeAccount": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 100
+    },
+    "bankName": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 200
+    }
+  },
+  "additionalProperties": false
+}

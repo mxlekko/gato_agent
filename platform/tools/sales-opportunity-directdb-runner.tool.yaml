@@ -1,0 +1,38 @@
+apiVersion: agent.platform/v1alpha1
+kind: ToolDefinition
+metadata:
+  name: sales-opportunity-directdb-runner
+  version: v1
+  title: Sales Opportunity DirectDb Runner
+  status: draft
+spec:
+  ref: tool://data/sales-opportunity-directdb-runner@v1
+  toolRole: context_fetcher
+  category: data
+  driver:
+    type: http
+    endpoint: http://127.0.0.1:19102/internal/directdb/sales-opportunity
+    networkPolicy: loopback-only
+  requestContract:
+    requiredFields:
+      - requestId
+      - opportunityId
+    inputSources:
+      requestId: runtime.request_id
+      opportunityId: request.bizParams.opportunityId
+  responseContract:
+    successField: success
+    resultPath: data.rawRow
+    errorPath: error
+  limits:
+    timeoutMsDefault: 30000
+    timeoutMsMax: 30000
+    retryMaxAttempts: 1
+  policy:
+    allowedScenes:
+      - sales-opportunity-advisor-directdb
+    deny:
+      endpointOverride: true
+      inlineCredential: true
+      rawSqlInput: true
+      externalNetwork: true

@@ -1,0 +1,445 @@
+apiVersion: agent.platform/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: grounded-structured-advisory
+  version: v1
+  title: Grounded Structured Advisory
+  status: draft
+spec:
+  description: >
+    Template for advisory workflows that fetch grounded business context,
+    load business reference assets, draft structured output with an LLM,
+    validate the payload, and finalize a stable result envelope.
+  compatibleScenes:
+    - sales-opportunity-advisor
+    - sales-opportunity-advisor-directdb
+    - sales-opportunity-smart-entry
+  engine:
+    type: langgraph-stategraph
+    runtimeRef: langgraph
+  stateSlices:
+    - id: request
+      required: true
+      description: normalized inbound request and business parameters
+    - id: runtime
+      required: true
+      description: request_id, trace_id, timers, route plan, execution metadata
+    - id: workflow_contract
+      required: true
+      description: merged template contract and scene-level workflow binding
+    - id: policy
+      required: false
+      description: permission scope, field whitelist, masking decisions
+    - id: context
+      required: false
+      description: raw business context fetched from tools or services
+    - id: references
+      required: false
+      description: dictionaries, rules, prompt assets, output schema
+    - id: facts
+      required: false
+      description: normalized facts and selected basis fields
+    - id: knowledge
+      required: false
+      description: retrieved local RAG knowledge snippets
+    - id: draft
+      required: false
+      description: LLM draft payload and repair attempts
+    - id: validation
+      required: false
+      description: schema validation result and normalization output
+    - id: result
+      required: false
+      description: final success or business failure payload
+    - id: error
+      required: false
+      description: normalized runtime error for failure path handling
+  phases:
+    - id: bootstrap
+      description: initialize runtime context and workflow envelope
+    - id: contract
+      description: load template contract and workflow-specific metadata
+    - id: policy
+      description: input validation and authorization checks
+    - id: data
+      description: select and call context acquisition tooling
+    - id: transform
+      description: load assets and transform raw context into grounded facts
+    - id: generation
+      description: create business-facing structured output
+    - id: validation
+      description: validate and repair the structured output
+    - id: finalize
+      description: finalize response and normalize failure path
+    - id: observe
+      description: emit trace and audit records
+  nodes:
+    - id: bootstrap_runtime
+      phase: bootstrap
+      category: system
+      handlerRef: platform.node.bootstrap_runtime
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - request.raw
+      outputs:
+        - runtime.request_id
+        - runtime.trace_id
+        - runtime.started_at
+        - runtime.request_source
+      allowedConfig:
+        - timeoutMs
+    - id: load_workflow_contract
+      phase: contract
+      category: system
+      handlerRef: platform.node.load_workflow_contract
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - runtime.request_id
+        - request.scene
+      outputs:
+        - workflow_contract.template_ref
+        - workflow_contract.scene_ref
+        - workflow_contract.output_schema_ref
+      allowedConfig:
+        - timeoutMs
+    - id: validate_input
+      phase: policy
+      category: validation
+      handlerRef: platform.node.validate_input
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - request.biz_params
+        - workflow_contract.input_contract
+      outputs:
+        - request.normalized
+      allowedConfig:
+        - timeoutMs
+    - id: authorize_scope
+      phase: policy
+      category: policy
+      handlerRef: platform.node.authorize_scope
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - request.normalized
+        - workflow_contract.policy_profile
+      outputs:
+        - policy.scope
+        - policy.allowed_fields
+      allowedConfig:
+        - timeoutMs
+    - id: resolve_data_plan
+      phase: data
+      category: planning
+      handlerRef: platform.node.resolve_data_plan
+      required: false
+      defaultEnabled: true
+      skipAllowed: true
+      reorderable: true
+      replaceable: true
+      inputs:
+        - request.normalized
+        - workflow_contract.data_profile
+      outputs:
+        - context.query_plan
+      allowedConfig:
+        - enabled
+        - timeoutMs
+        - retry
+    - id: fetch_business_context
+      phase: data
+      category: tool
+      handlerRef: platform.node.fetch_business_context
+      toolRole: context_fetcher
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: true
+      replaceable: true
+      inputs:
+        - request.normalized
+        - context.query_plan
+        - policy.allowed_fields
+      outputs:
+        - context.raw
+      allowedConfig:
+        - timeoutMs
+        - retry
+        - toolRole
+    - id: load_reference_bundle
+      phase: data
+      category: asset
+      handlerRef: platform.node.load_reference_bundle
+      required: false
+      defaultEnabled: true
+      skipAllowed: true
+      reorderable: true
+      replaceable: true
+      inputs:
+        - workflow_contract.reference_bundle
+      outputs:
+        - references.dictionary
+        - references.rules
+        - references.output_schema
+        - references.prompt
+      allowedConfig:
+        - enabled
+        - timeoutMs
+        - assetRefs
+    - id: normalize_facts
+      phase: transform
+      category: transform
+      handlerRef: platform.node.normalize_facts
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - context.raw
+        - references.dictionary
+        - policy.allowed_fields
+      outputs:
+        - facts.items
+        - facts.profile
+      allowedConfig:
+        - timeoutMs
+    - id: select_basis_fields
+      phase: transform
+      category: transform
+      handlerRef: platform.node.select_basis_fields
+      required: false
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: true
+      replaceable: true
+      inputs:
+        - facts.items
+        - facts.profile
+        - references.dictionary
+      outputs:
+        - facts.basis_fields
+      allowedConfig:
+        - timeoutMs
+        - maxBasisFields
+    - id: retrieve_knowledge_context
+      phase: transform
+      category: knowledge
+      handlerRef: platform.node.retrieve_knowledge_context
+      toolRole: knowledge_retriever
+      required: false
+      defaultEnabled: false
+      skipAllowed: true
+      reorderable: true
+      replaceable: true
+      inputs:
+        - request.normalized
+        - facts.profile
+        - facts.basis_fields
+      outputs:
+        - knowledge.matches
+      allowedConfig:
+        - enabled
+        - timeoutMs
+        - retry
+        - toolRole
+        - topK
+        - docId
+        - query
+        - failOnError
+    - id: draft_business_output
+      phase: generation
+      category: llm
+      handlerRef: platform.node.draft_business_output
+      toolRole: advisory_llm
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: true
+      inputs:
+        - request.normalized
+        - facts.profile
+        - facts.items
+        - facts.basis_fields
+        - knowledge.matches
+        - references.rules
+        - references.prompt
+      outputs:
+        - draft.payload
+      allowedConfig:
+        - timeoutMs
+        - retry
+        - toolRole
+        - promptRef
+    - id: validate_output
+      phase: validation
+      category: validation
+      handlerRef: platform.node.validate_output
+      toolRole: output_validator
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: true
+      inputs:
+        - draft.payload
+        - references.output_schema
+      outputs:
+        - validation.status
+        - validation.payload
+        - validation.error
+      allowedConfig:
+        - timeoutMs
+        - retry
+        - toolRole
+    - id: repair_output
+      phase: validation
+      category: llm
+      handlerRef: platform.node.repair_output
+      toolRole: advisory_llm
+      required: false
+      defaultEnabled: true
+      skipAllowed: true
+      reorderable: false
+      replaceable: true
+      inputs:
+        - draft.payload
+        - validation.error
+        - references.output_schema
+      outputs:
+        - draft.payload
+        - draft.repair_attempts
+      allowedConfig:
+        - enabled
+        - timeoutMs
+        - retry
+        - toolRole
+    - id: finalize_result
+      phase: finalize
+      category: finalize
+      handlerRef: platform.node.finalize_result
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - validation.payload
+        - validation.status
+        - validation.error
+        - error
+      outputs:
+        - result
+      allowedConfig:
+        - timeoutMs
+    - id: observe_run
+      phase: observe
+      category: observe
+      handlerRef: platform.node.observe_run
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - runtime
+        - request
+        - result
+        - error
+      outputs:
+        - runtime.observed
+      allowedConfig:
+        - timeoutMs
+  edges:
+    - from: bootstrap_runtime
+      to: load_workflow_contract
+    - from: load_workflow_contract
+      to: validate_input
+    - from: validate_input
+      to: authorize_scope
+    - from: authorize_scope
+      to: resolve_data_plan
+    - from: resolve_data_plan
+      to: fetch_business_context
+    - from: resolve_data_plan
+      to: load_reference_bundle
+    - from: fetch_business_context
+      to: normalize_facts
+    - from: load_reference_bundle
+      to: normalize_facts
+    - from: normalize_facts
+      to: select_basis_fields
+    - from: select_basis_fields
+      to: retrieve_knowledge_context
+    - from: retrieve_knowledge_context
+      to: draft_business_output
+    - from: draft_business_output
+      to: validate_output
+    - from: repair_output
+      to: validate_output
+    - from: validate_output
+      to: finalize_result
+    - from: finalize_result
+      to: observe_run
+  conditionalEdges:
+    - from: authorize_scope
+      when: "policy.denied == true"
+      to: finalize_result
+      description: stop early when authorization fails
+    - from: fetch_business_context
+      when: "context.status == 'no_data'"
+      to: finalize_result
+      description: finalize business not-found path without entering generation
+    - from: validate_output
+      when: "validation.status == 'invalid' && draft.repair_attempts < 1"
+      to: repair_output
+      description: allow one repair loop before finalize
+    - from: validate_output
+      when: "validation.status == 'invalid' && draft.repair_attempts >= 1"
+      to: finalize_result
+      description: stop after max repair loops
+    - from: any
+      when: "error != null"
+      to: finalize_result
+      description: normalize fatal node errors into a standard failure result
+  constraints:
+    entryNode: bootstrap_runtime
+    exitNode: observe_run
+    protectedNodes:
+      - bootstrap_runtime
+      - load_workflow_contract
+      - validate_input
+      - authorize_scope
+      - fetch_business_context
+      - normalize_facts
+      - validate_output
+      - finalize_result
+      - observe_run
+    maxRepairLoops: 1
+    allowCrossPhaseReorder: false
+    allowArbitraryNodeInsertion: false
+    parallelGroups:
+      - id: context_and_assets
+        members:
+          - fetch_business_context
+          - load_reference_bundle
+    compatibilityNotes:
+      - current scenes bind fetch_business_context to GenericQueryRunner
+      - query behavior is controlled by QueryProfile instead of scene-specific query code
+      - current ModelTool maps to validate_output via toolRole output_validator

@@ -1,0 +1,153 @@
+{
+  "scene": "special-custom-product-solution",
+  "enabled": true,
+  "title": "特殊定制产品部方案",
+  "description": "根据特殊定制单号和定制要求，先调用本地 RAG 检索相似片段，再参照相似片段生成产品部方案 JSON。",
+  "execution": {
+    "mode": "direct-model"
+  },
+  "routing": {
+    "mode": "legacy",
+    "allowedModes": [
+      "legacy"
+    ]
+  },
+  "directModel": {
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "baseUrl": "https://api.deepseek.com",
+    "apiKeyEnv": "DEEPSEEK_API_KEY",
+    "fallbackModelsFile": "runtime://openclaw/agents/sales-agent/agent/models.json",
+    "promptFile": "project://platform/assets/prompts/special-custom-product-solution.draft-business-output.v1.md",
+    "schemaReferenceId": "schema://special-custom-product-solution/output@v1",
+    "temperature": 1,
+    "maxTokens": 512,
+    "timeoutMs": 30000,
+    "ragSearch": {
+      "endpoint": "http://127.0.0.1:19104/internal/rag/search",
+      "topK": 3,
+      "timeoutMs": 12000
+    }
+  },
+  "agent": {
+    "id": "sales-agent",
+    "gatewayModel": "openclaw/sales-agent",
+    "sessionKeyPrefix": "agent:sales-agent:api"
+  },
+  "runtime": {
+    "requestKind": "special_custom_product_solution_request",
+    "messageVersion": "1.0",
+    "requestMarkers": {
+      "begin": "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_REQUEST_JSON_BEGIN>>>",
+      "end": "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_REQUEST_JSON_END>>>"
+    },
+    "resultMarkers": {
+      "begin": "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_RESULT_JSON_BEGIN>>>",
+      "end": "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_RESULT_JSON_END>>>"
+    },
+    "responseFormat": {
+      "type": "json",
+      "schemaVersion": "1.0"
+    }
+  },
+  "request": {
+    "bizParams": {
+      "specialCustomOrderNo": {
+        "type": "string",
+        "required": true,
+        "trim": true,
+        "maxLength": 100,
+        "label": "特殊定制单号"
+      },
+      "customRequirement": {
+        "type": "string",
+        "required": true,
+        "trim": true,
+        "maxLength": 12000,
+        "label": "定制要求"
+      }
+    }
+  },
+  "skill": {
+    "id": "special-custom-product-solution",
+    "type": "main-skill",
+    "workspacePath": "runtime://openclaw/workspace",
+    "entryFile": "runtime://openclaw/workspace/skills/special-custom-product-solution/SKILL.md",
+    "responsibility": "读取定制要求，调用本地 RAG 检索相似片段，参照相似片段生成产品部方案 JSON。",
+    "version": "v1"
+  },
+  "tools": [
+    {
+      "id": "local-rag-search",
+      "type": "knowledge-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:19104/internal/rag/search",
+      "responseContract": "similarSnippets",
+      "params": [
+        "requestId",
+        "customRequirement",
+        "topK"
+      ]
+    },
+    {
+      "id": "sales-opportunity-model-tool",
+      "type": "model-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:19103/internal/model/validate-structured-output",
+      "responseContract": "validatedPayload",
+      "params": [
+        "requestId",
+        "scene",
+        "payload",
+        "schema"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "schema://special-custom-product-solution/output@v1",
+      "type": "local-file",
+      "path": "runtime://openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json",
+      "purpose": "产品部方案结构化输出 schema"
+    },
+    {
+      "id": "prompt://special-custom-product-solution/draft-business-output@v1",
+      "type": "local-file",
+      "path": "project://platform/assets/prompts/special-custom-product-solution.draft-business-output.v1.md",
+      "purpose": "产品部方案生成提示词"
+    },
+    {
+      "id": "special-custom-product-solution-dictionary",
+      "type": "local-file",
+      "path": "project://metadata/special_custom_product_solution_dictionary.tsv",
+      "purpose": "入参和输出字段说明"
+    },
+    {
+      "id": "special-custom-product-solution-rules",
+      "type": "local-file",
+      "path": "runtime://openclaw/workspace/skills/special-custom-product-solution/references/decision_rules.md",
+      "purpose": "产品部方案生成约束"
+    }
+  ],
+  "orchestration": [
+    {
+      "order": 1,
+      "step": "retrieve-similar-snippets",
+      "owner": "knowledge-tool",
+      "toolId": "local-rag-search",
+      "description": "使用定制要求调用本地 RAG，返回相似片段。"
+    },
+    {
+      "order": 2,
+      "step": "generate-product-solution",
+      "owner": "model-tool",
+      "description": "调用 deepseek-v4-flash，参照 RAG 相似片段和定制要求生成产品部方案 JSON。"
+    },
+    {
+      "order": 3,
+      "step": "validate-output",
+      "owner": "runtime",
+      "description": "运行时校验结构化输出，确保 payload 只包含 productSolution。"
+    }
+  ]
+}

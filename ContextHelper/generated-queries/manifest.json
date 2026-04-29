@@ -1,0 +1,18 @@
+{
+  "sales-opportunity-advisor": {
+    "scene": "sales-opportunity-advisor",
+    "skillPath": "runtime://openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md",
+    "declaredFilePath": "project://ContextHelper/generated-queries/sales-opportunity-advisor.generated.js",
+    "definitionHash": "ca345fd3cc7615b5925a67c9ceff112418c25a1ff6bf955a1075dd6503a462ce",
+    "filePath": "project://ContextHelper/generated-queries/sales-opportunity-advisor.generated.js",
+    "generatedAt": "2026-04-10T06:39:29.506Z"
+  },
+  "sales-opportunity-smart-entry": {
+    "scene": "sales-opportunity-smart-entry",
+    "skillPath": "runtime://openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md",
+    "declaredFilePath": "project://ContextHelper/generated-queries/sales-opportunity-smart-entry.generated.js",
+    "definitionHash": "ca345fd3cc7615b5925a67c9ceff112418c25a1ff6bf955a1075dd6503a462ce",
+    "filePath": "project://ContextHelper/generated-queries/sales-opportunity-smart-entry.generated.js",
+    "generatedAt": "2026-04-10T06:49:43.472Z"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "scene": "payment-info-split",
+  "bizParams": {
+    "rawText": "收款方：上海某某科技有限公司；开户行：中国银行上海浦东分行；账号：1234567890123456789"
+  },
+  "runtimeContext": {
+    "tenantId": "tenant-a",
+    "userId": "user-a"
+  }
+}

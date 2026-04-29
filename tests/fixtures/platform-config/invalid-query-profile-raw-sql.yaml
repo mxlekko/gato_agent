@@ -1,0 +1,37 @@
+apiVersion: agent.platform/v1alpha1
+kind: QueryProfile
+metadata:
+  name: invalid-query-profile-raw-sql
+  version: v1
+spec:
+  ref: query://sales-opportunity/invalid-raw-sql@v1
+  toolRef: tool://data/sales-opportunity-context-helper@v1
+  toolRole: context_fetcher
+  inputContract:
+    requiredInputs:
+      - opportunityId
+    fields:
+      opportunityId:
+        type: opportunityId
+        sourcePath: request.bizParams.opportunityId
+  selectionPolicy:
+    rawSql: SELECT * FROM t_sales_opportunity WHERE opportunityId = @opportunityId
+  outputPolicy:
+    resultPath: data.rawRow
+    allowedFieldPolicy:
+      mode: dictionary-backed-allowlist
+      dictionaryRef: dictionary://sales-opportunity-advisor/fields@v1
+      projectionMode: all-dictionary-fields
+      allowUnknownFields: false
+  generationConstraints:
+    allowJoin: false
+    allowSubquery: false
+    allowOrderBy: false
+    allowWrite: false
+    allowMultipleStatements: false
+    allowRawSqlConfig: false
+    allowInlineScript: false
+  limits:
+    timeoutMsDefault: 30000
+    timeoutMsMax: 30000
+    retryMaxAttempts: 1

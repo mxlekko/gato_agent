@@ -1,0 +1,61 @@
+apiVersion: agent.platform/v1alpha1
+kind: QueryProfile
+metadata:
+  name: sales-opportunity-by-opportunity-id
+  version: v1
+  title: Sales Opportunity By Opportunity ID
+  status: draft
+spec:
+  ref: query://sales-opportunity/by-opportunity-id@v1
+  toolRef: tool://data/generic-query-runner@v1
+  toolRole: context_fetcher
+  primaryEntity:
+    table: t_sales_opportunity
+    idField: opportunityId
+  inputContract:
+    requiredInputs:
+    - opportunityId
+    fields:
+      opportunityId:
+        type: opportunityId
+        sourcePath: request.bizParams.opportunityId
+  selectionPolicy:
+    cardinality: single-record
+    where:
+    - field: opportunityId
+      operator: equals
+      param: opportunityId
+    statement:
+      type: select-top-1
+      parameterPlaceholder: "@opportunityId"
+  resultPolicy:
+    mode: single-row
+    fields:
+    - "*"
+    distinct: false
+    limit: 1
+  outputPolicy:
+    resultPath: data.rawRow
+  generationConstraints:
+    allowJoin: false
+    allowSubquery: false
+    allowOrderBy: false
+    allowWrite: false
+    allowMultipleStatements: false
+    allowRawSqlConfig: false
+    allowInlineScript: false
+  limits:
+    timeoutMsDefault: 30000
+    timeoutMsMax: 30000
+    retryMaxAttempts: 1
+  migrationSource:
+    skillPath: runtime://openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md
+    helperScriptPath: project://ContextHelper/generated-queries/sales-opportunity-advisor.generated.js
+    helperManifestPath: project://ContextHelper/generated-queries/manifest.json
+    definitionHash: ca345fd3cc7615b5925a67c9ceff112418c25a1ff6bf955a1075dd6503a462ce
+    queryDefinition: 'Query table t_sales_opportunity for the single record where
+      opportunityId equals the inbound opportunityId parameter. Use parameter placeholder
+      @opportunityId, allow only one SELECT TOP 1 statement, and disallow join, subquery,
+      ordering, and any write operation.
+
+'

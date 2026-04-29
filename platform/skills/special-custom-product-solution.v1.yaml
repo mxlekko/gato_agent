@@ -1,0 +1,124 @@
+apiVersion: agent.platform/v1alpha1
+kind: BusinessSkill
+metadata:
+  name: special-custom-product-solution
+  version: v1
+  title: 特殊定制产品部方案
+  status: draft
+spec:
+  scene: special-custom-product-solution
+  templateRef:
+    name: rag-grounded-product-solution
+    version: v1
+  runtimeContract:
+    requestKind: special_custom_product_solution_request
+    messageVersion: "1.0"
+    requestMarkers:
+      begin: "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_REQUEST_JSON_BEGIN>>>"
+      end: "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_REQUEST_JSON_END>>>"
+    resultMarkers:
+      begin: "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_RESULT_JSON_BEGIN>>>"
+      end: "<<<SPECIAL_CUSTOM_PRODUCT_SOLUTION_RESULT_JSON_END>>>"
+    responseFormat:
+      type: json
+      schemaVersion: "1.0"
+  inputContract:
+    bizParams:
+      specialCustomOrderNo:
+        type: string
+        required: true
+        trim: true
+        maxLength: 100
+        sourcePath: request.bizParams.specialCustomOrderNo
+      customRequirement:
+        type: string
+        required: true
+        trim: true
+        maxLength: 12000
+        sourcePath: request.bizParams.customRequirement
+  outputContract:
+    envelope:
+      successField: success
+      sceneField: scene
+      requestIdField: requestId
+      payloadField: payload
+      errorField: error
+    schemaRef: schema://special-custom-product-solution/output@v1
+  assetRefs:
+    prompts:
+      draftBusinessOutput:
+        promptRef: prompt://special-custom-product-solution/draft-business-output@v1
+        source:
+          type: local-file
+          path: project://platform/assets/prompts/special-custom-product-solution.draft-business-output.v1.md
+    schemas:
+      output:
+        schemaRef: schema://special-custom-product-solution/output@v1
+        source:
+          type: local-file
+          path: runtime://openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json
+    dictionaries:
+      requestFields:
+        dictionaryRef: dictionary://special-custom-product-solution/fields@v1
+        source:
+          type: local-file
+          path: project://metadata/special_custom_product_solution_dictionary.tsv
+    rules:
+      decisionRules:
+        rulesRef: rules://special-custom-product-solution/decision-rules@v1
+        source:
+          type: local-file
+          path: runtime://openclaw/workspace/skills/special-custom-product-solution/references/decision_rules.md
+  toolBindings:
+    knowledge_retriever:
+      toolRef: tool://knowledge/local-rag-search@v1
+      purpose: retrieve similar local RAG snippets from customRequirement
+    advisory_llm:
+      toolRef: tool://llm/openclaw-product-solution-agent@v1
+      purpose: draft product department solution JSON using RAG evidence
+    output_validator:
+      toolRef: tool://validation/model-tool-structured-output@v1
+      purpose: validate product solution JSON structure
+  nodeOverrides:
+    load_reference_bundle:
+      enabled: true
+      timeoutMs: 1000
+      assetRefs:
+        prompts:
+          - prompt://special-custom-product-solution/draft-business-output@v1
+        schemas:
+          - schema://special-custom-product-solution/output@v1
+        dictionaries:
+          - dictionary://special-custom-product-solution/fields@v1
+        rules:
+          - rules://special-custom-product-solution/decision-rules@v1
+    retrieve_knowledge_context:
+      enabled: true
+      toolRole: knowledge_retriever
+      topK: 5
+      timeoutMs: 30000
+      failOnError: true
+      retry:
+        maxAttempts: 1
+    draft_business_output:
+      toolRole: advisory_llm
+      promptRef: prompt://special-custom-product-solution/draft-business-output@v1
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 1
+    validate_output:
+      toolRole: output_validator
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 2
+  security:
+    mode: controlled
+    deny:
+      inlineSql: true
+      inlineScript: true
+      inlinePromptText: true
+      inlineSchemaText: true
+      unregisteredToolRef: true
+      externalNetworkEndpoint: true
+      crossPhaseReorder: true
+      arbitraryNodeInsertion: true

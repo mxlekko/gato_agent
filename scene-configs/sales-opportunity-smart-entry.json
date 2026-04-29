@@ -1,0 +1,149 @@
+{
+  "scene": "sales-opportunity-smart-entry",
+  "enabled": true,
+  "title": "销售机会智能录入",
+  "description": "通过 opportunityId 查询当前销售机会全部字段，结合 rawText 和字段字典，按销售场景输出基础字段加场景字段的结构化结果。",
+  "routing": {
+    "mode": "legacy",
+    "allowedModes": [
+      "legacy",
+      "shadow",
+      "langgraph"
+    ]
+  },
+  "agent": {
+    "id": "sales-agent",
+    "gatewayModel": "openclaw/sales-agent",
+    "sessionKeyPrefix": "agent:sales-agent:api"
+  },
+  "runtime": {
+    "requestKind": "sales_opportunity_smart_entry_request",
+    "messageVersion": "1.0",
+    "requestMarkers": {
+      "begin": "<<<SALES_OPPORTUNITY_SMART_ENTRY_REQUEST_JSON_BEGIN>>>",
+      "end": "<<<SALES_OPPORTUNITY_SMART_ENTRY_REQUEST_JSON_END>>>"
+    },
+    "resultMarkers": {
+      "begin": "<<<SALES_OPPORTUNITY_SMART_ENTRY_RESULT_JSON_BEGIN>>>",
+      "end": "<<<SALES_OPPORTUNITY_SMART_ENTRY_RESULT_JSON_END>>>"
+    },
+    "responseFormat": {
+      "type": "json",
+      "schemaVersion": "1.0"
+    }
+  },
+  "request": {
+    "bizParams": {
+      "opportunityId": {
+        "type": "opportunityId",
+        "required": true
+      },
+      "rawText": {
+        "type": "string",
+        "required": true,
+        "trim": true,
+        "maxLength": 8000
+      }
+    }
+  },
+  "skill": {
+    "id": "sales-opportunity-smart-entry",
+    "type": "main-skill",
+    "workspacePath": "runtime://openclaw/workspace",
+    "entryFile": "runtime://openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md",
+    "responsibility": "业务编排、读取字典、清洗字段、结合 rawText 更新当前机会字段，并输出结构化结果。"
+  },
+  "tools": [
+    {
+      "id": "generic-query-runner",
+      "type": "data-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:3100/internal/query/execute",
+      "responseContract": "queryResult",
+      "params": [
+        "requestId",
+        "queryProfileRef",
+        "opportunityId"
+      ]
+    },
+    {
+      "id": "sales-opportunity-model-tool",
+      "type": "model-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:19103/internal/model/validate-structured-output",
+      "responseContract": "validatedPayload",
+      "params": [
+        "requestId",
+        "scene",
+        "payload",
+        "schema"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "sales-opportunity-dictionary",
+      "type": "local-file",
+      "path": "project://metadata/sales_opportunity_smart_entry_dictionary.tsv",
+      "purpose": "字段名、字段描述、枚举解释、格式化说明"
+    },
+    {
+      "id": "sales-opportunity-decision-rules",
+      "type": "local-file",
+      "path": "runtime://openclaw/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md",
+      "purpose": "销售机会智能录入字段更新约束"
+    },
+    {
+      "id": "sales-opportunity-output-schema",
+      "type": "local-file",
+      "path": "runtime://openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json",
+      "purpose": "业务结构化输出 schema"
+    }
+  ],
+  "orchestration": [
+    {
+      "order": 1,
+      "step": "parse-request",
+      "owner": "skill",
+      "description": "解析 runtime request，校验 scene、kind、version、opportunityId、rawText。"
+    },
+    {
+      "order": 2,
+      "step": "fetch-raw-row",
+      "owner": "data-tool",
+      "toolId": "generic-query-runner",
+      "description": "通过通用查询执行器按 QueryProfile 获取销售机会数据。"
+    },
+    {
+      "order": 3,
+      "step": "load-references",
+      "owner": "skill",
+      "description": "读取本地字典文件、规则文件和输出 schema。"
+    },
+    {
+      "order": 4,
+      "step": "normalize-fields",
+      "owner": "skill",
+      "description": "在 skill 内完成字段过滤、字典映射、profile/facts 生成。"
+    },
+    {
+      "order": 5,
+      "step": "generate-structured-output",
+      "owner": "skill",
+      "description": "基于当前机会事实、rawText 和字段规则生成结构化字段更新 payload。"
+    },
+    {
+      "order": 6,
+      "step": "validate-output",
+      "owner": "model-tool",
+      "toolId": "sales-opportunity-model-tool",
+      "description": "调用模型结构化输出 tool 校验 payload 是否符合 schema。"
+    },
+    {
+      "order": 7,
+      "step": "return-result",
+      "owner": "skill",
+      "description": "返回 wrapped result JSON。"
+    }
+  ]
+}

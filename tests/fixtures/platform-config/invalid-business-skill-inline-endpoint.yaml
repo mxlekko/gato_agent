@@ -1,0 +1,25 @@
+apiVersion: agent.platform/v1alpha1
+kind: BusinessSkill
+metadata:
+  name: invalid-business-skill-inline-endpoint
+  version: v1
+spec:
+  scene: sales-opportunity-advisor
+  templateRef:
+    name: grounded-structured-advisory
+    version: v1
+  outputContract:
+    schemaRef: schema://sales-opportunity-advisor/output@v1
+  toolBindings:
+    context_fetcher:
+      toolRef: tool://data/sales-opportunity-context-helper@v1
+      endpoint: http://127.0.0.1:19999/internal/context/override
+      scriptPath: /tmp/unsafe-query.js
+    advisory_llm:
+      toolRef: tool://llm/openclaw-sales-agent-default@v1
+    output_validator:
+      toolRef: tool://validation/model-tool-structured-output@v1
+  dataBindings:
+    queryProfileRef: query://sales-opportunity/by-opportunity-id@v1
+  security:
+    mode: controlled

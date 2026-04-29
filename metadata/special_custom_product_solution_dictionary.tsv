@@ -1,0 +1,4 @@
+field_name	field_description
+specialCustomOrderNo	特殊定制单号；类型：string
+customRequirement	定制要求；类型：string
+productSolution	产品部方案；类型：string

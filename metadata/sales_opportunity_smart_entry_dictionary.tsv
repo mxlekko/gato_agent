@@ -1,0 +1,68 @@
+field_name	field_description
+id	系统主键；类型：system-id；Java类型：Long；数据库类型：bigint IDENTITY(1,1)；说明：自增主键，不对外暴露，业务逻辑不使用；处理：忽略
+opportunityId	销售机会ID；类型：id；Java类型：Long；数据库类型：bigint；说明：雪花业务ID，所有 API 入参与表间关联均使用此字段；处理：保留原值并原样回传
+opportunityCode	机会编号；类型：text；Java类型：String；数据库类型：nvarchar；说明：系统自动生成，格式如 OPP-20240414-001；处理：保留
+opportunityName	机会名称；类型：text；Java类型：String；数据库类型：nvarchar；说明：机会名称，必填；处理：保留
+customerId	客户业务ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：关联客户业务ID，来自 t_sales_customer.customerId；处理：忽略
+customerName	客户名称；类型：text；Java类型：String；数据库类型：nvarchar；说明：客户名称，冗余存储；处理：保留
+ownerId	负责人用户ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：负责人用户ID；处理：忽略
+ownerName	负责人姓名；类型：text；Java类型：String；数据库类型：nvarchar；说明：负责人姓名，冗余存储；处理：保留
+deptId	负责人部门ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：负责人所属部门ID；处理：忽略
+deptName	负责人部门名称；类型：text；Java类型：String；数据库类型：nvarchar；说明：部门名称，冗余存储；处理：保留
+opportunitySource	机会来源；类型：enum；Java类型：String；数据库类型：nvarchar；枚举：线索转化=由线索转化而来|手动录入=直接新建未关联线索；说明：机会来源；处理：保留
+leadId	线索业务ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：关联线索业务ID，从线索转化时写入；处理：忽略
+sourceLeadName	来源线索名称；类型：text；Java类型：String；数据库类型：nvarchar；说明：线索转化时冗余存储的线索名称；处理：保留
+sourceLeadOwnerName	来源线索负责人；类型：text；Java类型：String；数据库类型：nvarchar；说明：线索转化时冗余存储的线索负责人；处理：保留
+convertUserId	线索转化操作人ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：手动新建时为 NULL；处理：忽略
+convertUserName	线索转化操作人姓名；类型：text；Java类型：String；数据库类型：nvarchar；说明：手动新建时为 NULL；处理：保留
+salesScene	销售场景；类型：enum；Java类型：String；数据库类型：nvarchar；枚举：tenderNoDesign=招标未设计|tenderDesigned=招标已设计|noTender=不招标|smallProject=小项目|designInstitute=设计院；说明：销售场景 code，必填；处理：保留；优先级：96
+salesStage	销售阶段；类型：enum；Java类型：String；数据库类型：nvarchar；枚举：none=空|preliminary=初步方案认可|decisionChain=决策链覆盖|deepenPlan=深化方案及认可|designControl=设计控标方案并采用|tenderBid=招标与投标|confirmBidder=投标前确认参标单位|designLiaison=设计联络会|purchasePlan=确认采购计划|factoryInspection=厂验|contractExecution=合同谈判与执行；说明：当前销售阶段 code；处理：保留；优先级：98
+opportunityStatus	机会状态；类型：enum；Java类型：String；数据库类型：nvarchar；枚举：progressing=进行中|won=赢单|lost=输单；说明：机会状态 code；处理：保留；优先级：97
+winRate	赢单概率；类型：percent；Java类型：Integer；数据库类型：int；说明：0-100 整数，单位 %；处理：保留；优先级：92
+industry	行业编码；类型：code；Java类型：String；数据库类型：nvarchar；说明：来自系统行业字典；处理：保留
+productCategory	产品品类；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+amount	预计合同金额；类型：money；Java类型：BigDecimal；数据库类型：decimal；单位：元；说明：预计合同金额；处理：保留；优先级：95
+discountRate	折扣率；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本，如 9折 或 85%；处理：保留
+predictCloseDate	预计成交日期；类型：date；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD；VO字段：expectedDealDate；说明：预计成交日期；处理：保留；优先级：91
+predictTenderDate	预计开标日期；类型：date；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD；VO字段：expectedBidDate；说明：预计开标日期；处理：保留；优先级：90
+tenderType	招标类型；类型：enum；Java类型：Integer；数据库类型：int；枚举：1=公开招标|2=邀标|3=不招标；说明：招标类型；处理：保留；优先级：89
+tenderBlueprintDate	设计蓝图日期；类型：date；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD；说明：设计蓝图日期；处理：保留
+tenderStatus	招标状态；类型：legacy；Java类型：Integer；数据库类型：int；说明：历史字段，当前业务已停用，仅保留兼容；处理：忽略
+visitType	拜访方式；类型：text；Java类型：String；数据库类型：nvarchar；说明：前端自由文本输入；处理：保留
+isProjectStarted	项目是否启动；类型：legacy；Java类型：Integer；数据库类型：int；说明：历史字段，当前业务已停用，仅保留兼容；处理：忽略
+budgetConfirmed	预算是否确认；类型：legacy；Java类型：Integer；数据库类型：int；说明：历史字段，当前业务已停用，仅保留兼容；处理：忽略
+budgetAmount	预算金额；类型：legacy-money；Java类型：BigDecimal；数据库类型：decimal；单位：元；说明：历史字段，当前业务已停用，仅保留兼容；处理：忽略
+stageHistory	阶段变更历史；类型：json；Java类型：String；数据库类型：nvarchar(max)；说明：JSON 数组字符串，每项包含 stage、enterTime、leaveTime、stayDays；处理：保留
+isClosed	是否已关闭；类型：enum；Java类型：Integer；数据库类型：int；枚举：0=未关闭|1=已关闭；说明：赢单与输单均视为关闭；处理：保留
+projectBudgetAndSchedule	项目预算及进度说明；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+projectReasonAndStandard	立项原因及标准说明；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+productShare	核心参数是否满足；类型：enum；Java类型：String；数据库类型：nvarchar；枚举：satisfied=满足|partiallySatisfied=部分满足|notSatisfied=不满足|pending=待确认；说明：核心参数是否满足 code；处理：保留
+canControlBid	推荐品牌能否替换；类型：enum；Java类型：String；数据库类型：nvarchar；枚举：replaceable=可以替换|partialReplaceable=部分可替换|nonReplaceable=不能替换|pending=待确认；说明：推荐品牌能否替换 code；处理：保留
+controlBidPlan	控标方案说明；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+integratorCoverage	集成商控制力；类型：enum；Java类型：String；数据库类型：nvarchar；VO字段：integratorControl；枚举：strong=强|medium=中|weak=弱|pending=待确认；说明：集成商控制力 code；处理：保留
+integratorInfluence	其他集成商影响说明；类型：text；Java类型：String；数据库类型：nvarchar；VO字段：otherIntegratorInfluence；说明：自由文本；处理：保留
+integratorKeyPerson	集成商关键人说明；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+competitorSituation	竞争对手情况；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+competitor	竞争对手名称；类型：legacy；Java类型：String；数据库类型：nvarchar；说明：历史字段，当前被 competitorSituation 替代，仅保留兼容；处理：忽略
+tenderFlowAndKeyPerson	招标流程及关键人说明；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+tenderTime	投标时间；类型：date；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD；说明：投标时间；处理：保留
+bidTime	开标时间；类型：date；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD；说明：开标时间；处理：保留
+purchaseTime	采购时间；类型：date；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD；说明：采购时间；处理：保留
+customerPainPoint	客户痛点说明；类型：legacy；Java类型：String；数据库类型：nvarchar；说明：历史字段，当前已合并入 remark；处理：忽略
+initialPlanSummary	初步方案摘要；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+smartInputText	智能录入原始文本；类型：text；Java类型：String；数据库类型：nvarchar(max)；说明：用户粘贴的原始内容；处理：保留
+smartContacts	智能录入联系人；类型：json；Java类型：String；数据库类型：nvarchar(max)；说明：JSON 数组字符串；处理：保留
+loseReason	输单原因；类型：enum；Java类型：String；数据库类型：nvarchar；格式：多选逗号分隔；枚举：价格原因|质量原因|客户关系原因|产品功能|产品品牌|服务问题|付款方式|工程商未中标|人脉关系|用户搁置或取消|销售场景错误|未投标|其他；兼容旧编码：1=价格原因|2=质量原因|3=客户关系原因|4=产品功能|5=产品品牌|6=服务问题|7=付款方式|8=工程商未中标|9=人脉关系|10=用户搁置或取消|11=销售场景错误|12=未投标|13=其他；处理：保留
+loseDesc	输单说明；类型：text；Java类型：String；数据库类型：nvarchar；说明：自由文本；处理：保留
+customerConcern	客户关切；类型：legacy；Java类型：String；数据库类型：nvarchar；说明：历史字段，当前已合并入 remark，写入时不再单独存储；处理：忽略
+loseTime	输单时间；类型：datetime；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD HH:mm:ss；说明：输单时间；处理：保留
+loseUserId	输单操作人ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：输单操作人ID；处理：忽略
+loseUserName	输单操作人姓名；类型：text；Java类型：String；数据库类型：nvarchar；说明：输单操作人姓名；处理：忽略
+latestFollowTime	最近跟进时间；类型：datetime；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD HH:mm:ss；说明：每次新增跟进记录时自动更新；处理：保留
+remark	备注；类型：text；Java类型：String；数据库类型：nvarchar；说明：备注，自由文本；处理：保留
+createUserId	创建人用户ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：创建人用户ID；处理：忽略
+createUser	创建人姓名；类型：text；Java类型：String；数据库类型：nvarchar；说明：创建人姓名；处理：忽略
+updateUserId	最后更新人用户ID；类型：system-id；Java类型：Long；数据库类型：bigint；说明：最后更新人用户ID；处理：忽略
+updateUser	最后更新人姓名；类型：text；Java类型：String；数据库类型：nvarchar；说明：最后更新人姓名；处理：忽略
+createTime	创建时间；类型：datetime；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD HH:mm:ss；说明：创建时间；处理：忽略
+updateTime	最后更新时间；类型：datetime；Java类型：String；数据库类型：nvarchar；格式：YYYY-MM-DD HH:mm:ss；说明：最后更新时间；处理：忽略

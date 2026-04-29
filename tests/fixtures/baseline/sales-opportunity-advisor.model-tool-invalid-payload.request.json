@@ -1,0 +1,61 @@
+{
+  "requestId": "req_baseline_model_fail_20260412",
+  "scene": "sales-opportunity-advisor",
+  "payload": {
+    "opportunityId": "2041340312877535232",
+    "summary": "",
+    "adviceText": "ok",
+    "nextActions": [
+      "only one"
+    ],
+    "basisFields": []
+  },
+  "schema": {
+    "type": "object",
+    "required": [
+      "opportunityId",
+      "summary",
+      "adviceText",
+      "nextActions",
+      "basisFields"
+    ],
+    "properties": {
+      "opportunityId": {
+        "type": "string_or_number"
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "adviceText": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 600
+      },
+      "nextActions": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 5,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "basisFields": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 8,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "additionalProperties": false
+  }
+}

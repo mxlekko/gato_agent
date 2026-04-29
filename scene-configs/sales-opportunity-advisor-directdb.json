@@ -1,0 +1,150 @@
+{
+  "scene": "sales-opportunity-advisor-directdb",
+  "enabled": true,
+  "title": "销售机会推进建议（directdb）",
+  "description": "通过 DirectDbRunner 数据 tool 获取销售机会 rawRow，由主 skill 完成字段清洗、字典映射、建议生成和结构化输出校验。",
+  "routing": {
+    "mode": "langgraph",
+    "allowedModes": [
+      "legacy",
+      "langgraph"
+    ],
+    "langgraphCutover": {
+      "requestPercentage": 100
+    }
+  },
+  "agent": {
+    "id": "sales-agent",
+    "gatewayModel": "openclaw/sales-agent",
+    "sessionKeyPrefix": "agent:sales-agent:api"
+  },
+  "runtime": {
+    "requestKind": "sales_opportunity_advisor_directdb_request",
+    "messageVersion": "1.0",
+    "requestMarkers": {
+      "begin": "<<<SALES_OPPORTUNITY_ADVISOR_REQUEST_JSON_BEGIN>>>",
+      "end": "<<<SALES_OPPORTUNITY_ADVISOR_REQUEST_JSON_END>>>"
+    },
+    "resultMarkers": {
+      "begin": "<<<SALES_OPPORTUNITY_ADVISOR_RESULT_JSON_BEGIN>>>",
+      "end": "<<<SALES_OPPORTUNITY_ADVISOR_RESULT_JSON_END>>>"
+    },
+    "responseFormat": {
+      "type": "json",
+      "schemaVersion": "1.0"
+    }
+  },
+  "request": {
+    "bizParams": {
+      "opportunityId": {
+        "type": "opportunityId",
+        "required": true
+      }
+    }
+  },
+  "skill": {
+    "id": "sales-opportunity-advisor-directdb",
+    "type": "main-skill",
+    "workspacePath": "runtime://openclaw/workspace",
+    "entryFile": "runtime://openclaw/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md",
+    "responsibility": "业务编排、读取字典、清洗字段、映射业务文本、组织建议内容、调用模型校验 tool。"
+  },
+  "tools": [
+    {
+      "id": "sales-opportunity-directdb-runner",
+      "type": "data-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:19102/internal/directdb/sales-opportunity",
+      "responseContract": "rawRow",
+      "params": [
+        "requestId",
+        "opportunityId"
+      ]
+    },
+    {
+      "id": "sales-opportunity-model-tool",
+      "type": "model-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:19103/internal/model/validate-structured-output",
+      "responseContract": "validatedPayload",
+      "params": [
+        "requestId",
+        "scene",
+        "payload",
+        "schema"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "sales-opportunity-dictionary",
+      "type": "local-file",
+      "path": "project://metadata/sales_opportunity_advisor_directdb_dictionary.tsv",
+      "purpose": "字段名、字段描述、枚举解释、格式化说明"
+    },
+    {
+      "id": "sales-opportunity-decision-rules",
+      "type": "local-file",
+      "path": "runtime://openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md",
+      "purpose": "销售推进建议规则"
+    },
+    {
+      "id": "sales-opportunity-output-schema",
+      "type": "local-file",
+      "path": "runtime://openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json",
+      "purpose": "业务结构化输出 schema"
+    }
+  ],
+  "orchestration": [
+    {
+      "order": 1,
+      "step": "parse-request",
+      "owner": "skill",
+      "description": "解析 runtime request，校验 scene、kind、version、opportunityId。"
+    },
+    {
+      "order": 2,
+      "step": "describe-query-business",
+      "owner": "skill",
+      "description": "在 skill 内定义业务查询语义，由 runner 首次生成并缓存 SQL 模板。"
+    },
+    {
+      "order": 3,
+      "step": "fetch-raw-row",
+      "owner": "data-tool",
+      "toolId": "sales-opportunity-directdb-runner",
+      "description": "通过 directdb 数据 tool 执行缓存 SQL 模板并获取销售机会 rawRow。"
+    },
+    {
+      "order": 4,
+      "step": "load-references",
+      "owner": "skill",
+      "description": "读取本地字典文件、规则文件和输出 schema。"
+    },
+    {
+      "order": 5,
+      "step": "normalize-fields",
+      "owner": "skill",
+      "description": "在 skill 内完成字段过滤、字典映射、profile/facts 生成。"
+    },
+    {
+      "order": 6,
+      "step": "generate-advice",
+      "owner": "skill",
+      "description": "基于事实和业务规则生成建议 payload。"
+    },
+    {
+      "order": 7,
+      "step": "validate-output",
+      "owner": "model-tool",
+      "toolId": "sales-opportunity-model-tool",
+      "description": "调用模型结构化输出 tool 校验 payload 是否符合 schema。"
+    },
+    {
+      "order": 8,
+      "step": "return-result",
+      "owner": "skill",
+      "description": "返回 wrapped result JSON。"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "scene": "payment-info-split",
+  "enabled": true,
+  "title": "收款信息拆分",
+  "description": "将一整段收款文本拆分为收款方、收款账号、开户行名称三个字段。",
+  "execution": {
+    "mode": "direct-model"
+  },
+  "routing": {
+    "mode": "legacy",
+    "allowedModes": [
+      "legacy"
+    ]
+  },
+  "directModel": {
+    "provider": "moonshot",
+    "model": "kimi-k2-turbo-preview",
+    "baseUrl": "https://api.moonshot.cn/v1",
+    "apiKeyEnv": "MOONSHOT_API_KEY",
+    "fallbackModelsFile": "runtime://openclaw/agents/payment-fast-agent/agent/models.json",
+    "promptFile": "project://references/payment-info-split/prompt.md",
+    "schemaReferenceId": "payment-info-output-schema",
+    "temperature": 0,
+    "maxTokens": 128,
+    "timeoutMs": 30000
+  },
+  "request": {
+    "bizParams": {
+      "rawText": {
+        "type": "string",
+        "required": true,
+        "trim": true,
+        "maxLength": 4000
+      }
+    }
+  },
+  "references": [
+    {
+      "id": "payment-info-output-schema",
+      "type": "local-file",
+      "path": "project://references/payment-info-split/output_schema.json",
+      "purpose": "收款信息拆分结构化输出 schema"
+    },
+    {
+      "id": "payment-info-prompt",
+      "type": "local-file",
+      "path": "project://references/payment-info-split/prompt.md",
+      "purpose": "收款信息拆分单轮模型提示词"
+    }
+  ]
+}

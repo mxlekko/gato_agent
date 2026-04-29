@@ -1,0 +1,16 @@
+{
+  "success": false,
+  "requestId": "req_baseline_model_fail_20260412",
+  "data": null,
+  "error": {
+    "code": "INVALID_MODEL_OUTPUT",
+    "message": "String value is shorter than allowed.",
+    "httpStatus": 502,
+    "stage": "model-tool",
+    "retryable": false,
+    "details": {
+      "path": "payload.summary",
+      "minLength": 1
+    }
+  }
+}

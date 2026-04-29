@@ -1,0 +1,60 @@
+apiVersion: agent.platform/v1alpha1
+kind: QueryProfile
+metadata:
+  name: sales-opportunity-directdb-by-opportunity-id
+  version: v1
+  title: Sales Opportunity DirectDb By Opportunity ID
+  status: draft
+spec:
+  ref: query://sales-opportunity-directdb/by-opportunity-id@v1
+  toolRef: tool://data/generic-query-runner@v1
+  toolRole: context_fetcher
+  primaryEntity:
+    table: t_sales_opportunity
+    idField: opportunityId
+  inputContract:
+    requiredInputs:
+      - opportunityId
+    fields:
+      opportunityId:
+        type: opportunityId
+        sourcePath: request.bizParams.opportunityId
+  selectionPolicy:
+    cardinality: single-record
+    where:
+      - field: opportunityId
+        operator: equals
+        param: opportunityId
+    statement:
+      type: select-top-1
+      parameterPlaceholder: "@opportunityId"
+  resultPolicy:
+    mode: single-row
+    fields:
+      - "*"
+    distinct: false
+    limit: 1
+  outputPolicy:
+    resultPath: data.rawRow
+  generationConstraints:
+    allowJoin: false
+    allowSubquery: false
+    allowOrderBy: false
+    allowWrite: false
+    allowMultipleStatements: false
+    allowRawSqlConfig: false
+    allowInlineScript: false
+  limits:
+    timeoutMsDefault: 30000
+    timeoutMsMax: 30000
+    retryMaxAttempts: 1
+  migrationSource:
+    skillPath: /Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md
+    runnerServicePath: /Users/gato-pm/Desktop/API_副本/DirectDbRunner/services/sql-template.js
+    sqlCacheFile: /Users/gato-pm/Desktop/API_副本/DirectDbRunner/sql-cache/sales-opportunity-advisor-directdb.sql.json
+    definitionHash: directdb-sales-opportunity-advisor-v1
+    queryDefinition: >
+      Query table t_sales_opportunity for the single record where opportunityId
+      equals the inbound opportunityId parameter. Execute through DirectDbRunner
+      with the cached parameterized SQL template, using @opportunityId and
+      preserving the same single-record projection contract as the helper path.

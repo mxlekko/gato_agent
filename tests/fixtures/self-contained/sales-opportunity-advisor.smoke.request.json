@@ -1,0 +1,10 @@
+{
+  "scene": "sales-opportunity-advisor",
+  "bizParams": {
+    "opportunityId": "2041377071732625408"
+  },
+  "runtimeContext": {
+    "tenantId": "tenant-a",
+    "userId": "user-a"
+  }
+}

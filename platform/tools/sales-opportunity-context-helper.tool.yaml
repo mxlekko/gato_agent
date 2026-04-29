@@ -1,0 +1,38 @@
+apiVersion: agent.platform/v1alpha1
+kind: ToolDefinition
+metadata:
+  name: sales-opportunity-context-helper
+  version: v1
+  title: Sales Opportunity Context Helper
+  status: draft
+spec:
+  ref: tool://data/sales-opportunity-context-helper@v1
+  toolRole: context_fetcher
+  category: data
+  driver:
+    type: http
+    endpoint: http://127.0.0.1:19101/internal/context/sales-opportunity
+    networkPolicy: loopback-only
+  requestContract:
+    requiredFields:
+      - requestId
+      - opportunityId
+    inputSources:
+      requestId: runtime.request_id
+      opportunityId: request.bizParams.opportunityId
+  responseContract:
+    successField: success
+    resultPath: data.rawRow
+    errorPath: error
+  limits:
+    timeoutMsDefault: 30000
+    timeoutMsMax: 30000
+    retryMaxAttempts: 1
+  policy:
+    allowedScenes:
+      - sales-opportunity-advisor
+    deny:
+      endpointOverride: true
+      inlineCredential: true
+      rawSqlInput: true
+      externalNetwork: true

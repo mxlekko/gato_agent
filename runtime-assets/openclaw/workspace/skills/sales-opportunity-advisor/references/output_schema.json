@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "opportunityId",
+    "summary",
+    "adviceText",
+    "nextActions"
+  ],
+  "properties": {
+    "opportunityId": {
+      "type": "string_or_number"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "adviceText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600
+    },
+    "nextActions": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    }
+  },
+  "additionalProperties": false
+}

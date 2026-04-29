@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# env secrets
+.env
+
+# macOS
+.DS_Store
+
+# logs and runtime output
+logs/
+tmp/
+.tmp/
+output/
+
+# local caches
+.local/
+.npm-cache/
+.npm-cache-playwright/
+.playwright-cli/
