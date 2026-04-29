@@ -141,8 +141,8 @@ npm run service:status
 ## 启动控制台
 
 ```bash
-cd /Users/gato-pm/Desktop/API_副本/console
-npm run dev
+cd /Users/gato-pm/Desktop/API_副本
+npm run console:dev
 ```
 
 默认行为：
@@ -150,6 +150,23 @@ npm run dev
 - `http://127.0.0.1:3200` 提供控制台页面
 - `/api/*` 默认代理到 `http://127.0.0.1:3100`
 - 如需切到其他实验 API，在 [console/.env.local.example](/Users/gato-pm/Desktop/API_副本/console/.env.local.example) 的格式基础上创建 `console/.env.local`
+
+## 工程化检查
+
+项目结构边界说明见 [docs/engineering/project-structure.md](/Users/gato-pm/Desktop/API_副本/docs/engineering/project-structure.md)。
+
+提交前建议执行：
+
+```bash
+cd /Users/gato-pm/Desktop/API_副本
+npm run check
+```
+
+当前检查包含：
+
+- 项目关键目录和入口是否存在
+- `.env`、`node_modules`、日志、缓存、构建产物是否被误加入 Git
+- `platform` 配置是否合法
 
 ## 基础检查
 

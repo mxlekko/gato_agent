@@ -3,6 +3,7 @@
     "moonshot": {
       "baseUrl": "https://api.moonshot.cn/v1",
       "api": "openai-completions",
+      "apiKeyEnv": "MOONSHOT_API_KEY",
       "models": [
         {
           "id": "kimi-k2.5",
@@ -44,8 +45,7 @@
             "supportsUsageInStreaming": true
           }
         }
-      ],
-      "apiKey": "sk-Z3bBgnDT2hECu3GjGVnFF60zOzrAKmfCnPhoej7xmJrfoyyl"
+      ]
     }
   }
 }

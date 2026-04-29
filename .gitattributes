@@ -1,0 +1,13 @@
+* text=auto
+
+# Keep generated dependency locks out of language statistics.
+package-lock.json linguist-generated=true
+console/package-lock.json linguist-generated=true
+
+# Documentation and local binary drivers are not application source.
+*.md linguist-documentation=true
+drivers/*.jar linguist-vendored=true
+
+# Runtime/cache artifacts that are intentionally versioned for now.
+ContextHelper/generated-queries/*.generated.js linguist-generated=true
+DirectDbRunner/sql-cache/*.json linguist-generated=true

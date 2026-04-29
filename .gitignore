@@ -1,20 +1,30 @@
 # dependencies
 node_modules/
 
-# env secrets
+# env secrets and local overrides
 .env
+.env.local
+.env.*.local
+console/.env.local
 
 # macOS
 .DS_Store
 
 # logs and runtime output
+*.log
 logs/
 tmp/
 .tmp/
 output/
+coverage/
+
+# build output
+dist/
+console/dist/
 
 # local caches
 .local/
 .npm-cache/
 .npm-cache-playwright/
 .playwright-cli/
+console/.npm-cache/

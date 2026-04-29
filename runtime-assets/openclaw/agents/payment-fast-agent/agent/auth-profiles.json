@@ -4,7 +4,7 @@
     "moonshot:default": {
       "type": "api_key",
       "provider": "moonshot",
-      "key": "sk-Z3bBgnDT2hECu3GjGVnFF60zOzrAKmfCnPhoej7xmJrfoyyl"
+      "keyEnv": "MOONSHOT_API_KEY"
     }
   },
   "lastGood": {
