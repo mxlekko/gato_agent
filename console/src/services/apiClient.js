@@ -175,6 +175,9 @@ export const apiClient = {
   getRagDocument(docId) {
     return requestJson(`/api/console/rag/documents/${encodeURIComponent(docId)}`);
   },
+  getRagDocumentOriginalUrl(docId) {
+    return `/api/console/rag/documents/${encodeURIComponent(docId)}/original`;
+  },
   updateRagDocument(docId, payload) {
     return requestJson(`/api/console/rag/documents/${encodeURIComponent(docId)}`, {
       method: "PATCH",
@@ -196,6 +199,12 @@ export const apiClient = {
     return requestJson(
       `/api/console/rag/documents/${encodeURIComponent(docId)}/chunks${buildQueryString(params)}`
     );
+  },
+  updateRagDocumentChunks(docId, payload = {}) {
+    return requestJson(`/api/console/rag/documents/${encodeURIComponent(docId)}/chunks`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
   },
   listRagJobs(params = {}) {
     return requestJson(`/api/console/rag/jobs${buildQueryString(params)}`);

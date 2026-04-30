@@ -9,6 +9,8 @@ import { RunDetailPage } from "./pages/runs/RunDetailPage";
 import { RunListPage } from "./pages/runs/RunListPage";
 import { ShadowComparePage } from "./pages/runs/ShadowComparePage";
 import { RagJobsPage } from "./pages/rag/RagJobsPage";
+import { RagLibraryDetailPage } from "./pages/rag/RagLibraryDetailPage";
+import { RagLibraryEditPage } from "./pages/rag/RagLibraryEditPage";
 import { RagLibraryPage } from "./pages/rag/RagLibraryPage";
 import { RagOverviewPage } from "./pages/rag/RagOverviewPage";
 import { RagSearchPage } from "./pages/rag/RagSearchPage";
@@ -21,6 +23,8 @@ import { TraceDetailPage } from "./pages/traces/TraceDetailPage";
 export default function App() {
   return (
     <Routes>
+      <Route path="/rag/library/:docId/edit" element={<RagLibraryEditPage />} />
+      <Route path="/rag/library/:docId" element={<RagLibraryDetailPage />} />
       <Route path="/" element={<ShellLayout />}>
         <Route index element={<Navigate to="/scenes" replace />} />
         <Route path="scenes" element={<ScenesPage />} />

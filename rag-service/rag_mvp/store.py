@@ -74,6 +74,22 @@ class LocalRAGStore:
             "char_count": sum(chunk.char_count for chunk in chunks),
         }
 
+    def upsert_manual_chunks(self, document: ParsedDocument, chunk_texts: list[str]) -> dict[str, Any]:
+        chunks = [
+            TextChunk(
+                chunk_id=f"{document.doc_id}:{index}",
+                index=index,
+                text=text,
+                char_count=len(text),
+                unit_count=1,
+                start_block_index=index,
+                end_block_index=index,
+                strategy="manual",
+            )
+            for index, text in enumerate(chunk_texts)
+        ]
+        return self.upsert_document(document, chunks)
+
     def upsert_text_records(self, records: list[dict[str, Any]]) -> dict[str, Any]:
         if not records:
             return {"record_count": 0}

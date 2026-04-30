@@ -4,12 +4,14 @@ import base64
 import binascii
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 from urllib.parse import parse_qs, unquote, urlparse
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -83,6 +85,23 @@ def _json_response(handler: BaseHTTPRequestHandler, status_code: int, payload: d
     handler.send_response(status_code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(raw)))
+    handler.end_headers()
+    handler.wfile.write(raw)
+
+
+def _file_response(handler: BaseHTTPRequestHandler, path: Path, file_name: str) -> None:
+    content_type = _preview_content_type(file_name or str(path))
+    raw = path.read_bytes()
+    encoded_name = quote(file_name or path.name)
+    safe_ascii_name = re.sub(r'["\\\r\n]+', "_", file_name or path.name)
+    safe_ascii_name = safe_ascii_name.encode("ascii", "ignore").decode("ascii").strip() or "document"
+    if safe_ascii_name.startswith("."):
+        safe_ascii_name = f"document{safe_ascii_name}"
+    handler.send_response(200)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(raw)))
+    handler.send_header("Content-Disposition", f'inline; filename="{safe_ascii_name}"; filename*=UTF-8\'\'{encoded_name}')
+    handler.send_header("X-Content-Type-Options", "nosniff")
     handler.end_headers()
     handler.wfile.write(raw)
 
@@ -268,6 +287,16 @@ class RAGSearchService:
         store = self.get_store()
         chunks = store.chunk_document(document=document, config=config)
         result = store.upsert_document(document=document, chunks=chunks)
+        index_summary = store.get_document_summary(doc_id)
+        return {
+            **result,
+            "index_summary": index_summary,
+        }
+
+    def update_document_chunks(self, doc_id: str, chunk_texts: list[str]) -> dict[str, Any]:
+        document = self.get_library().build_parsed_document(doc_id)
+        store = self.get_store()
+        result = store.upsert_manual_chunks(document=document, chunk_texts=chunk_texts)
         index_summary = store.get_document_summary(doc_id)
         return {
             **result,
@@ -477,6 +506,11 @@ class RAGSearchHandler(BaseHTTPRequestHandler):
             self._handle_get_document_chunks(chunks_doc_id)
             return
 
+        original_doc_id = _match_document_action_path(self, "original")
+        if original_doc_id:
+            self._handle_get_document_original(original_doc_id)
+            return
+
         doc_id = _match_document_detail_path(self)
         if doc_id:
             self._handle_get_document(doc_id)
@@ -523,6 +557,14 @@ class RAGSearchHandler(BaseHTTPRequestHandler):
         doc_id = _match_document_detail_path(self)
         if doc_id:
             self._handle_update_document(doc_id)
+            return
+
+        _error_response(self, 404, "NOT_FOUND", "Not found.")
+
+    def do_PUT(self) -> None:
+        chunks_doc_id = _match_document_action_path(self, "chunks")
+        if chunks_doc_id:
+            self._handle_update_document_chunks(chunks_doc_id)
             return
 
         _error_response(self, 404, "NOT_FOUND", "Not found.")
@@ -685,6 +727,31 @@ class RAGSearchHandler(BaseHTTPRequestHandler):
             _error_response(self, 500, "RAG_DOCUMENT_FAILED", error.message, {"reason": error.code})
         except Exception as error:
             _error_response(self, 500, "RAG_DOCUMENT_FAILED", str(error))
+
+    def _handle_get_document_original(self, doc_id: str) -> None:
+        try:
+            document = SERVICE.get_library().get_document(doc_id)
+            file_name = _safe_preview_file_name(str(document.get("file_name") or "document"))
+            raw_path = str(document.get("original_upload_path") or "").strip()
+            if not raw_path:
+                raise FileNotFoundError(f"Original upload path not found for {doc_id}")
+
+            original_path = Path(raw_path).expanduser().resolve()
+            upload_root = _upload_dir().resolve()
+            if original_path != upload_root and upload_root not in original_path.parents:
+                raise ValueError("Original file path is outside upload directory.")
+            if not original_path.exists() or not original_path.is_file():
+                raise FileNotFoundError(f"Original upload file not found for {doc_id}")
+
+            _file_response(self, original_path, file_name)
+        except FileNotFoundError as error:
+            _error_response(self, 404, "RAG_DOCUMENT_ORIGINAL_NOT_FOUND", str(error))
+        except ValueError as error:
+            _error_response(self, 400, "INVALID_REQUEST", str(error))
+        except RAGServiceError as error:
+            _error_response(self, 500, "RAG_DOCUMENT_ORIGINAL_FAILED", error.message, {"reason": error.code})
+        except Exception as error:
+            _error_response(self, 500, "RAG_DOCUMENT_ORIGINAL_FAILED", str(error))
 
     def _handle_update_document(self, doc_id: str) -> None:
         try:
@@ -854,6 +921,35 @@ class RAGSearchHandler(BaseHTTPRequestHandler):
             _error_response(self, 500, "RAG_DOCUMENT_CHUNKS_FAILED", error.message, {"reason": error.code})
         except Exception as error:
             _error_response(self, 500, "RAG_DOCUMENT_CHUNKS_FAILED", str(error))
+
+    def _handle_update_document_chunks(self, doc_id: str) -> None:
+        try:
+            body = _read_json_body(self)
+            chunk_texts = _chunk_texts_from_body(body)
+            result = SERVICE.update_document_chunks(doc_id, chunk_texts)
+            chunks = SERVICE.get_document_chunks(doc_id, limit=1000)
+            _json_response(
+                self,
+                200,
+                {
+                    "success": True,
+                    "data": {
+                        "docId": doc_id,
+                        "chunkCount": int(result.get("chunk_count", 0)),
+                        "indexSummary": result.get("index_summary"),
+                        "chunks": [_chunk_row_to_dict(doc_id, row) for row in chunks],
+                    },
+                    "error": None,
+                },
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            _error_response(self, 400, "INVALID_REQUEST", str(error))
+        except FileNotFoundError as error:
+            _error_response(self, 404, "RAG_DOCUMENT_NOT_FOUND", str(error))
+        except RAGServiceError as error:
+            _error_response(self, 500, "RAG_DOCUMENT_CHUNKS_UPDATE_FAILED", error.message, {"reason": error.code})
+        except Exception as error:
+            _error_response(self, 500, "RAG_DOCUMENT_CHUNKS_UPDATE_FAILED", str(error))
 
     def _handle_list_db_sync_jobs(self) -> None:
         try:
@@ -1091,6 +1187,30 @@ def _safe_file_name(file_name: str) -> str:
     return name
 
 
+def _safe_preview_file_name(file_name: str) -> str:
+    name = Path(file_name or "document").name.strip()
+    name = re.sub(r"[\x00-\x1f/\\]+", "_", name)
+    return name if name and name not in {".", ".."} else "document"
+
+
+def _preview_content_type(file_name: str) -> str:
+    suffix = Path(file_name or "").suffix.lower()
+    explicit_types = {
+        ".md": "text/markdown; charset=utf-8",
+        ".markdown": "text/markdown; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".webp": "image/webp",
+    }
+    return explicit_types.get(suffix) or mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+
+
 def _display_name(file_name: str) -> str:
     return re.sub(r"^[0-9a-f]{12}_", "", file_name, count=1)
 
@@ -1105,6 +1225,30 @@ def _decode_upload_content(body: dict[str, Any]) -> bytes:
         return content.encode("utf-8")
 
     raise ValueError("contentBase64 or content is required.")
+
+
+def _chunk_texts_from_body(body: dict[str, Any]) -> list[str]:
+    raw_chunks = body.get("chunks")
+    if not isinstance(raw_chunks, list):
+        raise ValueError("chunks is required and must be an array.")
+    if not raw_chunks:
+        raise ValueError("chunks must contain at least one item.")
+    if len(raw_chunks) > 1000:
+        raise ValueError("chunks must not exceed 1000 items.")
+
+    chunk_texts: list[str] = []
+    for index, item in enumerate(raw_chunks):
+        if isinstance(item, str):
+            text = item.strip()
+        elif isinstance(item, dict):
+            text = str(item.get("text") or "").strip()
+        else:
+            raise ValueError(f"chunks[{index}] must be a string or an object with text.")
+
+        if not text:
+            raise ValueError(f"chunks[{index}].text must not be empty.")
+        chunk_texts.append(text)
+    return chunk_texts
 
 
 def _write_upload_file(file_name: str, raw_bytes: bytes) -> Path:
@@ -1140,6 +1284,7 @@ def _document_summary(manifest: dict[str, Any], index_summary: dict[str, Any] | 
     indexed_chunk_count = int(index_summary.get("chunk_count", 0)) if index_summary else 0
     index_status = _index_status(manifest, index_summary)
     edited = bool(manifest.get("edited"))
+    file_size = _document_file_size(manifest)
 
     return {
         "docId": doc_id,
@@ -1153,12 +1298,28 @@ def _document_summary(manifest: dict[str, Any], index_summary: dict[str, Any] | 
         "parseMode": manifest.get("parse_mode", "markdown"),
         "createdAt": manifest.get("created_at", ""),
         "updatedAt": manifest.get("updated_at", ""),
+        "fileSize": file_size,
+        "file_size": file_size,
         "charCount": int(manifest.get("char_count", 0)),
         "blockCount": int(manifest.get("block_count", 0)),
         "chunkCount": indexed_chunk_count,
         "indexStatus": index_status,
         "edited": edited,
     }
+
+
+def _document_file_size(manifest: dict[str, Any]) -> int:
+    for key in ("original_upload_path", "content_path"):
+        raw_path = str(manifest.get(key) or "").strip()
+        if not raw_path:
+            continue
+        try:
+            path = Path(raw_path).expanduser()
+            if path.is_file():
+                return int(path.stat().st_size)
+        except OSError:
+            continue
+    return 0
 
 
 def _index_status(manifest: dict[str, Any], index_summary: dict[str, Any] | None) -> str:

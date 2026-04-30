@@ -3,6 +3,7 @@ const {
   deleteRagDocument,
   deleteRagDbSyncJob,
   getRagDocument,
+  getRagDocumentOriginal,
   getRagDbSyncJob,
   getRagHealth,
   getRagJob,
@@ -13,6 +14,7 @@ const {
   listRagJobs,
   runRagDbSyncJob,
   reindexRagDocument,
+  updateRagDocumentChunks,
   updateRagDocument,
   updateRagDbSyncJob,
   uploadRagDocument,
@@ -119,6 +121,25 @@ async function getConsoleRagDocumentRoute(docId) {
   }
 }
 
+async function getConsoleRagDocumentOriginalRoute(docId) {
+  const requestId = buildRequestId();
+
+  try {
+    const data = await getRagDocumentOriginal(docId);
+    return {
+      statusCode: 200,
+      headers: data.headers,
+      body: data.body
+    };
+  } catch (caughtError) {
+    const appError = normalizeError(caughtError);
+    return {
+      statusCode: appError.httpStatus,
+      payload: buildErrorResponse(appError, requestId)
+    };
+  }
+}
+
 async function updateConsoleRagDocumentRoute(docId, body = {}) {
   const requestId = buildRequestId();
 
@@ -181,6 +202,24 @@ async function listConsoleRagDocumentChunksRoute(docId, url) {
       limit: url?.searchParams?.get("limit") || undefined
     };
     const data = await listRagDocumentChunks(docId, query);
+    return {
+      statusCode: 200,
+      payload: buildSuccessResponse(data, requestId)
+    };
+  } catch (caughtError) {
+    const appError = normalizeError(caughtError);
+    return {
+      statusCode: appError.httpStatus,
+      payload: buildErrorResponse(appError, requestId)
+    };
+  }
+}
+
+async function updateConsoleRagDocumentChunksRoute(docId, body = {}) {
+  const requestId = buildRequestId();
+
+  try {
+    const data = await updateRagDocumentChunks(docId, body);
     return {
       statusCode: 200,
       payload: buildSuccessResponse(data, requestId)
@@ -409,6 +448,7 @@ module.exports = {
   deleteConsoleRagDocumentRoute,
   deleteConsoleRagDbSyncJobRoute,
   getConsoleRagDocumentRoute,
+  getConsoleRagDocumentOriginalRoute,
   getConsoleRagDbSyncJobRoute,
   getConsoleRagHealthRoute,
   getConsoleRagJobRoute,
@@ -420,6 +460,7 @@ module.exports = {
   listConsoleRagJobsRoute,
   reindexConsoleRagDocumentRoute,
   runConsoleRagDbSyncJobRoute,
+  updateConsoleRagDocumentChunksRoute,
   updateConsoleRagDocumentRoute,
   updateConsoleRagDbSyncJobRoute,
   updateConsoleRagSettingsRoute,

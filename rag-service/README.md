@@ -36,6 +36,8 @@ RAG_COLLECTION_NAME=
 
 DASHSCOPE_API_KEY=
 EMBEDDING_MODEL=text-embedding-v4
+PDF_OCR_ENGINE=auto
+PDF_OCR_LANG=zh-Hans,en-US
 
 CHAT_MODEL=
 CHAT_BASE_URL=
@@ -47,6 +49,8 @@ RAG_SYNC_DB_URL=
 Do not commit `.env` or real API keys.
 
 The Node API proxy uses `RAG_SERVICE_BASE_URL` and defaults to `http://127.0.0.1:19104`. Keep this value on loopback.
+
+Scanned PDF pages use local OCR instead of a vision model. The pipeline renders each PDF page to an image, preprocesses it with OpenCV, and then runs the configured OCR engine. `PDF_OCR_ENGINE` supports `auto` (default), `ocrmac`, `pytesseract`, or `paddleocr`. On macOS, `auto` first uses local Apple Vision OCR through Python. When using `pytesseract`, install the system `tesseract` binary and Chinese language data separately. PaddleOCR is optional and is not the default engine on macOS.
 
 ## Source Layout
 
@@ -186,6 +190,7 @@ Only `.gitkeep` placeholders are tracked. Back up `data/` before deleting it if 
 
 - `DASHSCOPE_API_KEY missing`: create `rag-service/.env` or configure the variable in the shell before startup.
 - `ModuleNotFoundError`: run `npm run rag:install` from the repository root.
+- Scanned PDF OCR fails: confirm `opencv-python-headless` and the selected local OCR engine are installed. On macOS, `ocrmac` is installed from `requirements.txt`. For `pytesseract`, also install the system `tesseract` command and Chinese language data.
 - `GET /health` fails: confirm the service is listening on `RAG_SEARCH_HOST` and `RAG_SEARCH_PORT`.
 - Search returns no matches: upload a document, trigger reindex, and confirm the job succeeded before searching.
 - Do not commit `.env`, `.venv`, `data/`, `logs/`, uploaded files, Chroma files, or SQLite runtime data.

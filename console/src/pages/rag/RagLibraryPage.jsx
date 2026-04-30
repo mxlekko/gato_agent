@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, Input, Select, Tag } from "@arco-design/web-react";
+import { Button, Card, Input, Modal, Select, Tag } from "@arco-design/web-react";
+import { IconPlus, IconRefresh, IconSearch, IconUpload } from "@arco-design/web-react/icon";
 import { PageFrame } from "../../components/PageFrame";
 import { apiClient } from "../../services/apiClient";
 import {
@@ -11,7 +12,56 @@ import {
 } from "./components";
 
 const Option = Select.Option;
-const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".csv", ".json"]);
+const SUPPORTED_UPLOAD_EXTENSIONS = [
+  ".md",
+  ".markdown",
+  ".txt",
+  ".docx",
+  ".pdf",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".bmp",
+  ".webp"
+];
+const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt"]);
+const UPLOAD_ACCEPT = SUPPORTED_UPLOAD_EXTENSIONS.join(",");
+const UPLOAD_HELP_TEXT = "支持 Markdown、TXT、DOCX、PDF、PNG、JPG、JPEG、GIF、BMP、WebP。";
+const LIBRARY_REFRESH_SIGNAL_KEY = "rag-library-refresh-signal";
+const DEFAULT_UPLOAD_CHUNK_STRATEGY = "balanced";
+const CHUNK_STRATEGY_PRESETS = {
+  fine: {
+    label: "精细拆分",
+    description: "片段更短，适合条款、评分规则、流程步骤较密集的文档。",
+    config: {
+      minChars: "180",
+      maxChars: "560",
+      overlapChars: "80",
+      similarityThreshold: "0.62"
+    }
+  },
+  balanced: {
+    label: "均衡拆分",
+    description: "兼顾上下文完整和检索粒度，适合大多数业务文档。",
+    config: {
+      minChars: "280",
+      maxChars: "900",
+      overlapChars: "80",
+      similarityThreshold: "0.58"
+    }
+  },
+  broad: {
+    label: "长段拆分",
+    description: "片段更长，适合背景说明、方案文档、上下文依赖较强的内容。",
+    config: {
+      minChars: "500",
+      maxChars: "1400",
+      overlapChars: "120",
+      similarityThreshold: "0.52"
+    }
+  }
+};
 
 function extractError(response) {
   const error = response?.payload?.error;
@@ -32,6 +82,15 @@ function docIdOf(document) {
 
 function fileNameOf(document) {
   return document?.fileName || document?.file_name || "-";
+}
+
+function fileTypeOf(document) {
+  const sourceType = document?.sourceType || document?.source_type || extensionOf(fileNameOf(document)).replace(".", "");
+  return sourceType ? String(sourceType).toUpperCase() : "-";
+}
+
+function fileSizeOf(document) {
+  return document?.fileSize ?? document?.file_size ?? 0;
 }
 
 function formatNumber(value) {
@@ -56,9 +115,81 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function formatFileSize(size) {
+  const bytes = Number(size);
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "-";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function chunkFormFromPreset(strategy) {
+  return {
+    ...(CHUNK_STRATEGY_PRESETS[strategy] || CHUNK_STRATEGY_PRESETS[DEFAULT_UPLOAD_CHUNK_STRATEGY]).config
+  };
+}
+
+function parseChunkInteger(value, label, { minimum, maximum }) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${label} 必须是 ${minimum} 到 ${maximum} 的整数。`);
+  }
+  return parsed;
+}
+
+function parseChunkFloat(value, label, { minimum, maximum }) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${label} 必须是 ${minimum} 到 ${maximum} 之间的数字。`);
+  }
+  return parsed;
+}
+
+function buildChunkConfig(form) {
+  const minChars = parseChunkInteger(form.minChars, "最小字符数", { minimum: 1, maximum: 50000 });
+  const maxChars = parseChunkInteger(form.maxChars, "最大字符数", { minimum: 2, maximum: 100000 });
+  const overlapChars = parseChunkInteger(form.overlapChars, "重叠字符数", { minimum: 0, maximum: 50000 });
+  const similarityThreshold = parseChunkFloat(form.similarityThreshold, "语义相似阈值", {
+    minimum: 0,
+    maximum: 1
+  });
+
+  if (maxChars <= minChars) {
+    throw new Error("最大字符数必须大于最小字符数。");
+  }
+  if (overlapChars >= maxChars) {
+    throw new Error("重叠字符数必须小于最大字符数。");
+  }
+
+  return {
+    minChars,
+    maxChars,
+    overlapChars,
+    similarityThreshold
+  };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function editorUrlForDoc(docId) {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return `${window.location.origin}/rag/library/${encodeURIComponent(docId)}/edit`;
+}
+
 function indexStatusLabel(status) {
   const labels = {
     indexed: "已索引",
+    processing: "处理中",
     stale: "需重建",
     not_indexed: "未索引"
   };
@@ -66,6 +197,9 @@ function indexStatusLabel(status) {
 }
 
 function indexStatusColor(status) {
+  if (status === "processing") {
+    return "blue";
+  }
   if (status === "indexed") {
     return "green";
   }
@@ -126,6 +260,7 @@ function chunkIndexOf(chunk, index) {
 
 export function RagLibraryPage() {
   const fileInputRef = useRef(null);
+  const refreshSignalRef = useRef("");
   const [keyword, setKeyword] = useState("");
   const [sourceType, setSourceType] = useState("");
   const [documents, setDocuments] = useState([]);
@@ -140,7 +275,14 @@ export function RagLibraryPage() {
   const [chunksLoading, setChunksLoading] = useState(false);
   const [chunksError, setChunksError] = useState(null);
   const [uploadFile, setUploadFile] = useState(null);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadStep, setUploadStep] = useState("file");
+  const [uploadStrategy, setUploadStrategy] = useState(DEFAULT_UPLOAD_CHUNK_STRATEGY);
+  const [uploadChunkForm, setUploadChunkForm] = useState(chunkFormFromPreset(DEFAULT_UPLOAD_CHUNK_STRATEGY));
+  const [uploadDragActive, setUploadDragActive] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState("");
+  const [processingDocIds, setProcessingDocIds] = useState(() => new Set());
   const [actionLoading, setActionLoading] = useState("");
   const [editContent, setEditContent] = useState("");
   const [notice, setNotice] = useState(null);
@@ -149,6 +291,51 @@ export function RagLibraryPage() {
   const selectedSummary = documents.find((document) => docIdOf(document) === selectedDocId) || null;
   const manifest = detail?.manifest || selectedSummary || null;
   const canEdit = Boolean(selectedDocId && !detailLoading && detail && !actionLoading);
+
+  function setDocumentProcessing(docId, processing) {
+    if (!docId) {
+      return;
+    }
+    setProcessingDocIds((current) => {
+      const next = new Set(current);
+      if (processing) {
+        next.add(docId);
+      } else {
+        next.delete(docId);
+      }
+      return next;
+    });
+  }
+
+  async function monitorReindexJob(jobId, docId, fileName) {
+    try {
+      let finalJob = null;
+      for (let attempt = 0; attempt < 240; attempt += 1) {
+        await sleep(1000);
+        const jobResponse = await apiClient.getRagJob(jobId);
+        const jobData = unwrapResponse(jobResponse);
+        finalJob = jobData?.job || null;
+        if (finalJob?.status === "succeeded" || finalJob?.status === "failed") {
+          break;
+        }
+      }
+
+      if (finalJob?.status !== "succeeded") {
+        throw new Error(finalJob?.error?.message || "拆分任务未完成。");
+      }
+
+      setNotice({
+        status: "success",
+        title: "文档已处理完成",
+        detail: finalJob?.result?.chunkCount ? `${fileName || "文档"} / ${finalJob.result.chunkCount} 个片段` : fileName
+      });
+    } catch (caughtError) {
+      setNotice({ status: "error", title: "文档处理失败", detail: caughtError.message });
+    } finally {
+      setDocumentProcessing(docId, false);
+      await loadDocuments({ selectedDocId: docId });
+    }
+  }
 
   const loadDocuments = useCallback(async (options = {}) => {
     const nextKeyword = options.keyword ?? keyword;
@@ -221,14 +408,67 @@ export function RagLibraryPage() {
     loadDocuments();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    refreshSignalRef.current = window.localStorage.getItem(LIBRARY_REFRESH_SIGNAL_KEY) || "";
+
+    const refreshIfChanged = () => {
+      const nextSignal = window.localStorage.getItem(LIBRARY_REFRESH_SIGNAL_KEY) || "";
+      if (nextSignal && nextSignal !== refreshSignalRef.current) {
+        refreshSignalRef.current = nextSignal;
+        loadDocuments();
+      }
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === LIBRARY_REFRESH_SIGNAL_KEY) {
+        refreshSignalRef.current = event.newValue || "";
+        loadDocuments();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfChanged();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", refreshIfChanged);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", refreshIfChanged);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadDocuments]);
+
   async function handleSelectDocument(docId) {
     if (!docId) {
       return;
     }
 
-    setSelectedDocId(docId);
-    setNotice(null);
-    await Promise.all([loadDetail(docId), loadChunks(docId)]);
+    handleOpenDocumentDetail(docId);
+  }
+
+  function handleOpenDocumentDetail(docId) {
+    if (!docId || typeof window === "undefined") {
+      return;
+    }
+    const detailUrl = `${window.location.origin}/rag/library/${encodeURIComponent(docId)}`;
+    window.open(detailUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function handleOpenDocumentEditor(docId) {
+    if (!docId || typeof window === "undefined") {
+      return;
+    }
+    const editUrl = editorUrlForDoc(docId);
+    window.open(editUrl, "_blank", "noopener,noreferrer");
   }
 
   async function handleFilterSubmit(event) {
@@ -240,40 +480,137 @@ export function RagLibraryPage() {
     });
   }
 
-  async function handleUpload(event) {
+  function resetUploadWorkflow() {
+    setUploadStep("file");
+    setUploadStrategy(DEFAULT_UPLOAD_CHUNK_STRATEGY);
+    setUploadChunkForm(chunkFormFromPreset(DEFAULT_UPLOAD_CHUNK_STRATEGY));
+    setUploadProgressText("");
+    setUploadDragActive(false);
+  }
+
+  function openUploadModal() {
+    setNotice(null);
+    resetUploadWorkflow();
+    setUploadFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setUploadModalOpen(true);
+  }
+
+  function closeUploadModal() {
+    if (uploadLoading) {
+      return;
+    }
+    setUploadModalOpen(false);
+    resetUploadWorkflow();
+    setUploadFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  function handleUploadFileList(files) {
+    const nextFile = files?.[0] || null;
+    setUploadFile(nextFile);
+  }
+
+  function handleUploadStrategyChange(value) {
+    const nextStrategy = value || DEFAULT_UPLOAD_CHUNK_STRATEGY;
+    setUploadStrategy(nextStrategy);
+    if (CHUNK_STRATEGY_PRESETS[nextStrategy]) {
+      setUploadChunkForm(chunkFormFromPreset(nextStrategy));
+    }
+  }
+
+  function updateUploadChunkForm(field, value) {
+    setUploadStrategy("custom");
+    setUploadChunkForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  function handleUploadDragOver(event) {
     event.preventDefault();
+    event.stopPropagation();
+    if (!uploadLoading) {
+      setUploadDragActive(true);
+    }
+  }
+
+  function handleUploadDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setUploadDragActive(false);
+    }
+  }
+
+  function handleUploadDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setUploadDragActive(false);
+    if (!uploadLoading) {
+      handleUploadFileList(event.dataTransfer?.files);
+    }
+  }
+
+  async function handleUpload(event) {
+    event?.preventDefault();
 
     if (!uploadFile) {
       setNotice({ status: "warning", title: "请选择文件" });
       return;
     }
 
+    if (uploadStep === "file") {
+      setUploadStep("strategy");
+      setNotice(null);
+      return;
+    }
+
     setUploadLoading(true);
     setNotice(null);
+    setUploadProgressText("正在上传文件");
 
     try {
+      const chunkConfig = buildChunkConfig(uploadChunkForm);
       const payload = await buildUploadPayload(uploadFile);
       const response = await apiClient.uploadRagDocument(payload);
       const data = unwrapResponse(response);
       const nextDocId = data?.docId || docIdOf(data?.document);
+      if (!nextDocId) {
+        throw new Error("上传成功但未返回文档 ID。");
+      }
+
+      setUploadProgressText("正在创建拆分任务");
+      const reindexResponse = await apiClient.reindexRagDocument(nextDocId, chunkConfig);
+      const reindexData = unwrapResponse(reindexResponse);
+      const jobId = reindexData?.jobId || reindexData?.job?.jobId;
+      if (!jobId) {
+        throw new Error("未返回拆分任务 ID。");
+      }
 
       setUploadFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      setUploadModalOpen(false);
+      resetUploadWorkflow();
+      setDocumentProcessing(nextDocId, true);
       setNotice({
-        status: "success",
-        title: "文档已上传",
-        detail: nextDocId ? `docId: ${nextDocId}` : fileNameOf(data?.document)
+        status: "neutral",
+        title: "文档处理中",
+        detail: `${fileNameOf(data?.document)} 已进入拆分队列，完成后列表状态会自动更新。`
       });
       await loadDocuments({ selectedDocId: nextDocId || selectedDocId });
-      if (nextDocId) {
-        await handleSelectDocument(nextDocId);
-      }
+      monitorReindexJob(jobId, nextDocId, fileNameOf(data?.document));
     } catch (caughtError) {
-      setNotice({ status: "error", title: "上传失败", detail: caughtError.message });
+      setNotice({ status: "error", title: "上传或拆分失败", detail: caughtError.message });
     } finally {
       setUploadLoading(false);
+      setUploadProgressText("");
     }
   }
 
@@ -302,16 +639,16 @@ export function RagLibraryPage() {
     }
   }
 
-  async function handleReindex() {
-    if (!selectedDocId) {
+  async function handleReindex(targetDocId = selectedDocId) {
+    if (!targetDocId) {
       return;
     }
 
-    setActionLoading("reindex");
+    setActionLoading(`reindex:${targetDocId}`);
     setNotice(null);
 
     try {
-      const response = await apiClient.reindexRagDocument(selectedDocId, {});
+      const response = await apiClient.reindexRagDocument(targetDocId, {});
       const data = unwrapResponse(response);
       setNotice({
         status: "success",
@@ -319,7 +656,9 @@ export function RagLibraryPage() {
         detail: data?.jobId ? `jobId: ${data.jobId}` : "任务已进入队列。"
       });
       await loadDocuments({ selectedDocId });
-      await loadChunks(selectedDocId);
+      if (targetDocId === selectedDocId) {
+        await loadChunks(selectedDocId);
+      }
     } catch (caughtError) {
       setNotice({ status: "error", title: "重建失败", detail: caughtError.message });
     } finally {
@@ -340,12 +679,15 @@ export function RagLibraryPage() {
       const response = await apiClient.deleteRagDocument(docId);
       unwrapResponse(response);
       setConfirmDelete(null);
-      setSelectedDocId("");
-      setDetail(null);
-      setEditContent("");
-      setChunks([]);
+      setDocumentProcessing(docId, false);
+      if (docId === selectedDocId) {
+        setSelectedDocId("");
+        setDetail(null);
+        setEditContent("");
+        setChunks([]);
+      }
       setNotice({ status: "success", title: "文档已删除", detail: fileNameOf(confirmDelete) });
-      await loadDocuments({ selectedDocId: "" });
+      await loadDocuments({ selectedDocId: docId === selectedDocId ? "" : selectedDocId });
     } catch (caughtError) {
       setNotice({ status: "error", title: "删除失败", detail: caughtError.message });
     } finally {
@@ -359,7 +701,7 @@ export function RagLibraryPage() {
       title="文档库"
       description="上传、编辑、重建索引并查看文档片段。"
       actions={(
-        <Button onClick={() => loadDocuments()}>
+        <Button icon={<IconRefresh />} onClick={() => loadDocuments()}>
           刷新
         </Button>
       )}
@@ -370,29 +712,29 @@ export function RagLibraryPage() {
 
       <div className="rag-library-layout">
         <Card className="section-card rag-library-search-card" bordered>
-          <div className="section-header">
-            <div>
-              <h4>文档检索</h4>
-              <p className="section-text">按文件名和来源类型筛选文档。</p>
-            </div>
-            <Tag bordered>Search</Tag>
-          </div>
-
-          <form className="form-stack" onSubmit={handleFilterSubmit}>
-            <label className="field-group">
+          <form className="rag-library-filter-row" onSubmit={handleFilterSubmit}>
+            <Button
+              htmlType="button"
+              icon={<IconPlus />}
+              onClick={openUploadModal}
+              type="primary"
+            >
+              文件上传
+            </Button>
+            <label className="rag-library-filter-field">
               <span>关键词</span>
               <Input
-                className="field-input"
+                className="field-input rag-library-keyword-input"
                 onChange={setKeyword}
                 placeholder="文件名"
                 value={keyword}
               />
             </label>
-            <label className="field-group">
+            <label className="rag-library-filter-field">
               <span>来源类型</span>
               <Select
                 allowClear
-                className="field-input"
+                className="field-input rag-library-source-select"
                 onChange={(value) => setSourceType(value || "")}
                 placeholder="全部"
                 value={sourceType}
@@ -405,44 +747,18 @@ export function RagLibraryPage() {
                 <Option value="jpg">JPG</Option>
               </Select>
             </label>
-            <div className="button-row">
-              <Button htmlType="submit" type="primary">
-                查询
-              </Button>
-              <Button
-                onClick={() => {
-                  setKeyword("");
-                  setSourceType("");
-                  loadDocuments({ keyword: "", sourceType: "", selectedDocId });
-                }}
-              >
-                重置
-              </Button>
-            </div>
-          </form>
-        </Card>
-
-        <Card className="section-card rag-library-upload-card" bordered>
-          <div className="section-header">
-            <div>
-              <h4>文件上传</h4>
-              <p className="section-text">导入本地文件后进入文档库。</p>
-            </div>
-            <Tag bordered>Upload</Tag>
-          </div>
-
-          <form className="rag-upload-box" onSubmit={handleUpload}>
-            <label className="field-group">
-              <span>上传文件</span>
-              <input
-                className="field-input"
-                onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
-                ref={fileInputRef}
-                type="file"
-              />
-            </label>
-            <Button htmlType="submit" loading={uploadLoading}>
-              {uploadLoading ? "上传中" : "上传"}
+            <Button htmlType="submit" icon={<IconSearch />}>
+              查询
+            </Button>
+            <Button
+              htmlType="button"
+              onClick={() => {
+                setKeyword("");
+                setSourceType("");
+                loadDocuments({ keyword: "", sourceType: "", selectedDocId });
+              }}
+            >
+              重置
             </Button>
           </form>
         </Card>
@@ -464,150 +780,81 @@ export function RagLibraryPage() {
             <RagEmptyState title="暂无文档" detail="上传文件后会出现在文档库。" />
           ) : null}
           {!documentsLoading && !documentsError && documents.length > 0 ? (
-            <div className="rag-doc-list">
-              {documents.map((document) => {
-                const docId = docIdOf(document);
-                const active = docId === selectedDocId;
-
-                return (
-                  <button
-                    className={`rag-doc-row${active ? " rag-doc-row-active" : ""}`}
-                    key={docId}
-                    onClick={() => handleSelectDocument(docId)}
-                    type="button"
-                  >
-                    <span>
-                      <strong>{fileNameOf(document)}</strong>
-                      <em className="mono-text">{docId}</em>
-                    </span>
-                    <span className="rag-doc-row-meta">
-                      <IndexStatusTag status={document.indexStatus} />
-                      <span>{formatNumber(document.chunkCount)} chunks</span>
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="rag-doc-table">
+              <div className="rag-doc-table-head">
+                <span>序号</span>
+                <span>文件名称</span>
+                <span>文件类型</span>
+                <span>文件大小</span>
+                <span>状态</span>
+                <span>片段数</span>
+                <span>操作列</span>
+              </div>
+              <div className="rag-doc-table-body">
+                {documents.map((document, index) => {
+                  const docId = docIdOf(document);
+                  const isProcessing = processingDocIds.has(docId);
+                  return (
+                    <div
+                      className="rag-doc-table-row"
+                      key={docId}
+                      onClick={() => handleOpenDocumentDetail(docId)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleOpenDocumentDetail(docId);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span>{index + 1}</span>
+                      <strong title={fileNameOf(document)}>{fileNameOf(document)}</strong>
+                      <span>{fileTypeOf(document)}</span>
+                      <span>{formatFileSize(fileSizeOf(document))}</span>
+                      <span>
+                        <IndexStatusTag status={isProcessing ? "processing" : document.indexStatus} />
+                      </span>
+                      <span>{isProcessing ? "-" : formatNumber(document.chunkCount)}</span>
+                      <span className="rag-doc-table-actions">
+                        <Button
+                          htmlType="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleOpenDocumentDetail(docId);
+                          }}
+                          size="mini"
+                        >
+                          查看
+                        </Button>
+                        <Button
+                          htmlType="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleOpenDocumentEditor(docId);
+                          }}
+                          size="mini"
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          disabled={Boolean(actionLoading)}
+                          htmlType="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setConfirmDelete(document);
+                          }}
+                          size="mini"
+                          status="danger"
+                        >
+                          删除
+                        </Button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ) : null}
-        </Card>
-
-        <Card className="section-card rag-library-detail" bordered>
-          <div className="section-header">
-            <div>
-              <h4>详情</h4>
-              <p className="section-text">
-                {manifest ? `${fileNameOf(manifest)} / ${docIdOf(manifest)}` : "未选择文档"}
-              </p>
-            </div>
-            {manifest ? (
-              <IndexStatusTag status={manifest.indexStatus} />
-            ) : null}
-          </div>
-
-          {!selectedDocId ? (
-            <RagEmptyState title="请选择文档" detail="左侧列表选择文档后展示内容和片段。" />
-          ) : null}
-
-          {selectedDocId && detailLoading ? <RagLoadingState label="正在读取文档详情" /> : null}
-
-          {selectedDocId && !detailLoading && detailError ? (
-            <RagErrorState error={detailError} onRetry={() => loadDetail(selectedDocId)} />
-          ) : null}
-
-          {selectedDocId && !detailLoading && !detailError && detail ? (
-            <>
-              <div className="rag-detail-meta-grid">
-                <div>
-                  <span className="meta-label">来源类型</span>
-                  <strong>{manifest?.sourceType || manifest?.source_type || "-"}</strong>
-                </div>
-                <div>
-                  <span className="meta-label">字符数</span>
-                  <strong>{formatNumber(manifest?.charCount)}</strong>
-                </div>
-                <div>
-                  <span className="meta-label">块数</span>
-                  <strong>{formatNumber(manifest?.blockCount)}</strong>
-                </div>
-                <div>
-                  <span className="meta-label">更新时间</span>
-                  <strong>{formatDateTime(manifest?.updatedAt)}</strong>
-                </div>
-              </div>
-
-              <label className="field-group">
-                <span>内容</span>
-                <Input.TextArea
-                  className="field-input field-textarea rag-document-editor"
-                  onChange={setEditContent}
-                  value={editContent}
-                />
-              </label>
-
-              <div className="button-row">
-                <Button
-                  disabled={!canEdit}
-                  loading={actionLoading === "save"}
-                  onClick={handleSaveContent}
-                  type="primary"
-                >
-                  {actionLoading === "save" ? "保存中" : "保存内容"}
-                </Button>
-                <Button
-                  disabled={!selectedDocId || Boolean(actionLoading)}
-                  loading={actionLoading === "reindex"}
-                  onClick={handleReindex}
-                >
-                  {actionLoading === "reindex" ? "创建中" : "重建索引"}
-                </Button>
-                <Button
-                  disabled={!selectedSummary || Boolean(actionLoading)}
-                  onClick={() => setConfirmDelete(selectedSummary)}
-                  status="danger"
-                >
-                  删除
-                </Button>
-              </div>
-
-              <div className="rag-chunk-panel">
-                <div className="section-header">
-                  <div>
-                    <h4>片段</h4>
-                    <p className="section-text">{chunksLoading ? "加载中" : `${chunks.length} 个片段`}</p>
-                  </div>
-                  <Button
-                    disabled={chunksLoading}
-                    onClick={() => loadChunks(selectedDocId)}
-                    size="small"
-                  >
-                    刷新片段
-                  </Button>
-                </div>
-
-                {chunksLoading ? <RagLoadingState label="正在读取片段" /> : null}
-                {!chunksLoading && chunksError ? (
-                  <RagErrorState error={chunksError} onRetry={() => loadChunks(selectedDocId)} />
-                ) : null}
-                {!chunksLoading && !chunksError && chunks.length === 0 ? (
-                  <RagEmptyState title="暂无片段" detail="重建索引完成后会展示 chunk 内容。" />
-                ) : null}
-                {!chunksLoading && !chunksError && chunks.length > 0 ? (
-                  <div className="rag-chunk-list">
-                    {chunks.map((chunk, index) => (
-                      <article className="rag-chunk-card" key={chunkIdOf(chunk, index)}>
-                        <div className="rag-match-head">
-                          <strong>Chunk {chunkIndexOf(chunk, index) + 1}</strong>
-                          <Tag bordered>
-                            {formatNumber(chunk.charCount ?? chunk.char_count)} chars
-                          </Tag>
-                        </div>
-                        <p className="rag-match-text">{chunk.text || "-"}</p>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </>
           ) : null}
         </Card>
       </div>
@@ -621,6 +868,136 @@ export function RagLibraryPage() {
         open={Boolean(confirmDelete)}
         title="删除文档"
       />
+
+      <Modal
+        footer={null}
+        onCancel={closeUploadModal}
+        style={{ width: 680 }}
+        title="文件上传"
+        visible={uploadModalOpen}
+      >
+        <form className="rag-upload-dialog-form" onSubmit={handleUpload}>
+          <div className="rag-upload-steps">
+            <span className={uploadStep === "file" ? "rag-upload-step-active" : ""}>1 文件上传</span>
+            <span className={uploadStep === "strategy" ? "rag-upload-step-active" : ""}>2 拆分策略</span>
+          </div>
+
+          {uploadStep === "file" ? (
+            <label
+              className={`rag-upload-dropzone${uploadDragActive ? " rag-upload-dropzone-active" : ""}${uploadLoading ? " rag-upload-dropzone-disabled" : ""}`}
+              onDragLeave={handleUploadDragLeave}
+              onDragOver={handleUploadDragOver}
+              onDrop={handleUploadDrop}
+            >
+              <input
+                accept={UPLOAD_ACCEPT}
+                className="rag-upload-native-input"
+                disabled={uploadLoading}
+                onChange={(event) => handleUploadFileList(event.target.files)}
+                ref={fileInputRef}
+                type="file"
+              />
+              <span className="rag-upload-dropzone-icon">
+                <IconUpload />
+              </span>
+              <strong>{uploadFile ? uploadFile.name : "点击或拖拽文件到这里"}</strong>
+              <em>{uploadFile ? `${formatFileSize(uploadFile.size)}，可点击重新选择` : UPLOAD_HELP_TEXT}</em>
+            </label>
+          ) : (
+            <div className="rag-upload-strategy-panel">
+              <div className="rag-upload-selected-file">
+                <span>已选择文件</span>
+                <strong>{uploadFile?.name || "-"}</strong>
+                <em>{formatFileSize(uploadFile?.size)}</em>
+              </div>
+
+              <label className="field-group">
+                <span>拆分策略</span>
+                <Select
+                  className="field-input"
+                  disabled={uploadLoading}
+                  onChange={handleUploadStrategyChange}
+                  value={uploadStrategy}
+                >
+                  {Object.entries(CHUNK_STRATEGY_PRESETS).map(([key, preset]) => (
+                    <Option key={key} value={key}>{preset.label}</Option>
+                  ))}
+                  <Option value="custom">自定义策略</Option>
+                </Select>
+                <p className="field-help">
+                  {CHUNK_STRATEGY_PRESETS[uploadStrategy]?.description || "手动调整下方参数后，将按自定义策略拆分。"}
+                </p>
+              </label>
+
+              <div className="form-grid-two rag-upload-chunk-grid">
+                <label className="field-group">
+                  <span>最小字符数</span>
+                  <input
+                    className="field-input"
+                    disabled={uploadLoading}
+                    min="1"
+                    onChange={(event) => updateUploadChunkForm("minChars", event.target.value)}
+                    type="number"
+                    value={uploadChunkForm.minChars}
+                  />
+                </label>
+                <label className="field-group">
+                  <span>最大字符数</span>
+                  <input
+                    className="field-input"
+                    disabled={uploadLoading}
+                    min="2"
+                    onChange={(event) => updateUploadChunkForm("maxChars", event.target.value)}
+                    type="number"
+                    value={uploadChunkForm.maxChars}
+                  />
+                </label>
+                <label className="field-group">
+                  <span>重叠字符数</span>
+                  <input
+                    className="field-input"
+                    disabled={uploadLoading}
+                    min="0"
+                    onChange={(event) => updateUploadChunkForm("overlapChars", event.target.value)}
+                    type="number"
+                    value={uploadChunkForm.overlapChars}
+                  />
+                </label>
+                <label className="field-group">
+                  <span>语义相似阈值</span>
+                  <input
+                    className="field-input"
+                    disabled={uploadLoading}
+                    max="1"
+                    min="0"
+                    onChange={(event) => updateUploadChunkForm("similarityThreshold", event.target.value)}
+                    step="0.01"
+                    type="number"
+                    value={uploadChunkForm.similarityThreshold}
+                  />
+                </label>
+              </div>
+
+              {uploadProgressText ? (
+                <p className="rag-upload-progress-text">{uploadProgressText}</p>
+              ) : null}
+            </div>
+          )}
+          <div className="button-row rag-upload-dialog-actions">
+            <Button disabled={uploadLoading} htmlType="button" onClick={closeUploadModal}>
+              取消
+            </Button>
+            {uploadStep === "strategy" ? (
+              <Button disabled={uploadLoading} htmlType="button" onClick={() => setUploadStep("file")}>
+                上一步
+              </Button>
+            ) : null}
+            <Button htmlType="submit" loading={uploadLoading} type="primary">
+              {uploadLoading ? "处理中" : uploadStep === "file" ? "下一步" : "确认上传并拆分"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </PageFrame>
   );
 }

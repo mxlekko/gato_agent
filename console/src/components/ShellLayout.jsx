@@ -1,15 +1,10 @@
-import { Layout, Menu, Space, Tag, Typography } from "@arco-design/web-react";
+import { Layout, Menu, Typography } from "@arco-design/web-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { consoleDataMode } from "../services/clientFactory";
 
 const { Content, Sider } = Layout;
 const MenuItem = Menu.Item;
 const SubMenu = Menu.SubMenu;
-const { Text, Title } = Typography;
-
-function formatDataMode(mode) {
-  return mode === "api" ? "真实接口" : mode === "mock" ? "模拟数据" : mode;
-}
+const { Title } = Typography;
 
 const configCatalogItems = [
   { to: "/configs/skills", label: "业务技能" },
@@ -20,10 +15,10 @@ const configCatalogItems = [
 
 const ragItems = [
   { to: "/rag/overview", label: "服务总览" },
-  { to: "/rag/search", label: "检索测试" },
   { to: "/rag/library", label: "文档库" },
+  { to: "/rag/sync", label: "数据库" },
   { to: "/rag/jobs", label: "任务队列" },
-  { to: "/rag/sync", label: "数据库同步" },
+  { to: "/rag/search", label: "检索测试" },
   { to: "/rag/settings", label: "设置" }
 ];
 
@@ -109,10 +104,6 @@ function renderMenuItem(item, groupLabel) {
 export function ShellLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const currentPort =
-    typeof window !== "undefined" && window.location?.port
-      ? window.location.port
-      : "3200";
   const navLeaves = flattenNavItems(navGroups.flatMap((group) => group.items));
   const selectedItem = navLeaves
     .slice()
@@ -125,19 +116,11 @@ export function ShellLayout() {
         <div className="sidebar-brand">
           <div className="brand-mark">A</div>
           <div>
-            <Text className="eyebrow">业务平台</Text>
             <Title heading={5} className="sidebar-title">
               业务平台控制台
             </Title>
           </div>
         </div>
-
-        <Space className="sidebar-note" wrap>
-          <Tag bordered color="gray">开发端口 {currentPort}</Tag>
-          <Tag bordered color="arcoblue">
-            数据模式 {formatDataMode(consoleDataMode)}
-          </Tag>
-        </Space>
 
         <Menu
           className="sidebar-nav-menu"

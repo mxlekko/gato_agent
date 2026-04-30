@@ -33,9 +33,13 @@ RAG_PROXY_TIMEOUT_MS=15000
 
 DASHSCOPE_API_KEY=
 EMBEDDING_MODEL=text-embedding-v4
+PDF_OCR_ENGINE=auto
+PDF_OCR_LANG=zh-Hans,en-US
 ```
 
 不要把 `.env`、真实 API Key、数据库密码或运行数据提交到 Git。
+
+扫描版 PDF 不走视觉模型：服务会先把 PDF 页面渲染成图片，再用 OpenCV 做去噪、增强、纠偏和二值化，最后用本地 OCR 识别文本。`PDF_OCR_ENGINE` 支持 `auto`、`ocrmac`、`pytesseract` 或 `paddleocr`；macOS 下 `auto` 默认优先使用本地 Apple Vision OCR 的 Python 封装。使用 `pytesseract` 时需要额外安装系统 `tesseract` 命令和中文语言包。PaddleOCR 可选，但不作为 macOS 默认引擎。
 
 ## 3. 启动与检查
 
@@ -139,5 +143,6 @@ RAG 运行数据在 `rag-service/data/`：
 - `RAG_SERVICE_UNAVAILABLE`：RAG 服务未启动或 `RAG_SERVICE_BASE_URL` 不正确。
 - `RAG_DEPENDENCY_MISSING`：依赖未安装，执行 `npm run rag:install`。
 - `DASHSCOPE_API_KEY missing`：本地环境变量未配置或服务未重启。
+- 扫描版 PDF OCR 失败：确认 `opencv-python-headless` 和所选 OCR 引擎已安装；macOS 默认引擎 `ocrmac` 由 `requirements.txt` 安装。如果使用 `pytesseract`，还需要系统 `tesseract` 和中文语言包。
 - 重建任务失败：在 `/rag/jobs` 查看错误详情，再检查依赖、API Key 和文档内容是否可解析。
 - 检索为空：确认文档已上传、重建任务已完成，并使用相近的 query 测试。

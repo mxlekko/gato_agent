@@ -13,10 +13,6 @@ const EMPTY_FORM = {
   defaultTopK: "5",
   embeddingModel: "text-embedding-v4",
   collectionName: "local_rag_mvp__text_embedding_v4",
-  minChars: "280",
-  maxChars: "900",
-  overlapChars: "80",
-  similarityThreshold: "0.58",
   sceneBindingsText: "{}"
 };
 
@@ -39,7 +35,6 @@ function prettyJson(value) {
 
 function formFromSettings(settings) {
   const config = settings?.config || {};
-  const chunkConfig = config.defaultChunkConfig || {};
 
   return {
     ragServiceBaseUrl: config.ragServiceBaseUrl || EMPTY_FORM.ragServiceBaseUrl,
@@ -47,10 +42,6 @@ function formFromSettings(settings) {
     defaultTopK: String(config.defaultTopK || EMPTY_FORM.defaultTopK),
     embeddingModel: config.embeddingModel || EMPTY_FORM.embeddingModel,
     collectionName: config.collectionName || EMPTY_FORM.collectionName,
-    minChars: String(chunkConfig.minChars || EMPTY_FORM.minChars),
-    maxChars: String(chunkConfig.maxChars || EMPTY_FORM.maxChars),
-    overlapChars: String(chunkConfig.overlapChars ?? EMPTY_FORM.overlapChars),
-    similarityThreshold: String(chunkConfig.similarityThreshold ?? EMPTY_FORM.similarityThreshold),
     sceneBindingsText: prettyJson(config.sceneBindings)
   };
 }
@@ -59,14 +50,6 @@ function parseInteger(value, label) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
     throw new Error(`${label} 必须是整数。`);
-  }
-  return parsed;
-}
-
-function parseFloatNumber(value, label) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`${label} 必须是数字。`);
   }
   return parsed;
 }
@@ -85,12 +68,6 @@ function buildPayload(form) {
     defaultTopK: parseInteger(form.defaultTopK, "默认 Top K"),
     embeddingModel: form.embeddingModel.trim(),
     collectionName: form.collectionName.trim(),
-    defaultChunkConfig: {
-      minChars: parseInteger(form.minChars, "minChars"),
-      maxChars: parseInteger(form.maxChars, "maxChars"),
-      overlapChars: parseInteger(form.overlapChars, "overlapChars"),
-      similarityThreshold: parseFloatNumber(form.similarityThreshold, "similarityThreshold")
-    },
     sceneBindings
   };
 }
@@ -240,7 +217,7 @@ export function RagSettingsPage() {
               <div>
                 <h4>非敏感配置</h4>
                 <p className="section-text">
-                  {settings?.storagePath || "mysql://cfg_platform_resources/rag-settings:default@v1"}
+                  拆分策略已移动到文档上传流程；这里仅维护全局服务与检索配置。
                 </p>
               </div>
               <span className="tag tag-neutral">更新于 {formatDateTime(settings?.updatedAt)}</span>
@@ -291,48 +268,6 @@ export function RagSettingsPage() {
                   className="field-input"
                   onChange={(event) => updateForm("collectionName", event.target.value)}
                   value={form.collectionName}
-                />
-              </label>
-              <label className="field-group">
-                <span>minChars</span>
-                <input
-                  className="field-input"
-                  min="1"
-                  onChange={(event) => updateForm("minChars", event.target.value)}
-                  type="number"
-                  value={form.minChars}
-                />
-              </label>
-              <label className="field-group">
-                <span>maxChars</span>
-                <input
-                  className="field-input"
-                  min="2"
-                  onChange={(event) => updateForm("maxChars", event.target.value)}
-                  type="number"
-                  value={form.maxChars}
-                />
-              </label>
-              <label className="field-group">
-                <span>overlapChars</span>
-                <input
-                  className="field-input"
-                  min="0"
-                  onChange={(event) => updateForm("overlapChars", event.target.value)}
-                  type="number"
-                  value={form.overlapChars}
-                />
-              </label>
-              <label className="field-group">
-                <span>similarityThreshold</span>
-                <input
-                  className="field-input"
-                  max="1"
-                  min="0"
-                  onChange={(event) => updateForm("similarityThreshold", event.target.value)}
-                  step="0.01"
-                  type="number"
-                  value={form.similarityThreshold}
                 />
               </label>
               <label className="field-group">

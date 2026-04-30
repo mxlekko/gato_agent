@@ -51,6 +51,7 @@ const {
   getConsoleRagDbSyncJobRoute,
   getConsoleRagHealthRoute,
   getConsoleRagJobRoute,
+  getConsoleRagDocumentOriginalRoute,
   inspectConsoleRagDbSyncColumnsRoute,
   listConsoleRagDocumentChunksRoute,
   listConsoleRagDocumentsRoute,
@@ -59,6 +60,7 @@ const {
   reindexConsoleRagDocumentRoute,
   runConsoleRagDbSyncJobRoute,
   searchConsoleRagRoute,
+  updateConsoleRagDocumentChunksRoute,
   updateConsoleRagDocumentRoute,
   updateConsoleRagDbSyncJobRoute,
   uploadConsoleRagDocumentRoute
@@ -76,6 +78,13 @@ function sendJson(res, statusCode, payload) {
     "Content-Type": "application/json; charset=utf-8"
   });
   res.end(`${JSON.stringify(payload)}\n`);
+}
+
+function sendBinary(res, statusCode, headers, body) {
+  res.writeHead(statusCode, headers || {
+    "Content-Type": "application/octet-stream"
+  });
+  res.end(body);
 }
 
 async function readJsonBody(req) {
@@ -223,6 +232,27 @@ const server = http.createServer(async (req, res) => {
         url
       );
       sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "PUT" && ragDocumentChunksMatch) {
+      const body = await readJsonBody(req);
+      const result = await updateConsoleRagDocumentChunksRoute(
+        decodeURIComponent(ragDocumentChunksMatch[1]),
+        body
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragDocumentOriginalMatch = pathname.match(/^\/api\/console\/rag\/documents\/([^/]+)\/original$/);
+    if (method === "GET" && ragDocumentOriginalMatch) {
+      const result = await getConsoleRagDocumentOriginalRoute(decodeURIComponent(ragDocumentOriginalMatch[1]));
+      if (result.body) {
+        sendBinary(res, result.statusCode, result.headers, result.body);
+      } else {
+        sendJson(res, result.statusCode, result.payload);
+      }
       return;
     }
 

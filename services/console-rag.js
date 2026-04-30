@@ -2,6 +2,7 @@ const { createAppError } = require("../utils/errors");
 
 const DEFAULT_RAG_SERVICE_BASE_URL = "http://127.0.0.1:19104";
 const DEFAULT_RAG_PROXY_TIMEOUT_MS = 15000;
+const DEFAULT_RAG_CHUNK_UPDATE_TIMEOUT_MS = 180000;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 function getRagServiceBaseUrl() {
@@ -44,9 +45,20 @@ function getRagServiceBaseUrl() {
   return parsed;
 }
 
+function parsePositiveTimeoutMs(value, fallback) {
+  const parsed = Number(value || fallback);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function getProxyTimeoutMs() {
-  const parsed = Number(process.env.RAG_PROXY_TIMEOUT_MS || DEFAULT_RAG_PROXY_TIMEOUT_MS);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_RAG_PROXY_TIMEOUT_MS;
+  return parsePositiveTimeoutMs(process.env.RAG_PROXY_TIMEOUT_MS, DEFAULT_RAG_PROXY_TIMEOUT_MS);
+}
+
+function getChunkUpdateTimeoutMs() {
+  return parsePositiveTimeoutMs(
+    process.env.RAG_CHUNK_UPDATE_TIMEOUT_MS,
+    DEFAULT_RAG_CHUNK_UPDATE_TIMEOUT_MS
+  );
 }
 
 function buildRagUrl(pathname, query = {}) {
@@ -109,7 +121,7 @@ function throwUpstreamError(response, payload, requestPath) {
 
 async function requestRagJson(pathname, options = {}) {
   const method = options.method || "GET";
-  const timeoutMs = getProxyTimeoutMs();
+  const timeoutMs = parsePositiveTimeoutMs(options.timeoutMs, getProxyTimeoutMs());
   const url = buildRagUrl(pathname, options.query);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -130,6 +142,72 @@ async function requestRagJson(pathname, options = {}) {
     }
 
     return payload;
+  } catch (caughtError) {
+    if (caughtError?.name === "AbortError") {
+      throw createAppError("RUNTIME_TIMEOUT", "RAG service request timed out.", {
+        stage: "console-rag-proxy",
+        details: {
+          requestPath: pathname,
+          timeoutMs
+        }
+      });
+    }
+
+    if (caughtError?.name === "AppError") {
+      throw caughtError;
+    }
+
+    throw createAppError("RAG_SERVICE_UNAVAILABLE", "RAG service is unavailable.", {
+      httpStatus: 502,
+      stage: "console-rag-proxy",
+      retryable: true,
+      details: {
+        requestPath: pathname,
+        cause: caughtError?.message || "unknown"
+      }
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function requestRagFile(pathname, options = {}) {
+  const method = options.method || "GET";
+  const timeoutMs = parsePositiveTimeoutMs(options.timeoutMs, getProxyTimeoutMs());
+  const url = buildRagUrl(pathname, options.query);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method,
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      const rawText = await response.text();
+      let payload = {};
+      if (contentType.includes("application/json") && rawText.trim()) {
+        try {
+          payload = JSON.parse(rawText);
+        } catch {
+          payload = {};
+        }
+      }
+      throwUpstreamError(response, payload, pathname);
+    }
+
+    const body = Buffer.from(await response.arrayBuffer());
+    return {
+      body,
+      headers: {
+        "Content-Type": response.headers.get("content-type") || "application/octet-stream",
+        "Content-Length": String(body.length),
+        "Content-Disposition": response.headers.get("content-disposition") || "inline",
+        "X-Content-Type-Options": response.headers.get("x-content-type-options") || "nosniff"
+      }
+    };
   } catch (caughtError) {
     if (caughtError?.name === "AbortError") {
       throw createAppError("RUNTIME_TIMEOUT", "RAG service request timed out.", {
@@ -180,6 +258,14 @@ async function patchRagJson(pathname, body = {}) {
   });
 }
 
+async function putRagJson(pathname, body = {}, options = {}) {
+  return requestRagJson(pathname, {
+    method: "PUT",
+    body,
+    timeoutMs: options.timeoutMs
+  });
+}
+
 async function deleteRagJson(pathname, body = undefined) {
   return requestRagJson(pathname, {
     method: "DELETE",
@@ -213,6 +299,11 @@ async function getRagDocument(docId) {
   return payload.data || null;
 }
 
+async function getRagDocumentOriginal(docId) {
+  const encodedDocId = encodeURIComponent(String(docId || ""));
+  return requestRagFile(`/internal/rag/documents/${encodedDocId}/original`);
+}
+
 async function updateRagDocument(docId, body = {}) {
   const encodedDocId = encodeURIComponent(String(docId || ""));
   const payload = await patchRagJson(`/internal/rag/documents/${encodedDocId}`, body);
@@ -234,6 +325,16 @@ async function reindexRagDocument(docId, body = {}) {
 async function listRagDocumentChunks(docId, query = {}) {
   const encodedDocId = encodeURIComponent(String(docId || ""));
   const payload = await getRagJson(`/internal/rag/documents/${encodedDocId}/chunks`, query);
+  return payload.data || null;
+}
+
+async function updateRagDocumentChunks(docId, body = {}) {
+  const encodedDocId = encodeURIComponent(String(docId || ""));
+  const payload = await putRagJson(
+    `/internal/rag/documents/${encodedDocId}/chunks`,
+    body,
+    { timeoutMs: getChunkUpdateTimeoutMs() }
+  );
   return payload.data || null;
 }
 
@@ -294,6 +395,7 @@ module.exports = {
   deleteRagDbSyncJob,
   deleteRagJson,
   getRagDocument,
+  getRagDocumentOriginal,
   getRagDbSyncJob,
   getRagJson,
   getRagJob,
@@ -305,10 +407,12 @@ module.exports = {
   listRagJobs,
   patchRagJson,
   postRagJson,
+  putRagJson,
   reindexRagDocument,
   runRagDbSyncJob,
   searchRag,
   uploadRagDocument,
   updateRagDbSyncJob,
-  updateRagDocument
+  updateRagDocument,
+  updateRagDocumentChunks
 };
