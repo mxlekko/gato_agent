@@ -18,6 +18,13 @@ const PLATFORM_BASE_DIR = path.resolve(__dirname, "..", "platform");
 const CONSOLE_CONFIG_STORE_DRIVER = "mysql";
 const CONSOLE_CONFIG_STORAGE_TABLE = "cfg_platform_resources";
 const CONSOLE_CONFIG_UPDATED_BY = "console-config";
+const RAG_SETTINGS_KIND = "rag-settings";
+const RAG_SETTINGS_NAME = "default";
+const RAG_SETTINGS_VERSION = "v1";
+const RAG_SETTINGS_RESOURCE_ID = `${RAG_SETTINGS_KIND}:${RAG_SETTINGS_NAME}@${RAG_SETTINGS_VERSION}`;
+const RAG_SETTINGS_UPDATED_BY = "console-rag-settings";
+const RAG_SETTINGS_DEFAULT_EMBEDDING_MODEL = "text-embedding-v4";
+const RAG_SETTINGS_LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 const KIND_META = {
   WorkflowTemplate: {
@@ -230,6 +237,10 @@ function isEditableProjectPath(filePath) {
 
 function cloneJson(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function formatJsonDocument(document) {
+  return `${JSON.stringify(document, null, 2)}\n`;
 }
 
 async function withConsoleConfigStore(callback) {
@@ -525,6 +536,384 @@ function listExistingScenes() {
       title: sceneConfig.title || sceneConfig.scene
     }))
     .sort((left, right) => left.scene.localeCompare(right.scene));
+}
+
+function buildDefaultRagCollectionName(embeddingModel) {
+  const suffix = String(embeddingModel || RAG_SETTINGS_DEFAULT_EMBEDDING_MODEL)
+    .replace(/-/g, "_")
+    .replace(/\./g, "_");
+  return `local_rag_mvp__${suffix}`;
+}
+
+function readPositiveIntEnv(name, fallback) {
+  const parsed = Number(process.env[name]);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function hasConfiguredEnv(envNames) {
+  return envNames.some((name) => Boolean(String(process.env[name] || "").trim()));
+}
+
+function getDefaultRagSettingsConfig() {
+  const embeddingModel = String(process.env.EMBEDDING_MODEL || RAG_SETTINGS_DEFAULT_EMBEDDING_MODEL).trim()
+    || RAG_SETTINGS_DEFAULT_EMBEDDING_MODEL;
+
+  return {
+    ragServiceBaseUrl: String(process.env.RAG_SERVICE_BASE_URL || "http://127.0.0.1:19104").trim()
+      || "http://127.0.0.1:19104",
+    requestTimeoutMs: readPositiveIntEnv("RAG_PROXY_TIMEOUT_MS", 15000),
+    defaultTopK: 5,
+    embeddingModel,
+    collectionName: String(process.env.RAG_COLLECTION_NAME || "").trim()
+      || buildDefaultRagCollectionName(embeddingModel),
+    defaultChunkConfig: {
+      minChars: 280,
+      maxChars: 900,
+      overlapChars: 80,
+      similarityThreshold: 0.58
+    },
+    sceneBindings: {}
+  };
+}
+
+function parseIntegerField(value, fieldName, { minimum = 1, maximum = null } = {}) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || (maximum !== null && parsed > maximum)) {
+    const rangeText = maximum === null ? `大于等于 ${minimum}` : `${minimum} 到 ${maximum}`;
+    throw createAppError("INVALID_REQUEST", `${fieldName} 必须是 ${rangeText} 的整数。`, {
+      stage: "rag-settings-save"
+    });
+  }
+
+  return parsed;
+}
+
+function parseFloatField(value, fieldName, { minimum = 0, maximum = 1 } = {}) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
+    throw createAppError("INVALID_REQUEST", `${fieldName} 必须是 ${minimum} 到 ${maximum} 之间的数字。`, {
+      stage: "rag-settings-save"
+    });
+  }
+
+  return parsed;
+}
+
+function normalizeRagServiceBaseUrl(value) {
+  const rawBaseUrl = String(value || "").trim();
+  if (!rawBaseUrl) {
+    throw createAppError("INVALID_REQUEST", "RAG 服务地址不能为空。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(rawBaseUrl);
+  } catch {
+    throw createAppError("INVALID_REQUEST", "RAG 服务地址必须是合法 URL。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  if (parsed.protocol !== "http:") {
+    throw createAppError("INVALID_REQUEST", "RAG 服务地址只允许 http://。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  if (!RAG_SETTINGS_LOOPBACK_HOSTS.has(parsed.hostname)) {
+    throw createAppError("ACCESS_DENIED", "RAG 服务地址只允许本机 loopback 地址。", {
+      stage: "rag-settings-save",
+      details: {
+        hostname: parsed.hostname
+      }
+    });
+  }
+
+  if (parsed.username || parsed.password) {
+    throw createAppError("INVALID_REQUEST", "RAG 服务地址不能包含用户名或密码。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString().replace(/\/$/, "");
+}
+
+function normalizeRagCollectionName(value) {
+  const normalized = String(value || "").trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{2,62}$/.test(normalized)) {
+    throw createAppError(
+      "INVALID_REQUEST",
+      "Collection 名称必须是 3 到 63 位的字母、数字、点、下划线或短横线组合。",
+      {
+        stage: "rag-settings-save"
+      }
+    );
+  }
+
+  return normalized;
+}
+
+function findSensitiveConfigPath(value, pathParts = []) {
+  if (!isObject(value) && !Array.isArray(value)) {
+    return null;
+  }
+
+  const entries = Array.isArray(value)
+    ? value.map((item, index) => [String(index), item])
+    : Object.entries(value);
+
+  for (const [key, entryValue] of entries) {
+    const nextPath = [...pathParts, key];
+    if (/(api[_-]?key|secret|token|password|passwd|pwd|credential)/i.test(key)) {
+      return nextPath.join(".");
+    }
+
+    const nestedPath = findSensitiveConfigPath(entryValue, nextPath);
+    if (nestedPath) {
+      return nestedPath;
+    }
+  }
+
+  return null;
+}
+
+function normalizeRagSceneBindings(value) {
+  if (value === undefined || value === null) {
+    return {};
+  }
+
+  if (!isObject(value)) {
+    throw createAppError("INVALID_REQUEST", "场景绑定必须是 JSON 对象。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  const sensitivePath = findSensitiveConfigPath(value, ["sceneBindings"]);
+  if (sensitivePath) {
+    throw createAppError("INVALID_REQUEST", `场景绑定不能保存密钥字段: ${sensitivePath}。`, {
+      stage: "rag-settings-save"
+    });
+  }
+
+  const normalized = {};
+  for (const [scene, binding] of Object.entries(value)) {
+    const sceneKey = String(scene || "").trim();
+    if (!sceneKey) {
+      throw createAppError("INVALID_REQUEST", "场景绑定的 scene 不能为空。", {
+        stage: "rag-settings-save"
+      });
+    }
+
+    const knowledgeBase = typeof binding === "string"
+      ? binding.trim()
+      : isObject(binding)
+        ? String(binding.knowledgeBase || binding.collectionName || "").trim()
+        : "";
+
+    if (!knowledgeBase) {
+      throw createAppError("INVALID_REQUEST", `场景 ${sceneKey} 必须配置 knowledgeBase。`, {
+        stage: "rag-settings-save"
+      });
+    }
+
+    normalized[sceneKey] = { knowledgeBase };
+  }
+
+  return normalized;
+}
+
+function normalizeRagSettingsConfig(input = {}) {
+  const defaults = getDefaultRagSettingsConfig();
+  const rawChunkConfig = isObject(input.defaultChunkConfig) ? input.defaultChunkConfig : {};
+  const mergedChunkConfig = {
+    ...defaults.defaultChunkConfig,
+    ...rawChunkConfig
+  };
+
+  const config = {
+    ...defaults,
+    ...input,
+    defaultChunkConfig: mergedChunkConfig
+  };
+
+  const embeddingModel = String(config.embeddingModel || "").trim();
+  if (!embeddingModel) {
+    throw createAppError("INVALID_REQUEST", "Embedding 模型不能为空。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  const minChars = parseIntegerField(mergedChunkConfig.minChars, "minChars", {
+    minimum: 1,
+    maximum: 50000
+  });
+  const maxChars = parseIntegerField(mergedChunkConfig.maxChars, "maxChars", {
+    minimum: 2,
+    maximum: 100000
+  });
+  const overlapChars = parseIntegerField(mergedChunkConfig.overlapChars, "overlapChars", {
+    minimum: 0,
+    maximum: 50000
+  });
+  const similarityThreshold = parseFloatField(mergedChunkConfig.similarityThreshold, "similarityThreshold");
+
+  if (maxChars <= minChars) {
+    throw createAppError("INVALID_REQUEST", "maxChars 必须大于 minChars。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  if (overlapChars >= maxChars) {
+    throw createAppError("INVALID_REQUEST", "overlapChars 必须小于 maxChars。", {
+      stage: "rag-settings-save"
+    });
+  }
+
+  return {
+    ragServiceBaseUrl: normalizeRagServiceBaseUrl(config.ragServiceBaseUrl),
+    requestTimeoutMs: parseIntegerField(config.requestTimeoutMs, "requestTimeoutMs", {
+      minimum: 1000,
+      maximum: 120000
+    }),
+    defaultTopK: parseIntegerField(config.defaultTopK, "defaultTopK", {
+      minimum: 1,
+      maximum: 10
+    }),
+    embeddingModel,
+    collectionName: normalizeRagCollectionName(config.collectionName),
+    defaultChunkConfig: {
+      minChars,
+      maxChars,
+      overlapChars,
+      similarityThreshold
+    },
+    sceneBindings: normalizeRagSceneBindings(config.sceneBindings)
+  };
+}
+
+function buildRagSettingsDocument(config) {
+  return {
+    kind: "RagSettings",
+    apiVersion: "openclaw.console/v1",
+    metadata: {
+      name: RAG_SETTINGS_NAME,
+      version: RAG_SETTINGS_VERSION,
+      title: "RAG console settings",
+      status: "draft"
+    },
+    spec: cloneJson(config)
+  };
+}
+
+function buildRagSettingsReadonly() {
+  return {
+    dashscopeApiKeyConfigured: hasConfiguredEnv(["DASHSCOPE_API_KEY"]),
+    chatApiKeyConfigured: hasConfiguredEnv([
+      "CHAT_API_KEY",
+      "MOONSHOT_API_KEY",
+      "OPENAI_API_KEY",
+      "OPENCLAW_GATEWAY_TOKEN"
+    ]),
+    pythonServiceVersion: String(process.env.RAG_PYTHON_SERVICE_VERSION || "").trim() || null,
+    chromaPersistDirectory: path.join("rag-service", "data", "chroma")
+  };
+}
+
+function buildRagSettingsStoragePath() {
+  return `mysql://${CONSOLE_CONFIG_STORAGE_TABLE}/${RAG_SETTINGS_RESOURCE_ID}`;
+}
+
+function buildRagSettingsPayload(record = null) {
+  const rawSpec = isObject(record?.document?.spec) ? record.document.spec : {};
+  const config = normalizeRagSettingsConfig(rawSpec);
+  const storagePath = buildRagSettingsStoragePath();
+
+  return {
+    resourceId: RAG_SETTINGS_RESOURCE_ID,
+    kind: RAG_SETTINGS_KIND,
+    name: RAG_SETTINGS_NAME,
+    version: RAG_SETTINGS_VERSION,
+    status: record?.status || record?.document?.metadata?.status || "draft",
+    storageDriver: CONSOLE_CONFIG_STORE_DRIVER,
+    storageTable: CONSOLE_CONFIG_STORAGE_TABLE,
+    storagePath,
+    currentRevisionId: record?.currentRevisionId || null,
+    updatedBy: record?.updatedBy || null,
+    updatedAt: toIsoString(record?.updatedAt),
+    config,
+    readOnly: buildRagSettingsReadonly(),
+    editable: true
+  };
+}
+
+async function getConsoleRagSettings() {
+  try {
+    const record = await withConsoleConfigStore((store) => store.getPlatformResource({
+      kind: RAG_SETTINGS_KIND,
+      name: RAG_SETTINGS_NAME,
+      version: RAG_SETTINGS_VERSION
+    }));
+
+    return buildRagSettingsPayload(record);
+  } catch (error) {
+    throw normalizeError(error, "INVALID_REQUEST");
+  }
+}
+
+async function updateConsoleRagSettings(body = {}) {
+  try {
+    return await withConsoleConfigStore(async (store) => {
+      const currentRecord = await store.getPlatformResource({
+        kind: RAG_SETTINGS_KIND,
+        name: RAG_SETTINGS_NAME,
+        version: RAG_SETTINGS_VERSION
+      });
+      const currentConfig = buildRagSettingsPayload(currentRecord).config;
+      const normalized = normalizeRagSettingsConfig({
+        ...currentConfig,
+        ...body,
+        defaultChunkConfig: {
+          ...currentConfig.defaultChunkConfig,
+          ...(isObject(body.defaultChunkConfig) ? body.defaultChunkConfig : {})
+        },
+        sceneBindings: body.sceneBindings === undefined
+          ? currentConfig.sceneBindings
+          : body.sceneBindings
+      });
+      const document = buildRagSettingsDocument(normalized);
+      const sourceText = formatJsonDocument(document);
+      const savedDraft = await store.savePlatformResourceDraft(
+        {
+          kind: RAG_SETTINGS_KIND,
+          name: RAG_SETTINGS_NAME,
+          version: RAG_SETTINGS_VERSION,
+          status: "draft",
+          document,
+          sourceText,
+          updatedBy: RAG_SETTINGS_UPDATED_BY
+        },
+        {
+          operator: RAG_SETTINGS_UPDATED_BY,
+          changeNote: `console rag settings draft update for ${RAG_SETTINGS_RESOURCE_ID}`
+        }
+      );
+
+      return {
+        ...buildRagSettingsPayload(savedDraft),
+        validation: {
+          valid: true,
+          issueCount: 0
+        }
+      };
+    });
+  } catch (error) {
+    throw normalizeError(error, "INVALID_REQUEST");
+  }
 }
 
 function normalizeToolStructuredConfig(body = {}, currentDocument = {}) {
@@ -974,6 +1363,7 @@ function sortItems(items) {
 
 async function getConsoleConfigCatalog() {
   const state = await loadConsoleConfigCatalogState();
+  const ragSettings = await getConsoleRagSettings();
 
   return {
     counts: {
@@ -982,6 +1372,7 @@ async function getConsoleConfigCatalog() {
       tools: state.items.filter((item) => item.kind === "tool").length,
       queries: state.items.filter((item) => item.kind === "query").length
     },
+    ragSettings,
     items: state.items
   };
 }
@@ -1006,6 +1397,10 @@ async function compileConsoleConfigPreview({ scene } = {}) {
 }
 
 async function updateConsoleToolStructuredConfig(resourceId, body = {}) {
+  if (resourceId === RAG_SETTINGS_RESOURCE_ID) {
+    return updateConsoleRagSettings(body);
+  }
+
   try {
     const state = await loadConsoleConfigCatalogState();
     const toolItem = resolveCatalogItemByKind(state, resourceId, "tool");
@@ -1199,6 +1594,9 @@ async function updateConsoleQueryStructuredConfig(resourceId, body = {}) {
 module.exports = {
   compileConsoleConfigPreview,
   getConsoleConfigCatalog,
+  getConsoleRagSettings,
+  RAG_SETTINGS_RESOURCE_ID,
+  updateConsoleRagSettings,
   updateConsoleQueryStructuredConfig,
   updateConsoleToolStructuredConfig,
   validateConsoleConfigs

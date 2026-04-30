@@ -1,5 +1,11 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Layout, Menu, Space, Tag, Typography } from "@arco-design/web-react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { consoleDataMode } from "../services/clientFactory";
+
+const { Content, Sider } = Layout;
+const MenuItem = Menu.Item;
+const SubMenu = Menu.SubMenu;
+const { Text, Title } = Typography;
 
 function formatDataMode(mode) {
   return mode === "api" ? "真实接口" : mode === "mock" ? "模拟数据" : mode;
@@ -10,6 +16,15 @@ const configCatalogItems = [
   { to: "/configs/templates", label: "流程模板" },
   { to: "/configs/queries", label: "查询服务配置" },
   { to: "/configs/tools", label: "工具配置" }
+];
+
+const ragItems = [
+  { to: "/rag/overview", label: "服务总览" },
+  { to: "/rag/search", label: "检索测试" },
+  { to: "/rag/library", label: "文档库" },
+  { to: "/rag/jobs", label: "任务队列" },
+  { to: "/rag/sync", label: "数据库同步" },
+  { to: "/rag/settings", label: "设置" }
 ];
 
 const navGroups = [
@@ -32,6 +47,12 @@ const navGroups = [
     ]
   },
   {
+    label: "知识库 / RAG",
+    items: [
+      { label: "RAG 管理", children: ragItems }
+    ]
+  },
+  {
     label: "配置",
     items: [
       { label: "配置目录", children: configCatalogItems },
@@ -51,102 +72,99 @@ function isPathActive(pathname, to) {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-function NavItem({ item, depth = 0, pathname }) {
-  if (Array.isArray(item.children) && item.children.length > 0) {
-    const submenuActive = item.children.some((child) => isPathActive(pathname, child.to));
+function flattenNavItems(items) {
+  return items.flatMap((item) => {
+    if (Array.isArray(item.children)) {
+      return flattenNavItems(item.children);
+    }
+    return item.to ? [item] : [];
+  });
+}
 
+function collectOpenKeys() {
+  return navGroups.flatMap((group) => [
+    `group:${group.label}`,
+    ...group.items
+      .filter((item) => Array.isArray(item.children) && item.children.length > 0)
+      .map((item) => `submenu:${group.label}:${item.label}`)
+  ]);
+}
+
+function renderMenuItem(item, groupLabel) {
+  if (Array.isArray(item.children) && item.children.length > 0) {
     return (
-      <div className="nav-submenu">
-        <p className={`nav-submenu-label${submenuActive ? " nav-submenu-label-active" : ""}`}>
-          {item.label}
-        </p>
-        <div className="nav-submenu-items">
-          {item.children.map((child) => (
-            <NavItem
-              depth={depth + 1}
-              item={child}
-              key={child.to}
-              pathname={pathname}
-            />
-          ))}
-        </div>
-      </div>
+      <SubMenu key={`submenu:${groupLabel}:${item.label}`} title={item.label}>
+        {item.children.map((child) => renderMenuItem(child, groupLabel))}
+      </SubMenu>
     );
   }
 
   return (
-    <NavLink
-      className={({ isActive }) =>
-        `nav-link${depth > 0 ? " nav-link-sublevel" : ""}${isActive ? " nav-link-active" : ""}`
-      }
-      to={item.to}
-    >
+    <MenuItem key={item.to}>
       {item.label}
-    </NavLink>
+    </MenuItem>
   );
 }
 
 export function ShellLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPort =
     typeof window !== "undefined" && window.location?.port
       ? window.location.port
       : "3200";
+  const navLeaves = flattenNavItems(navGroups.flatMap((group) => group.items));
+  const selectedItem = navLeaves
+    .slice()
+    .sort((left, right) => right.to.length - left.to.length)
+    .find((item) => isPathActive(location.pathname, item.to));
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
+    <Layout className="app-shell">
+      <Sider className="app-sidebar" width={264}>
         <div className="sidebar-brand">
           <div className="brand-mark">A</div>
           <div>
-            <p className="eyebrow">业务平台</p>
-            <h1>业务平台控制台</h1>
+            <Text className="eyebrow">业务平台</Text>
+            <Title heading={5} className="sidebar-title">
+              业务平台控制台
+            </Title>
           </div>
         </div>
 
-        <div className="sidebar-note">
-          <span className="status-chip">开发端口 {currentPort}</span>
-          <span className="status-chip status-chip-accent">
+        <Space className="sidebar-note" wrap>
+          <Tag bordered color="gray">开发端口 {currentPort}</Tag>
+          <Tag bordered color="arcoblue">
             数据模式 {formatDataMode(consoleDataMode)}
-          </span>
-        </div>
+          </Tag>
+        </Space>
 
-        <nav className="sidebar-nav" aria-label="主导航">
+        <Menu
+          className="sidebar-nav-menu"
+          defaultOpenKeys={collectOpenKeys()}
+          onClickMenuItem={(key) => {
+            if (String(key).startsWith("/")) {
+              navigate(key);
+            }
+          }}
+          selectedKeys={selectedItem ? [selectedItem.to] : []}
+        >
           {navGroups.map((group) => (
-            <section key={group.label} className="nav-group">
-              <p className="nav-group-title">{group.label}</p>
-              <div className="nav-group-items">
-                {group.items.map((item) => (
-                  <NavItem
-                    item={item}
-                    key={item.to || item.label}
-                    pathname={location.pathname}
-                  />
-                ))}
-              </div>
-            </section>
+            <SubMenu key={`group:${group.label}`} title={group.label}>
+              {group.items.map((item) => renderMenuItem(item, group.label))}
+            </SubMenu>
           ))}
-        </nav>
+        </Menu>
 
         <div className="sidebar-footer">
           <p>当前阶段：FE3-T3</p>
           <p>灰度报告、路由摘要和变更预检已接入，前端 FE3 范围已闭合。</p>
         </div>
-      </aside>
+      </Sider>
 
-      <main className="app-main">
-        <header className="app-header">
-          <div>
-            <p className="eyebrow">内部控制台</p>
-            <h2>先把联调、排障、迁移视角放到一个地方</h2>
-          </div>
-          <div className="header-badges">
-            <span className="pill">只读优先</span>
-            <span className="pill pill-warm">受控变更</span>
-          </div>
-        </header>
+      <Content className="app-main">
         <Outlet />
-      </main>
-    </div>
+      </Content>
+    </Layout>
   );
 }

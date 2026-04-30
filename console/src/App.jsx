@@ -8,6 +8,12 @@ import { RolloutPage } from "./pages/rollout/RolloutPage";
 import { RunDetailPage } from "./pages/runs/RunDetailPage";
 import { RunListPage } from "./pages/runs/RunListPage";
 import { ShadowComparePage } from "./pages/runs/ShadowComparePage";
+import { RagJobsPage } from "./pages/rag/RagJobsPage";
+import { RagLibraryPage } from "./pages/rag/RagLibraryPage";
+import { RagOverviewPage } from "./pages/rag/RagOverviewPage";
+import { RagSearchPage } from "./pages/rag/RagSearchPage";
+import { RagSettingsPage } from "./pages/rag/RagSettingsPage";
+import { RagSyncPage } from "./pages/rag/RagSyncPage";
 import { SceneWorkflowPage } from "./pages/scenes/SceneWorkflowPage";
 import { ScenesPage } from "./pages/scenes/ScenesPage";
 import { TraceDetailPage } from "./pages/traces/TraceDetailPage";
@@ -24,6 +30,13 @@ export default function App() {
         <Route path="runs/:runId" element={<RunDetailPage />} />
         <Route path="runs/:runId/shadow" element={<ShadowComparePage />} />
         <Route path="traces/:traceId" element={<TraceDetailPage />} />
+        <Route path="rag" element={<Navigate to="/rag/overview" replace />} />
+        <Route path="rag/overview" element={<RagOverviewPage />} />
+        <Route path="rag/search" element={<RagSearchPage />} />
+        <Route path="rag/library" element={<RagLibraryPage />} />
+        <Route path="rag/jobs" element={<RagJobsPage />} />
+        <Route path="rag/sync" element={<RagSyncPage />} />
+        <Route path="rag/settings" element={<RagSettingsPage />} />
         <Route path="configs" element={<Navigate to="/configs/skills" replace />} />
         <Route
           path="configs/skills"

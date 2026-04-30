@@ -43,6 +43,26 @@ const {
 } = require("./routes/console-releases");
 const { getConsoleRunRoute, getConsoleShadowRoute, listConsoleRunsRoute } = require("./routes/console-runs");
 const { getConsoleTraceRoute } = require("./routes/console-traces");
+const {
+  createConsoleRagDbSyncJobRoute,
+  deleteConsoleRagDocumentRoute,
+  deleteConsoleRagDbSyncJobRoute,
+  getConsoleRagDocumentRoute,
+  getConsoleRagDbSyncJobRoute,
+  getConsoleRagHealthRoute,
+  getConsoleRagJobRoute,
+  inspectConsoleRagDbSyncColumnsRoute,
+  listConsoleRagDocumentChunksRoute,
+  listConsoleRagDocumentsRoute,
+  listConsoleRagDbSyncJobsRoute,
+  listConsoleRagJobsRoute,
+  reindexConsoleRagDocumentRoute,
+  runConsoleRagDbSyncJobRoute,
+  searchConsoleRagRoute,
+  updateConsoleRagDocumentRoute,
+  updateConsoleRagDbSyncJobRoute,
+  uploadConsoleRagDocumentRoute
+} = require("./routes/console-rag");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("./utils/errors");
 const { info, error } = require("./utils/logger");
 const { GATEWAY_BASE_URL } = require("./services/runtime-message");
@@ -155,6 +175,150 @@ const server = http.createServer(async (req, res) => {
 
     if (method === "GET" && pathname === "/api/console/runs") {
       const result = await listConsoleRunsRoute(url);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/api/console/rag/health") {
+      const result = await getConsoleRagHealthRoute();
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "POST" && pathname === "/api/console/rag/search") {
+      const body = await readJsonBody(req);
+      const result = await searchConsoleRagRoute(body);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/api/console/rag/documents") {
+      const result = await listConsoleRagDocumentsRoute(url);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "POST" && pathname === "/api/console/rag/documents") {
+      const body = await readJsonBody(req);
+      const result = await uploadConsoleRagDocumentRoute(body);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragDocumentReindexMatch = pathname.match(/^\/api\/console\/rag\/documents\/([^/]+)\/reindex$/);
+    if (method === "POST" && ragDocumentReindexMatch) {
+      const body = await readJsonBody(req);
+      const result = await reindexConsoleRagDocumentRoute(
+        decodeURIComponent(ragDocumentReindexMatch[1]),
+        body
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragDocumentChunksMatch = pathname.match(/^\/api\/console\/rag\/documents\/([^/]+)\/chunks$/);
+    if (method === "GET" && ragDocumentChunksMatch) {
+      const result = await listConsoleRagDocumentChunksRoute(
+        decodeURIComponent(ragDocumentChunksMatch[1]),
+        url
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragDocumentMatch = pathname.match(/^\/api\/console\/rag\/documents\/([^/]+)$/);
+    if (method === "GET" && ragDocumentMatch) {
+      const result = await getConsoleRagDocumentRoute(decodeURIComponent(ragDocumentMatch[1]));
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "PATCH" && ragDocumentMatch) {
+      const body = await readJsonBody(req);
+      const result = await updateConsoleRagDocumentRoute(
+        decodeURIComponent(ragDocumentMatch[1]),
+        body
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "DELETE" && ragDocumentMatch) {
+      const result = await deleteConsoleRagDocumentRoute(decodeURIComponent(ragDocumentMatch[1]));
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/api/console/rag/jobs") {
+      const result = await listConsoleRagJobsRoute(url);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragJobMatch = pathname.match(/^\/api\/console\/rag\/jobs\/([^/]+)$/);
+    if (method === "GET" && ragJobMatch) {
+      const result = await getConsoleRagJobRoute(decodeURIComponent(ragJobMatch[1]));
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/api/console/rag/db-sync/jobs") {
+      const result = await listConsoleRagDbSyncJobsRoute(url);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "POST" && pathname === "/api/console/rag/db-sync/jobs") {
+      const body = await readJsonBody(req);
+      const result = await createConsoleRagDbSyncJobRoute(body);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragDbSyncInspectColumnsMatch = pathname.match(/^\/api\/console\/rag\/db-sync\/jobs\/([^/]+)\/inspect-columns$/);
+    if (method === "POST" && ragDbSyncInspectColumnsMatch) {
+      const result = await inspectConsoleRagDbSyncColumnsRoute(
+        decodeURIComponent(ragDbSyncInspectColumnsMatch[1])
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragDbSyncRunMatch = pathname.match(/^\/api\/console\/rag\/db-sync\/jobs\/([^/]+)\/run$/);
+    if (method === "POST" && ragDbSyncRunMatch) {
+      const body = await readJsonBody(req);
+      const result = await runConsoleRagDbSyncJobRoute(
+        decodeURIComponent(ragDbSyncRunMatch[1]),
+        body
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const ragDbSyncMatch = pathname.match(/^\/api\/console\/rag\/db-sync\/jobs\/([^/]+)$/);
+    if (method === "GET" && ragDbSyncMatch) {
+      const result = await getConsoleRagDbSyncJobRoute(
+        decodeURIComponent(ragDbSyncMatch[1]),
+        url
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "PATCH" && ragDbSyncMatch) {
+      const body = await readJsonBody(req);
+      const result = await updateConsoleRagDbSyncJobRoute(
+        decodeURIComponent(ragDbSyncMatch[1]),
+        body
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "DELETE" && ragDbSyncMatch) {
+      const result = await deleteConsoleRagDbSyncJobRoute(
+        decodeURIComponent(ragDbSyncMatch[1])
+      );
       sendJson(res, result.statusCode, result.payload);
       return;
     }

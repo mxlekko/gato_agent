@@ -4,6 +4,7 @@
 
 - API 服务：统一业务入口、控制台接口、配置校验和发布查询
 - 本地工具服务：`ContextHelper`、`DirectDbRunner`、`ModelTool`
+- RAG 服务：本地知识库检索、文档库和索引任务接口
 - 平台运行层：workflow 编译、LangGraph 兼容运行、直连模型运行、运行追踪
 - React 控制台：场景、配置、运行记录、灰度和发布状态页面
 - Runtime 资产：scene 配置、prompt、schema、OpenClaw skill、模型元数据和业务字典
@@ -74,7 +75,7 @@ POST /api/agent/run
 | ModelTool | `127.0.0.1:19103` |
 | Console dev | `127.0.0.1:3200` |
 | OpenClaw Gateway | `127.0.0.1:18789` |
-| special RAG | `127.0.0.1:19104` |
+| RAG / special RAG | `127.0.0.1:19104` |
 
 代码内置默认值仍是 `3000/19001/19002/19003`。本副本日常运行建议使用 `3100/19101/19102/19103`，这样可以和旧仓或其他实验端口并行。
 
@@ -90,6 +91,9 @@ POST /api/agent/run
 - `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`
 - `SQLSERVER_HOST`, `SQLSERVER_PORT`, `SQLSERVER_DATABASE`, `SQLSERVER_USER`, `SQLSERVER_PASSWORD`
 - `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`
+- `RAG_SERVICE_BASE_URL`, `RAG_SEARCH_HOST`, `RAG_SEARCH_PORT`, `RAG_COLLECTION_NAME`
+- `DASHSCOPE_API_KEY`, `EMBEDDING_MODEL`
+- `RAG_PROXY_TIMEOUT_MS`, `RAG_SYNC_DB_URL`
 - `CONFIG_STORE_DRIVER`
 - `CONFIG_CURRENT_BUNDLE`, `CONFIG_SCENE_CONFIG_DIR`, `CONFIG_PROJECT_ROOT`, `CONFIG_RUNTIME_ROOT`
 
@@ -153,6 +157,38 @@ npm run service:status
 
 更详细的常驻方式见 [常驻启动说明.md](常驻启动说明.md)。
 
+## 启动 RAG 服务
+
+首次安装 Python 依赖：
+
+```bash
+npm run rag:install
+```
+
+启动 RAG 服务：
+
+```bash
+npm run start:rag
+```
+
+健康检查：
+
+```bash
+npm run rag:health
+```
+
+默认 RAG 服务监听 `http://127.0.0.1:19104`。API 服务通过 `RAG_SERVICE_BASE_URL` 代理到 RAG 服务，控制台通过 `/api/console/rag/*` 访问文档库、检索和任务队列。`DASHSCOPE_API_KEY` 只允许写在本地 `.env` 或 `rag-service/.env` 中，不能写入 Git。
+
+RAG 运行数据默认写入 `rag-service/data/`。需要做临时验收或隔离旧 Chroma 数据时，可以在启动前设置 `RAG_DATA_DIR` 指向一个被忽略的临时目录；如需更细粒度控制，也可分别设置 `RAG_CHROMA_DIR`、`RAG_LIBRARY_DIR`、`RAG_UPLOAD_DIR`、`RAG_JOBS_DB`、`RAG_DB_SYNC_DIR`。这些变量只影响本地运行数据位置，不改变 `POST /internal/rag/search` 和控制台代理协议。
+
+常见排查：
+
+- `RAG_SERVICE_UNAVAILABLE`：确认 `npm run start:rag` 已启动，且 `RAG_SERVICE_BASE_URL` 指向本机 loopback 地址。
+- `RAG_DEPENDENCY_MISSING`：执行 `npm run rag:install` 后重启 RAG 服务。
+- `DASHSCOPE_API_KEY missing`：在 `.env` 或 `rag-service/.env` 配置密钥后重启服务。
+- 搜索无结果：先在 `/rag/library` 上传文档并触发重建索引，再到 `/rag/jobs` 查看任务是否完成。
+- `rag-service/data/`、`rag-service/logs/`、`.venv/`、`.env` 都是本地运行内容，不提交到 Git。
+
 ## 启动控制台
 
 从仓库根目录启动：
@@ -193,6 +229,51 @@ npm run mysql:schema:apply
 npm run mysql:import-config
 npm run mysql:import-config:verify
 ```
+
+## 本地初始化
+
+clone 到新机器后，代码本身不能自动补齐 `.env`、MySQL 配置中心、active bundle、OpenClaw Gateway、RAG 服务和业务数据库。先创建 `.env` 并填好真实配置：
+
+```bash
+cp .env.example .env
+```
+
+然后可以用 bootstrap 脚本做预检：
+
+```bash
+npm run bootstrap:local:dry-run
+```
+
+预检通过后执行：
+
+```bash
+npm run bootstrap:local
+```
+
+该脚本会按顺序完成：
+
+- 检查 `.env` 必要变量
+- 检查项目关键文件
+- 检查 RAG requirements、虚拟环境、`DASHSCOPE_API_KEY` 和 `/health`
+- 检查 `npm`、`mysql`、`ruby`
+- 可选探测 OpenClaw Gateway 和 special RAG 服务
+- 应用 MySQL 配置中心表结构
+- 将仓库内 scene / platform / asset / helper script 导入 MySQL 配置中心
+- 创建并发布本地 active bundle 到 `.local/runtime-bundles/local/current`
+- 执行 `npm run check`
+
+可选参数：
+
+```bash
+node scripts/bootstrap_local_runtime.js --dry-run
+node scripts/bootstrap_local_runtime.js --install-deps
+node scripts/bootstrap_local_runtime.js --skip-external-checks
+node scripts/bootstrap_local_runtime.js --skip-schema
+node scripts/bootstrap_local_runtime.js --skip-import
+node scripts/bootstrap_local_runtime.js --skip-publish
+```
+
+注意：bootstrap 只能恢复本仓库可管理的本地运行态，不能替你创建外部 SQL Server、OpenClaw Gateway、RAG 服务或模型服务账号。
 
 ## 工程化检查
 
@@ -277,6 +358,7 @@ npm run regression:self-contained
 ## 文档索引
 
 - [常驻启动说明.md](常驻启动说明.md)
+- [docs/项目开发文档/RAG管理工作台运行说明.md](docs/项目开发文档/RAG管理工作台运行说明.md)
 - [docs/engineering/project-structure.md](docs/engineering/project-structure.md)
 - [docs/场景外部对接文档/payment-info-split外部API对接文档.md](docs/场景外部对接文档/payment-info-split外部API对接文档.md)
 - [docs/场景外部对接文档/special-custom-product-solution外部API对接文档.md](docs/场景外部对接文档/special-custom-product-solution外部API对接文档.md)

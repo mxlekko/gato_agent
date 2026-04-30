@@ -6,12 +6,14 @@ node_modules/
 .env.local
 .env.*.local
 console/.env.local
+.venv/
 
 # macOS
 .DS_Store
 
 # logs and runtime output
 *.log
+*.pid
 logs/
 tmp/
 .tmp/
@@ -28,3 +30,23 @@ console/dist/
 .npm-cache-playwright/
 .playwright-cli/
 console/.npm-cache/
+
+# local data stores
+data/chroma/
+data/library/
+data/uploads/
+data/db_sync/*.sqlite3
+
+# RAG service local runtime
+rag-service/.env
+rag-service/.env.*
+!rag-service/.env.example
+rag-service/.venv/
+rag-service/**/__pycache__/
+rag-service/**/*.py[cod]
+rag-service/data/*
+!rag-service/data/
+!rag-service/data/.gitkeep
+!rag-service/logs/
+rag-service/logs/*
+!rag-service/logs/.gitkeep

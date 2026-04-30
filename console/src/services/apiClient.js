@@ -1,16 +1,23 @@
 import { requestJson } from "./httpClient";
 
+function buildQueryString(params = {}) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      query.set(key, String(value));
+    }
+  }
+
+  const suffix = query.toString();
+  return suffix ? `?${suffix}` : "";
+}
+
+const RAG_SETTINGS_RESOURCE_ID = "rag-settings:default@v1";
+
 export const apiClient = {
   getReleaseStatus(params = {}) {
-    const query = new URLSearchParams();
-
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && String(value).trim() !== "") {
-        query.set(key, String(value));
-      }
-    }
-
-    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const suffix = buildQueryString(params);
     return requestJson(`/api/console/releases/status${suffix}`);
   },
   listScenes() {
@@ -126,6 +133,115 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify(body)
     });
+  },
+  getRagHealth() {
+    return requestJson("/api/console/rag/health");
+  },
+  async getRagSettings() {
+    const response = await requestJson("/api/console/configs/catalog");
+    if (response.ok && response.payload?.success !== false && response.payload?.data?.ragSettings) {
+      return {
+        ...response,
+        payload: {
+          ...response.payload,
+          data: response.payload.data.ragSettings
+        }
+      };
+    }
+
+    return response;
+  },
+  updateRagSettings(payload) {
+    return requestJson(`/api/console/configs/tools/${encodeURIComponent(RAG_SETTINGS_RESOURCE_ID)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  searchRag(payload) {
+    return requestJson("/api/console/rag/search", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  listRagDocuments(params = {}) {
+    return requestJson(`/api/console/rag/documents${buildQueryString(params)}`);
+  },
+  uploadRagDocument(payload) {
+    return requestJson("/api/console/rag/documents", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  getRagDocument(docId) {
+    return requestJson(`/api/console/rag/documents/${encodeURIComponent(docId)}`);
+  },
+  updateRagDocument(docId, payload) {
+    return requestJson(`/api/console/rag/documents/${encodeURIComponent(docId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  deleteRagDocument(docId) {
+    return requestJson(`/api/console/rag/documents/${encodeURIComponent(docId)}`, {
+      method: "DELETE"
+    });
+  },
+  reindexRagDocument(docId, payload = {}) {
+    return requestJson(`/api/console/rag/documents/${encodeURIComponent(docId)}/reindex`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  listRagDocumentChunks(docId, params = {}) {
+    return requestJson(
+      `/api/console/rag/documents/${encodeURIComponent(docId)}/chunks${buildQueryString(params)}`
+    );
+  },
+  listRagJobs(params = {}) {
+    return requestJson(`/api/console/rag/jobs${buildQueryString(params)}`);
+  },
+  getRagJob(jobId) {
+    return requestJson(`/api/console/rag/jobs/${encodeURIComponent(jobId)}`);
+  },
+  listRagDbSyncJobs(params = {}) {
+    return requestJson(`/api/console/rag/db-sync/jobs${buildQueryString(params)}`);
+  },
+  createRagDbSyncJob(payload) {
+    return requestJson("/api/console/rag/db-sync/jobs", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  getRagDbSyncJob(syncJobId, params = {}) {
+    return requestJson(
+      `/api/console/rag/db-sync/jobs/${encodeURIComponent(syncJobId)}${buildQueryString(params)}`
+    );
+  },
+  updateRagDbSyncJob(syncJobId, payload) {
+    return requestJson(`/api/console/rag/db-sync/jobs/${encodeURIComponent(syncJobId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  },
+  deleteRagDbSyncJob(syncJobId) {
+    return requestJson(`/api/console/rag/db-sync/jobs/${encodeURIComponent(syncJobId)}`, {
+      method: "DELETE"
+    });
+  },
+  runRagDbSyncJob(syncJobId, payload = {}) {
+    return requestJson(`/api/console/rag/db-sync/jobs/${encodeURIComponent(syncJobId)}/run`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+  inspectRagDbSyncColumns(syncJobId) {
+    return requestJson(
+      `/api/console/rag/db-sync/jobs/${encodeURIComponent(syncJobId)}/inspect-columns`,
+      {
+        method: "POST",
+        body: JSON.stringify({})
+      }
+    );
   },
   getRolloutReport() {
     return requestJson("/api/console/rollout/report");
