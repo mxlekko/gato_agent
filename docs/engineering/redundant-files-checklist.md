@@ -25,8 +25,8 @@
 | `docs/.DS_Store` | macOS 元数据 | 可删除。 |
 | `docs/场景外部对接文档/.DS_Store` | macOS 元数据 | 可删除。 |
 | `runtime-assets/.DS_Store` | macOS 元数据 | 可删除。 |
-| `runtime-assets/openclaw/.DS_Store` | macOS 元数据 | 可删除。 |
-| `runtime-assets/openclaw/agents/.DS_Store` | macOS 元数据 | 可删除。 |
+| `runtime-assets/project-runtime/.DS_Store` | macOS 元数据 | 可删除。 |
+| `runtime-assets/project-runtime/agents/.DS_Store` | macOS 元数据 | 可删除。 |
 | `.npm-cache/` | npm 缓存 | 不影响已安装依赖；删除后下次安装依赖时 npm 会重新缓存。 |
 | `console/.npm-cache/` | npm 缓存 | 不影响已安装依赖；删除后下次安装依赖时 npm 会重新缓存。 |
 | `.npm-cache-playwright/` | Playwright/npm 缓存 | 不影响项目源码；删除后下次使用相关工具时会重新缓存。 |
@@ -89,7 +89,7 @@
 | `ContextHelper/generated-queries/manifest.json` | helper 查询脚本清单，运行和 release bundle 会引用。 |
 | `.env` | 本地运行配置和密钥文件，未提交 Git，但不是冗余文件。 |
 | `scene-configs/` | 当前 scene 配置基线，active bundle 不存在时会回退读取。 |
-| `runtime-assets/` | OpenClaw runtime 资产，属于项目结构要求的运行资产。 |
+| `runtime-assets/` | 项目运行资产，属于当前 release bundle 结构要求。 |
 | `metadata/` | 本地业务字典，多个 scene 和配置导入流程依赖。 |
 | `references/` | direct-model prompt/schema 等资产。 |
 

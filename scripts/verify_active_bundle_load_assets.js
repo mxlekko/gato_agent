@@ -115,13 +115,13 @@ async function main() {
     if (referenceMeta.prompt.path_ref !== "project://platform/assets/prompts/sales-opportunity-advisor.draft-business-output.v1.md") {
       throw new Error(`Unexpected prompt path_ref: ${referenceMeta.prompt.path_ref || "missing"}.`);
     }
-    if (referenceMeta.output_schema.path_ref !== "runtime://openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json") {
+    if (referenceMeta.output_schema.path_ref !== "project://references/sales-opportunity-advisor/output_schema.json") {
       throw new Error(`Unexpected output_schema path_ref: ${referenceMeta.output_schema.path_ref || "missing"}.`);
     }
     if (referenceMeta.dictionary.path_ref !== "project://metadata/sales_opportunity_dictionary.tsv") {
       throw new Error(`Unexpected dictionary path_ref: ${referenceMeta.dictionary.path_ref || "missing"}.`);
     }
-    if (referenceMeta.rules.path_ref !== "runtime://openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md") {
+    if (referenceMeta.rules.path_ref !== "project://references/sales-opportunity-advisor/decision_rules.md") {
       throw new Error(`Unexpected rules path_ref: ${referenceMeta.rules.path_ref || "missing"}.`);
     }
 

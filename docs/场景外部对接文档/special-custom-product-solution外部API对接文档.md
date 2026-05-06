@@ -321,9 +321,9 @@ curl -sS -X POST http://192.168.9.162:3100/api/agent/run \
 
 - 统一入口：`POST /api/agent/run`
 - 场景配置：`scene-configs/special-custom-product-solution.json`
-- 输出结构：`runtime-assets/openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json`
+- 输出结构：`references/special-custom-product-solution/output_schema.json`
 - 生成提示词：`platform/assets/prompts/special-custom-product-solution.draft-business-output.v1.md`
-- 业务规则：`runtime-assets/openclaw/workspace/skills/special-custom-product-solution/references/decision_rules.md`
+- 业务规则：`references/special-custom-product-solution/decision_rules.md`
 - 请求校验：`services/request-validation.js`
 - 直连模型执行：`services/direct-model.js`
 - 统一错误封装：`utils/errors.js`

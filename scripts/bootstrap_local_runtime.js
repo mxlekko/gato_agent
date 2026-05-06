@@ -351,7 +351,7 @@ function assertRequiredFiles() {
     "scripts/import_config_to_mysql.js",
     "scene-configs",
     "platform",
-    "runtime-assets/openclaw"
+    "runtime-assets"
   ];
   const missing = requiredPaths.filter((relativePath) => {
     return !fs.existsSync(path.join(PROJECT_ROOT, relativePath));

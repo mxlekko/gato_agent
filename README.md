@@ -7,7 +7,7 @@
 - RAG 服务：本地知识库检索、文档库和索引任务接口
 - 平台运行层：workflow 编译、LangGraph 兼容运行、直连模型运行、运行追踪
 - React 控制台：场景、配置、运行记录、灰度和发布状态页面
-- Runtime 资产：scene 配置、prompt、schema、OpenClaw skill、模型元数据和业务字典
+- Runtime 资产：scene 配置、prompt、schema、项目内 runtime references、模型元数据和业务字典
 
 统一业务入口是：
 
@@ -24,9 +24,9 @@ POST /api/agent/run
 | scene | 模式 | 模型/Agent | 主要入参 |
 | --- | --- | --- | --- |
 | `payment-info-split` | `direct-model` | Moonshot `kimi-k2-turbo-preview` | `rawText` |
-| `sales-opportunity-advisor` | `agent-runtime` | `openclaw/sales-agent` | `opportunityId` |
-| `sales-opportunity-advisor-directdb` | `agent-runtime` | `openclaw/sales-agent` | `opportunityId` |
-| `sales-opportunity-smart-entry` | `agent-runtime` | `openclaw/sales-agent` | `opportunityId`, `rawText` |
+| `sales-opportunity-advisor` | `langgraph` | 项目内 LangGraph + ContextHelper + Project Advisory LLM | `opportunityId` |
+| `sales-opportunity-advisor-directdb` | `langgraph` | 项目内 LangGraph + DirectDbRunner + Project Advisory LLM | `opportunityId` |
+| `sales-opportunity-smart-entry` | `langgraph` | 项目内 LangGraph + GenericQueryRunner + Project Advisory LLM | `opportunityId`, `rawText` |
 | `special-custom-product-solution` | `direct-model` | DeepSeek `deepseek-v4-flash` | `specialCustomOrderNo`, `customRequirement` |
 
 对应配置在 [scene-configs](scene-configs) 中。运行时如果存在 active bundle，会优先读取 `.local/runtime-bundles/local/current/scene-configs`，否则回退到仓库内的 `scene-configs`。
@@ -42,19 +42,19 @@ POST /api/agent/run
 `sales-opportunity-advisor`:
 
 ```text
-调用方 -> API -> OpenClaw Gateway -> sales-agent -> ContextHelper -> SQL Server -> ModelTool -> 返回推进建议
+调用方 -> API -> Platform Gateway -> LangGraph Runtime -> ContextHelper -> SQL Server -> Project Advisory LLM -> ModelTool -> 返回推进建议
 ```
 
 `sales-opportunity-advisor-directdb`:
 
 ```text
-调用方 -> API -> OpenClaw Gateway / LangGraph -> DirectDbRunner -> SQL Server -> ModelTool -> 返回推进建议
+调用方 -> API -> Platform Gateway -> LangGraph Runtime -> DirectDbRunner -> SQL Server -> Project Advisory LLM -> ModelTool -> 返回推进建议
 ```
 
 `sales-opportunity-smart-entry`:
 
 ```text
-调用方 -> API -> OpenClaw Gateway -> GenericQueryRunner -> SQL Server -> ModelTool -> 返回智能录入结果
+调用方 -> API -> Platform Gateway -> LangGraph Runtime -> GenericQueryRunner -> SQL Server -> Project Advisory LLM -> ModelTool -> 返回智能录入结果
 ```
 
 `special-custom-product-solution`:
@@ -74,7 +74,6 @@ POST /api/agent/run
 | DirectDbRunner | `127.0.0.1:19102` |
 | ModelTool | `127.0.0.1:19103` |
 | Console dev | `127.0.0.1:3200` |
-| OpenClaw Gateway | `127.0.0.1:18789` |
 | RAG / special RAG | `127.0.0.1:19104` |
 
 代码内置默认值仍是 `3000/19001/19002/19003`。本副本日常运行建议使用 `3100/19101/19102/19103`，这样可以和旧仓或其他实验端口并行。
@@ -87,7 +86,6 @@ POST /api/agent/run
 
 - `API_HOST`, `API_PORT`
 - `CONTEXT_HELPER_PORT`, `DIRECTDB_RUNNER_PORT`, `MODEL_TOOL_PORT`
-- `OPENCLAW_GATEWAY_TOKEN`
 - `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`
 - `SQLSERVER_HOST`, `SQLSERVER_PORT`, `SQLSERVER_DATABASE`, `SQLSERVER_USER`, `SQLSERVER_PASSWORD`
 - `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`
@@ -97,7 +95,7 @@ POST /api/agent/run
 - `CONFIG_STORE_DRIVER`
 - `CONFIG_CURRENT_BUNDLE`, `CONFIG_SCENE_CONFIG_DIR`, `CONFIG_PROJECT_ROOT`, `CONFIG_RUNTIME_ROOT`
 
-模型密钥只允许放在 `.env` 或环境变量里。`runtime-assets/openclaw/agents/*/agent/models.json` 和 `auth-profiles.json` 只保留模型元数据和 `apiKeyEnv` / `keyEnv`，不能写真实 key。
+模型密钥只允许放在 `.env` 或环境变量里。`runtime-assets/model-profiles/*/models.json` 和 `auth-profiles.json` 只保留模型元数据和 `apiKeyEnv` / `keyEnv`，不能写真实 key。
 
 ## 路径规则
 
@@ -107,10 +105,12 @@ POST /api/agent/run
   - 解析到当前 project root
   - active bundle 存在时解析到 `.local/runtime-bundles/local/current`
   - 否则解析到仓库根目录
-- `runtime://openclaw/...`
-  - 解析到当前 runtime root 下的 `openclaw`
-  - active bundle 存在时解析到 `.local/runtime-bundles/local/current/runtime-assets/openclaw`
-  - 否则解析到 `runtime-assets/openclaw`
+- `runtime://project-runtime/...`
+  - 解析到当前 runtime root 下的 `project-runtime`
+  - active bundle 存在时解析到 `.local/runtime-bundles/local/current/runtime-assets/project-runtime`
+  - 否则解析到 `runtime-assets/project-runtime`
+
+历史 `runtime://openclaw/...` namespace 已退役，运行时只接受 `runtime://project-runtime/...`。
 
 禁止继续引用：
 
@@ -126,7 +126,8 @@ POST /api/agent/run
 - [services](services): scene 配置、运行调用、控制台数据、发布和持久化服务
 - [platform](platform): workflow 模板、技能、工具、编译器和运行时
 - [scene-configs](scene-configs): scene 配置
-- [runtime-assets/openclaw](runtime-assets/openclaw): OpenClaw agent、skill、schema 和模型元数据
+- [runtime-assets/project-runtime](runtime-assets/project-runtime): 项目内 runtime 参考资产
+- [runtime-assets/model-profiles](runtime-assets/model-profiles): direct-model 和项目内 LLM 使用的模型元数据
 - [metadata](metadata): 本地业务字段字典
 - [ContextHelper](ContextHelper): helper 型数据工具
 - [DirectDbRunner](DirectDbRunner): directdb 型数据工具
@@ -155,7 +156,7 @@ npm run service:restart
 npm run service:status
 ```
 
-更详细的常驻方式见 [常驻启动说明.md](常驻启动说明.md)。
+更详细的常驻方式见 [docs/engineering/常驻启动说明.md](docs/engineering/常驻启动说明.md)。
 
 ## 启动 RAG 服务
 
@@ -232,7 +233,7 @@ npm run mysql:import-config:verify
 
 ## 本地初始化
 
-clone 到新机器后，代码本身不能自动补齐 `.env`、MySQL 配置中心、active bundle、OpenClaw Gateway、RAG 服务和业务数据库。先创建 `.env` 并填好真实配置：
+clone 到新机器后，代码本身不能自动补齐 `.env`、MySQL 配置中心、active bundle、RAG 服务和业务数据库。先创建 `.env` 并填好真实配置：
 
 ```bash
 cp .env.example .env
@@ -256,7 +257,7 @@ npm run bootstrap:local
 - 检查项目关键文件
 - 检查 RAG requirements、虚拟环境、`DASHSCOPE_API_KEY` 和 `/health`
 - 检查 `npm`、`mysql`、`ruby`
-- 可选探测 OpenClaw Gateway 和 special RAG 服务
+- 可选探测 special RAG 服务
 - 应用 MySQL 配置中心表结构
 - 将仓库内 scene / platform / asset / helper script 导入 MySQL 配置中心
 - 创建并发布本地 active bundle 到 `.local/runtime-bundles/local/current`
@@ -273,7 +274,7 @@ node scripts/bootstrap_local_runtime.js --skip-import
 node scripts/bootstrap_local_runtime.js --skip-publish
 ```
 
-注意：bootstrap 只能恢复本仓库可管理的本地运行态，不能替你创建外部 SQL Server、OpenClaw Gateway、RAG 服务或模型服务账号。
+注意：bootstrap 只能恢复本仓库可管理的本地运行态，不能替你创建外部 SQL Server、RAG 服务或模型服务账号。
 
 ## 工程化检查
 
@@ -340,13 +341,23 @@ curl -sS -X POST http://127.0.0.1:3100/api/agent/run \
 npm run regression:self-contained
 ```
 
-当前 manifest 覆盖三个核心 smoke case：
+当前 manifest 覆盖五个 self-contained case：
 
 - `payment-info-split.smoke`
 - `sales-opportunity-advisor.smoke`
 - `sales-opportunity-advisor-directdb.smoke`
+- `sales-opportunity-smart-entry.smoke`
+- `special-custom-product-solution.smoke`
 
-回归会先扫描 `scene-configs / platform / services / deploy / runtime-assets/openclaw/workspace/skills` 是否残留旧仓或共享 `.openclaw` 路径，再回放 manifest 中的请求。
+回归会先扫描运行配置和主链路是否残留旧仓或共享 `.openclaw` 路径，再回放 manifest 中的请求。
+
+无 OpenClaw 回归入口：
+
+```bash
+npm run regression:no-openclaw
+```
+
+该命令会清空 `OPENCLAW_GATEWAY_TOKEN`，关闭 langgraph legacy fallback，并检查本轮请求日志中没有 OpenClaw Gateway 主链路痕迹。
 
 ## Git 和发布注意
 
@@ -357,7 +368,7 @@ npm run regression:self-contained
 
 ## 文档索引
 
-- [常驻启动说明.md](常驻启动说明.md)
+- [docs/engineering/常驻启动说明.md](docs/engineering/常驻启动说明.md)
 - [docs/项目开发文档/RAG管理工作台运行说明.md](docs/项目开发文档/RAG管理工作台运行说明.md)
 - [docs/engineering/project-structure.md](docs/engineering/project-structure.md)
 - [docs/场景外部对接文档/payment-info-split外部API对接文档.md](docs/场景外部对接文档/payment-info-split外部API对接文档.md)

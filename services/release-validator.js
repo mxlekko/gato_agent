@@ -403,12 +403,34 @@ async function validateSceneConfigDocument({
   const executionMode = toTrimmedString(document?.execution?.mode) || "agent-runtime";
 
   if (executionMode === "agent-runtime") {
+    const routingMode = toTrimmedString(document?.routing?.mode) || "legacy";
+    if (routingMode !== "langgraph") {
+      pushIssue(issues, {
+        code: "RETIRED_AGENT_RUNTIME_LEGACY_ROUTING",
+        file: relativeFilePath,
+        field: "routing.mode",
+        message: "Agent-runtime legacy routing has been retired; use routing.mode=langgraph.",
+        value: routingMode
+      });
+    }
+
     if (!toTrimmedString(document?.agent?.id) || !toTrimmedString(document?.agent?.gatewayModel)) {
       pushIssue(issues, {
         code: "MISSING_SCENE_AGENT",
         file: relativeFilePath,
         field: "agent",
         message: "Agent-runtime scene must define agent.id and agent.gatewayModel."
+      });
+    }
+
+    const gatewayModel = toTrimmedString(document?.agent?.gatewayModel);
+    if (gatewayModel.startsWith("openclaw/")) {
+      pushIssue(issues, {
+        code: "RETIRED_OPENCLAW_GATEWAY_MODEL",
+        file: relativeFilePath,
+        field: "agent.gatewayModel",
+        message: "Agent-runtime scene must not use an OpenClaw gatewayModel.",
+        value: gatewayModel
       });
     }
 

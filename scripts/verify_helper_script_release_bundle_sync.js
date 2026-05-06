@@ -118,7 +118,7 @@ async function verifyContextHelperReadOnly(bundleRoot, expectedScriptPath, expec
 
 function assertAdvisorManifestEntry(entry, scriptName) {
   const expectedFilePath = `project://ContextHelper/generated-queries/${scriptName}`;
-  const expectedSkillPath = "runtime://openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md";
+  const expectedSkillPath = "project://references/sales-opportunity-advisor/skill_contract.md";
 
   if (!entry) {
     throw new Error(`Missing helper manifest entry for ${SCENE}.`);

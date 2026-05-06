@@ -61,6 +61,36 @@
           "data.data"
         ]
       }
+    },
+    {
+      "id": "special-custom-product-solution.smoke",
+      "scene": "special-custom-product-solution",
+      "route": "POST /api/agent/run",
+      "requestFile": "special-custom-product-solution.smoke.request.json",
+      "expectation": {
+        "type": "success-or-external-warning",
+        "requiredDataFields": [
+          "data.productSolution"
+        ],
+        "allowedErrorCodes": [
+          "RAG_SEARCH_FAILED",
+          "RUNTIME_TIMEOUT",
+          "MODEL_INVOCATION_FAILED",
+          "RUNTIME_INVALID_RESPONSE"
+        ],
+        "allowedStages": [
+          "direct-model-rag",
+          "direct-model",
+          "model-call",
+          "response-parse",
+          "unknown"
+        ],
+        "allowedHttpStatuses": [
+          500,
+          502,
+          504
+        ]
+      }
     }
   ]
 }

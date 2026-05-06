@@ -4,11 +4,15 @@ const fs = require("fs/promises");
 const path = require("path");
 
 const { createAppError } = require("../utils/errors");
-const { PROJECT_ROOT } = require("../utils/path-resolver");
+const {
+  CANONICAL_RUNTIME_NAMESPACE,
+  PROJECT_ROOT
+} = require("../utils/path-resolver");
 
 const PROJECT_PREFIX = "project://";
-const RUNTIME_NAMESPACE = "openclaw";
-const RUNTIME_PREFIX = `runtime://${RUNTIME_NAMESPACE}/`;
+const RUNTIME_STORAGE_NAMESPACE = CANONICAL_RUNTIME_NAMESPACE;
+const CANONICAL_RUNTIME_PREFIX = `runtime://${CANONICAL_RUNTIME_NAMESPACE}/`;
+const RUNTIME_PREFIX = "runtime://";
 const LEGACY_PROJECT_ROOTS_ENV = "BUNDLE_RENDERER_LEGACY_PROJECT_ROOTS";
 const PASS_THROUGH_RELATIVE_PATHS = [
   "runtime-assets",
@@ -93,8 +97,8 @@ function normalizeAbsolutePathToBundleReference(value) {
   for (const normalizedRoot of getProjectRootsForBundleReference()) {
     if (normalized === normalizedRoot || normalized.startsWith(`${normalizedRoot}/`)) {
       const relativePath = ensureBundleRelativePath(normalized.slice(normalizedRoot.length + 1), "absolutePath");
-      if (relativePath.startsWith(`runtime-assets/${RUNTIME_NAMESPACE}/`)) {
-        return `${RUNTIME_PREFIX}${relativePath.slice(`runtime-assets/${RUNTIME_NAMESPACE}/`.length)}`;
+      if (relativePath.startsWith(`runtime-assets/${RUNTIME_STORAGE_NAMESPACE}/`)) {
+        return `${CANONICAL_RUNTIME_PREFIX}${relativePath.slice(`runtime-assets/${RUNTIME_STORAGE_NAMESPACE}/`.length)}`;
       }
 
       return `${PROJECT_PREFIX}${relativePath}`;
@@ -102,6 +106,42 @@ function normalizeAbsolutePathToBundleReference(value) {
   }
 
   return value;
+}
+
+function parseRuntimeReference(reference) {
+  if (typeof reference !== "string" || !reference.startsWith(RUNTIME_PREFIX)) {
+    return null;
+  }
+
+  const relativePath = reference.slice(RUNTIME_PREFIX.length);
+  const [namespace, ...segments] = relativePath.split("/").filter(Boolean);
+  if (!namespace || segments.length === 0) {
+    return null;
+  }
+
+  return {
+    namespace,
+    assetPath: segments.join("/")
+  };
+}
+
+function normalizeRuntimeReference(reference) {
+  const parsed = parseRuntimeReference(reference);
+  if (!parsed) {
+    return reference;
+  }
+
+  if (parsed.namespace !== CANONICAL_RUNTIME_NAMESPACE) {
+    throw createAppError("INVALID_REQUEST", `Unsupported runtime namespace: ${parsed.namespace}.`, {
+      stage: "bundle-renderer",
+      details: {
+        namespace: parsed.namespace,
+        supportedNamespace: CANONICAL_RUNTIME_NAMESPACE
+      }
+    });
+  }
+
+  return reference;
 }
 
 function normalizeBundlePathReference(value) {
@@ -114,8 +154,12 @@ function normalizeBundlePathReference(value) {
     return value;
   }
 
-  if (trimmed.startsWith(PROJECT_PREFIX) || trimmed.startsWith(RUNTIME_PREFIX)) {
+  if (trimmed.startsWith(PROJECT_PREFIX)) {
     return trimmed;
+  }
+
+  if (trimmed.startsWith(RUNTIME_PREFIX)) {
+    return normalizeRuntimeReference(trimmed);
   }
 
   if (path.isAbsolute(trimmed)) {
@@ -137,9 +181,21 @@ function bundleReferenceToRelativePath(reference, fieldName) {
     return ensureBundleRelativePath(normalizedReference.slice(PROJECT_PREFIX.length), fieldName);
   }
 
-  if (normalizedReference.startsWith(RUNTIME_PREFIX)) {
+  const runtimeReference = parseRuntimeReference(normalizedReference);
+  if (runtimeReference) {
+    if (runtimeReference.namespace !== CANONICAL_RUNTIME_NAMESPACE) {
+      throw createAppError("INVALID_REQUEST", `Unsupported runtime namespace: ${runtimeReference.namespace}.`, {
+        stage: "bundle-renderer",
+        details: {
+          fieldName,
+          namespace: runtimeReference.namespace,
+          supportedNamespace: CANONICAL_RUNTIME_NAMESPACE
+        }
+      });
+    }
+
     return ensureBundleRelativePath(
-      path.posix.join("runtime-assets", RUNTIME_NAMESPACE, normalizedReference.slice(RUNTIME_PREFIX.length)),
+      path.posix.join("runtime-assets", RUNTIME_STORAGE_NAMESPACE, runtimeReference.assetPath),
       fieldName
     );
   }

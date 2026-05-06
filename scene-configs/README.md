@@ -26,7 +26,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 注意：
 
 - scene 配置变更只解决 API 路由问题
-- `agent-runtime` scene 对应的 OpenClaw skill、reference 和内部 tool 仍然必须真实存在
+- `agent-runtime` scene 通过 Platform Gateway 路由到项目内 LangGraph/runtime，BusinessSkill、references 和 tool binding 必须真实存在
 - `direct-model` scene 只需要 prompt/schema 等本地 reference 和 provider 配置
 
 ## 2. 当前配置结构
@@ -74,7 +74,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 ### `agent`
 
-定义 `agent-runtime` scene 归属的 OpenClaw agent。
+定义 `agent-runtime` scene 的项目内 runtime 标识和兼容路由元数据。
 
 当前常用字段：
 
@@ -84,7 +84,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 ### `runtime`
 
-定义 `agent-runtime` scene 的 API -> Gateway -> agent 契约。
+定义 `agent-runtime` scene 的 API -> LangGraph runtime 契约。
 
 当前常用字段：
 
@@ -162,7 +162,9 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 - [sales-opportunity-advisor.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-advisor.json)
 - [sales-opportunity-advisor-directdb.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-advisor-directdb.json)
+- [sales-opportunity-smart-entry.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-smart-entry.json)
 - [payment-info-split.json](/Users/gato-pm/Desktop/API_副本/scene-configs/payment-info-split.json)
+- [special-custom-product-solution.json](/Users/gato-pm/Desktop/API_副本/scene-configs/special-custom-product-solution.json)
 
 ## 5. 后续前台配置建议
 
@@ -180,33 +182,23 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 三者一致。
 
-## 6. 并行迁移新增设计态字段：`routing`
+## 6. 运行路由字段：`routing`
 
-为支持“新平台并行路径”迁移，建议后续在 scene 配置中新增设计态字段：
+`routing` 用于描述当前 scene 的运行入口。当前代码口径：
+
+- `agent-runtime` scene 主路径必须走项目内 `langgraph`
+- 退役的 `legacy` / `shadow` 只作为历史迁移口径保留，gateway 不再允许 agent-runtime scene 走 OpenClaw legacy 主链路
+- `direct-model` scene 在 V1 仍使用 `routing.mode = legacy`，这里的 legacy 表示直连模型的既有执行边界，不表示 OpenClaw Gateway
+
+当前 agent-runtime scene 的目标形态：
 
 ```json
 {
   "routing": {
-    "mode": "legacy",
-    "shadow": {
-      "enabled": false,
-      "baselineMode": "legacy",
-      "candidateMode": "langgraph",
-      "recordDiff": true,
-      "returnSource": "baseline"
-    },
-    "fallback": {
-      "enabled": true,
-      "targetMode": "legacy",
-      "on": [
-        "graph_compile_failed",
-        "graph_timeout",
-        "graph_node_failed",
-        "tool_transport_failed",
-        "llm_transport_failed",
-        "graph_invalid_output"
-      ],
-      "maxPerRequest": 1
+    "mode": "langgraph",
+    "allowedModes": ["legacy", "shadow", "langgraph"],
+    "langgraphCutover": {
+      "requestPercentage": 100
     }
   }
 }
@@ -216,29 +208,25 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 - `routing.mode`
   - scene 主运行模式
-  - V1 统一值：
+  - V1 支持值：
     - `legacy`
     - `shadow`
     - `langgraph`
+  - agent-runtime scene 当前必须配置为 `langgraph`
+  - direct-model scene 当前保持 `legacy`
 - `routing.allowedModes`
-  - scene 允许被配置成的运行模式白名单
-  - 未提供时，交由平台默认约束处理
-  - V1 当前建议：
-    - `sales-opportunity-advisor`：`legacy / shadow / langgraph`
-    - `sales-opportunity-advisor-directdb`：`legacy`
-    - `payment-info-split`：`legacy`
-- `routing.shadow`
-  - 只用于旁路运行，不直接向调用方返回候选结果
-- `routing.fallback`
-  - 只用于正式模式下的平台内部失败兜底
-  - 默认目标是 `legacy`
+  - scene 允许被配置成的运行模式白名单，用于迁移历史和控制台展示
+  - 即使白名单保留 `legacy` / `shadow`，agent-runtime gateway 仍会拒绝退役主链路
+- `routing.langgraphCutover`
+  - 控制 `langgraph` 命中策略
+  - 已完成迁移的 agent-runtime scene 应保持 `requestPercentage = 100`
 
 当前说明：
 
-1. 这套字段目前是设计口径，还不是现有代码已实现功能。
-2. 在真正落地前，即使 scene 配置里暂时没有 `routing` 字段，也应按 `mode = legacy` 理解。
-3. `INVALID_REQUEST`、`POLICY_DENIED`、`AUTH_FAILED`、`OPPORTUNITY_NOT_FOUND` 这类错误不应触发自动回退。
+1. `sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry` 已经是 `langgraph` 100%。
+2. 项目内 fallback 默认关闭，不会自动回到 OpenClaw agent-runtime。
+3. `payment-info-split`、`special-custom-product-solution` 是 direct-model scene，不经过 OpenClaw Gateway。
 
 更完整的定义见：
 
-- [平台运行模式与回退开关设计.md](/Users/gato-pm/Desktop/API_副本/平台运行模式与回退开关设计.md)
+- [平台运行模式与回退开关设计.md](/Users/gato-pm/Desktop/API_副本/docs/项目开发文档/平台运行模式与回退开关设计.md)

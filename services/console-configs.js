@@ -23,6 +23,7 @@ const RAG_SETTINGS_NAME = "default";
 const RAG_SETTINGS_VERSION = "v1";
 const RAG_SETTINGS_RESOURCE_ID = `${RAG_SETTINGS_KIND}:${RAG_SETTINGS_NAME}@${RAG_SETTINGS_VERSION}`;
 const RAG_SETTINGS_UPDATED_BY = "console-rag-settings";
+const RAG_SETTINGS_API_VERSION = "agent.console/v1";
 const RAG_SETTINGS_DEFAULT_EMBEDDING_MODEL = "text-embedding-v4";
 const RAG_SETTINGS_LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
@@ -799,7 +800,7 @@ function normalizeRagSettingsConfig(input = {}) {
 function buildRagSettingsDocument(config) {
   return {
     kind: "RagSettings",
-    apiVersion: "openclaw.console/v1",
+    apiVersion: RAG_SETTINGS_API_VERSION,
     metadata: {
       name: RAG_SETTINGS_NAME,
       version: RAG_SETTINGS_VERSION,

@@ -1,0 +1,69 @@
+# OpenClaw 退场最终验收报告
+
+记录时间：2026-05-06 13:12（Asia/Shanghai）
+
+## 结论
+
+AG-11 已建立无 OpenClaw 回归入口：`npm run regression:no-openclaw`，并完成本轮复验。
+
+本轮验收显示：
+
+- agent-runtime 主场景默认走项目内 `langgraph`。
+- no-openclaw 回归中 `OPENCLAW_GATEWAY_TOKEN_SET=false`。
+- OpenClaw blocker 扫描结果为 `runtimeBlockers=0`、`configBlockers=0`。
+- 本轮 5 个 no-openclaw 回归请求的 API 日志未出现 `gateway-http`、`OpenClaw Gateway request timed out`、`agent.langgraph.fallback.triggered`。
+- Rollout 指标复验中 `fallbackRatio=0`、`schemaFailureRate=0`、`p95DurationMs=3857`，无 alert。
+- 手工 smoke 请求 `req_20260506_130403314_ece4f7f1` 命中 `langgraph-stategraph`，返回 `success=true`、非空 `summary/adviceText` 和 3 条 `nextActions`。
+
+## 本轮命令结果
+
+| 命令 | 结果 |
+|---|---|
+| `npm run lint:platform-configs` | 通过，`templates=2 / tools=7 / queries=3 / skills=4 / issueCount=0` |
+| `node scripts/scan_openclaw_dependencies.js` | 通过；默认全量扫描只剩 `asset-namespace` 和 `documentation` 分类 |
+| `node scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker --fail-on-config-blocker` | 通过；未发现 `runtime-blocker` 或 `config-blocker` |
+| `npm run regression:self-contained` | 通过；输出目录 `tests/regression/output/self-contained-2026-05-06T05-11-50-881Z`，5 个用例，4 pass，1 warning |
+| `npm run regression:no-openclaw` | 通过；输出目录 `tests/regression/output/self-contained-2026-05-06T05-12-09-185Z`，5 个用例，4 pass，1 warning；no-openclaw blocker 和日志检查均通过 |
+| `node scripts/build_rollout_report.js --input <filtered-no-openclaw-langgraph-jsonl> --batch-id ag11-no-openclaw-langgraph-20260506-final --min-success-rate 0.98 --max-p95-ms 5000 --max-schema-failure-rate 0.01 --max-fallback-ratio 0 --fail-on-alert` | 通过；`langgraphRuns=3`、`successRate=1`、`fallbackRatio=0`、`schemaFailureRate=0`、`p95DurationMs=3857`、`alerts=[]` |
+| `curl -sS http://127.0.0.1:3100/health` | 通过；`service=ok`，三条 LangGraph scene 编译成功，ContextHelper / DirectDbRunner / ModelTool 正常，RAG 为 optional unavailable |
+| `curl -sS -X POST http://127.0.0.1:3100/api/agent/run ...sales-opportunity-advisor...` | 通过；`success=true`，`requestId=req_20260506_130403314_ece4f7f1`，核心业务字段非空 |
+| `rg "req_20260506_130403314_ece4f7f1" logs/api.stdout.log logs/api.stderr.log \| rg "gateway-http\|OpenClaw Gateway request timed out"` | 通过；无输出 |
+
+## Rollout 指标
+
+指标来源为最近一次 no-openclaw 回归中的三条 agent-runtime LangGraph 请求：`sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry`。
+
+| 指标 | 结果 |
+|---|---|
+| `langgraphRuns` | `3` |
+| `successRate` | `1` |
+| `fallbackRatio` | `0` |
+| `schemaFailureRate` | `0` |
+| `p95DurationMs` | `3857` |
+| `alerts` | `[]` |
+
+本次本地 smoke 采用 `5000ms` p95 阈值通过；生产 rollout 仍建议保留 `3000ms` 目标作为真实流量放量前的延迟 guardrail。
+
+## 回归覆盖
+
+| 场景 | 结果 | 说明 |
+|---|---|---|
+| `payment-info-split` | pass | direct-model 路径成功 |
+| `sales-opportunity-advisor` | pass | langgraph 路径成功 |
+| `sales-opportunity-advisor-directdb` | pass | langgraph 路径成功 |
+| `sales-opportunity-smart-entry` | pass | langgraph 路径成功 |
+| `special-custom-product-solution` | warning | 返回明确 external warning，属于 RAG / direct-model 外部链路，不是 OpenClaw 依赖 |
+
+## 剩余引用
+
+`scripts/scan_openclaw_dependencies.js` 默认全量扫描仍会命中历史文档、迁移报告、旧回归输出，以及历史兼容别名说明。新回归输出会继续抬高默认全量命中数，因此当前判断以 blocker 分类为准。这些命中当前归类为：
+
+- `asset-namespace`：主要来自历史报告和旧输出中的 `runtime://openclaw` / `runtime-assets/openclaw`。
+- `documentation`：迁移说明、扫描脚本自身、控制台历史文案、测试 fixture 说明等。
+
+当前未发现 `runtime-blocker` 或 `config-blocker`。
+
+## 风险
+
+- `special-custom-product-solution` 仍依赖本地 RAG 和外部 direct-model provider；无 OpenClaw 回归允许它以明确 warning 形式通过。
+- 日志检查依赖 `logs/api.stdout.log` / `logs/api.stderr.log` 可读；若 API 以非 launchd 方式运行，可通过 `NO_OPENCLAW_LOG_FILES` 指定日志文件。

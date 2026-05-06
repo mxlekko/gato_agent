@@ -102,7 +102,7 @@ async function runLegacyDirectModelRoute({ requestId, scene, sceneConfig, bizPar
   info("agent.run.start", {
     ...traceContext,
     platformManagedScene: routePlan?.platformManagedScene ?? null,
-    legacyExecutionRole: routePlan?.legacyRole || null
+    deprecatedLegacyExecutionRole: routePlan?.deprecatedLegacyRole || null
   });
 
   const execution = await runLegacySceneExecution({

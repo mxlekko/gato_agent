@@ -4,6 +4,10 @@ const PROJECT_ROOT = path.resolve(__dirname, "..");
 const RUNTIME_ROOT = path.join(PROJECT_ROOT, "runtime-assets");
 const PROJECT_PREFIX = "project://";
 const RUNTIME_PREFIX = "runtime://";
+const CANONICAL_RUNTIME_NAMESPACE = "project-runtime";
+const RUNTIME_NAMESPACE_TO_DIRECTORY = Object.freeze({
+  [CANONICAL_RUNTIME_NAMESPACE]: CANONICAL_RUNTIME_NAMESPACE
+});
 
 const LEGACY_RULES = [
   {
@@ -51,11 +55,12 @@ function resolveRuntimePath(reference, runtimeRoot) {
     throw new Error(`Invalid runtime path reference: ${reference}`);
   }
 
-  if (namespace !== "openclaw") {
+  const directoryName = RUNTIME_NAMESPACE_TO_DIRECTORY[namespace];
+  if (!directoryName) {
     throw new Error(`Unsupported runtime namespace: ${namespace}`);
   }
 
-  return path.resolve(runtimeRoot, namespace, segments.join("/"));
+  return path.resolve(runtimeRoot, directoryName, segments.join("/"));
 }
 
 function collectLegacyWarnings(original, resolvedPath) {
@@ -119,6 +124,8 @@ module.exports = {
   RUNTIME_ROOT,
   PROJECT_PREFIX,
   RUNTIME_PREFIX,
+  CANONICAL_RUNTIME_NAMESPACE,
+  RUNTIME_NAMESPACE_TO_DIRECTORY,
   resolvePathReference,
   resolvePathList
 };

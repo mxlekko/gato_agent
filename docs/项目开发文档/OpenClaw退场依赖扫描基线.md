@@ -2,7 +2,9 @@
 
 生成时间：2026-05-03
 
-本报告对应 AG-00，用于给后续 OpenClaw 退场任务提供可复跑的依赖扫描入口和当前残留分层。完整机器可读报告由以下命令生成到 `tmp/openclaw-dependencies-report.json`：
+最近更新：2026-05-06 11:45（Asia/Shanghai）
+
+本报告对应 AG-00，用于给后续 OpenClaw 退场任务提供可复跑的依赖扫描入口和当前残留分层。当前代码侧主链路已经迁到项目内 LangGraph/runtime；本文档保留基线入口，并同步记录最新扫描结果，避免后续 agent 继续按早期阻塞项重复开发。完整机器可读报告由以下命令生成到 `tmp/openclaw-dependencies-report.json`：
 
 ```bash
 node scripts/scan_openclaw_dependencies.js --output tmp/openclaw-dependencies-report.json
@@ -22,43 +24,46 @@ openclaw, OpenClaw, OPENCLAW, 18789, runtime://openclaw, .openclaw, openclaw/sal
 
 ## 扫描摘要
 
-最近一次扫描摘要：总命中 685，涉及 73 个文件。
+最近一次扫描摘要：总命中 761，涉及 61 个文件。该总数会随着 `tests/regression/output/` 下的新回归输出增加而漂移，当前判断以 `runtime-blocker = 0`、`config-blocker = 0` 为准。
 
 | 分类 | 命中数 | 文件数/代表文件 | 建议归属 |
 |---|---:|---|---|
-| `runtime-blocker` | 17 | `services/runtime-message.js`, `services/runtime.js`, `server.js`, `scripts/bootstrap_local_runtime.js` | AG-08 / AG-09 |
-| `config-blocker` | 32 | `scene-configs/*.json`, `platform/skills/*.yaml`, `platform/tools/openclaw-*.yaml` | AG-01 到 AG-06 |
-| `asset-namespace` | 172 | `runtime://openclaw`、`runtime-assets/openclaw` 相关配置、校验脚本、历史回归输出 | AG-10 |
-| `documentation` | 464 | `docs/`、架构图生成脚本、README、历史回归报告 | AG-07 |
+| `runtime-blocker` | 0 | 无 | 已完成，持续用扫描守住 |
+| `config-blocker` | 0 | 无 | 已完成，持续用扫描守住 |
+| `asset-namespace` | 132 | 历史报告、旧回归输出、`runtime://openclaw` 兼容别名说明 | AG-10 后置清理 |
+| `documentation` | 629 | 迁移说明、扫描脚本自身、历史回归报告、少量兼容字段说明 | AG-07 后置清理 |
 
-说明：`asset-namespace` 表示路径或 bundle namespace 仍叫 `openclaw`，不等同于一定会访问本机 OpenClaw Gateway；是否影响运行需要结合对应 AG 工单判断。
+说明：`asset-namespace` 表示路径或 bundle namespace 仍叫 `openclaw`，不等同于一定会访问本机 OpenClaw Gateway。当前这些命中没有被扫描脚本归为运行阻塞或配置阻塞。
 
 ## 当前必须优先处理的残留
 
-1. `services/runtime-message.js` 仍固定 `http://127.0.0.1:18789`，并读取 `OPENCLAW_GATEWAY_TOKEN` 构造 Gateway 请求。
-2. `services/runtime.js` 仍校验 `openclaw/` model、`x-openclaw-session-key`，并执行 legacy Gateway chat completion。
-3. `server.js` 的 `/health` 仍通过 `OPENCLAW_GATEWAY_TOKEN` 探测 OpenClaw Gateway。
-4. `scripts/bootstrap_local_runtime.js` 仍把 `OPENCLAW_GATEWAY_TOKEN` 列为 required env，并探测 `http://127.0.0.1:18789/v1/models`。
-5. `sales-opportunity-advisor` 与 `sales-opportunity-smart-entry` 的 scene routing 仍是 `legacy`，并指向 `openclaw/sales-agent`。
-6. `sales-opportunity-advisor-directdb` 已是 `langgraph` 100% cutover，但 scene/skill 仍保留 OpenClaw agent、tool 命名和 `runtime://openclaw` 资产引用。
-7. `payment-info-split` 与 `special-custom-product-solution` 仍使用 `runtime://openclaw/.../models.json` 作为 direct-model fallback models 文件；`special-custom-product-solution` 还保留 OpenClaw agent/skill 配置。
+当前未发现 `runtime-blocker` 或 `config-blocker`。
+
+已确认的关键状态：
+
+1. `services/runtime.js` 中 agent-runtime legacy 执行已退役，只保留 direct-model 的 legacy 边界。
+2. `server.js` 的 `/health` 探测项目内依赖：ContextHelper、DirectDbRunner、ModelTool、RAG 和 LangGraph 编译状态，不再探测 OpenClaw Gateway。
+3. `scripts/bootstrap_local_runtime.js` 不再要求 `OPENCLAW_GATEWAY_TOKEN`，也不再探测 `127.0.0.1:18789`。
+4. `sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry` 均为 `routing.mode=langgraph` 且 `langgraphCutover.requestPercentage=100`。
+5. 三条销售 BusinessSkill 的 `advisory_llm` 均绑定 `tool://llm/project-advisory@v1`。
+6. `payment-info-split` 与 `special-custom-product-solution` 的 direct-model fallback models 已迁到 `project://runtime-assets/model-profiles/...`。
 
 ## AG-00 到 AG-11 状态判断
 
 | 工单 | 状态 | 判断依据 |
 |---|---|---|
-| AG-00 基线与依赖扫描 | 已完成本轮落地 | 已新增 `scripts/scan_openclaw_dependencies.js`，本报告已建立；已有 advisor/directdb fixture，并补齐 smart-entry fixture。 |
-| AG-01 路由与 fallback 策略收口 | 未完成 | `LANGGRAPH_LEGACY_FALLBACK_ENABLED` 尚不存在；LangGraph 异常仍会自动 fallback 到 legacy。 |
-| AG-02 项目内 LLM tool/client | 未完成 | `platform/tools/openclaw-sales-agent-default.tool.yaml` 与 `openclaw-product-solution-agent.tool.yaml` 仍是 `agent-runtime` / `openclaw/sales-agent`；`draft-output` 仍以兼容草稿为默认。 |
-| AG-03 advisor 迁移 | 未完成，依赖 AG-01/AG-02 | `scene-configs/sales-opportunity-advisor.json` 仍是 `routing.mode=legacy` 且保留 `openclaw/sales-agent`。 |
-| AG-04 directdb 纯项目化 | 部分完成，依赖 AG-01/AG-02 | scene 已 `langgraph` 100% cutover，但配置仍保留 OpenClaw agent/skill/tool 命名与 namespace。 |
-| AG-05 smart-entry 迁移 | 未完成，依赖 AG-01/AG-02 | scene 仍是 `routing.mode=legacy`，本轮只补了最小请求 fixture。 |
-| AG-06 direct-model OpenClaw 残留清理 | 未完成，可在 AG-00 后处理 | `payment-info-split` 和 `special-custom-product-solution` 仍有 `runtime://openclaw` fallback models；后者还有 OpenClaw agent/skill 字段。 |
-| AG-07 文档、控制台与图示清理 | 未完成，可在 AG-00 后处理 | 文档、架构图脚本、控制台服务中仍有 OpenClaw 文案或 workspace mirror 残留。 |
-| AG-08 health/bootstrap/startup 去 OpenClaw | 未完成，建议等 AG-03 到 AG-05 稳定后处理 | `/health` 与 bootstrap 仍探测 OpenClaw Gateway。 |
-| AG-09 删除 legacy OpenClaw 主链路 | 未完成，阻塞于 AG-03/AG-04/AG-05 | `services/runtime*.js` 仍是 legacy Gateway 主链路实现。 |
-| AG-10 runtime namespace 清理 | 未完成，阻塞于 AG-09 | 大量 `runtime://openclaw` / `runtime-assets/openclaw` 仍作为资产 namespace。 |
-| AG-11 最终回归与上线门槛 | 未完成，阻塞于 AG-01 到 AG-10 | 尚无 `regression:no-openclaw` npm script，且扫描仍有 runtime/config blocker。 |
+| AG-00 基线与依赖扫描 | 已完成 | `scripts/scan_openclaw_dependencies.js` 可复跑并输出分层 JSON。 |
+| AG-01 路由与 fallback 策略收口 | 已完成 | `platform/runtime/fallback.js` 默认关闭 legacy fallback，gateway trace 会记录 fallback 状态。 |
+| AG-02 项目内 LLM tool/client | 已完成 | 已有 `platform/tools/project-advisory-llm.tool.yaml`、`platform/runtime/llm-client.js`，draft-output 支持 `compat/mock/project-llm`。 |
+| AG-03 advisor 迁移 | 已完成 | `sales-opportunity-advisor` 已 `langgraph` 100% cutover，agent model 改为项目内语义。 |
+| AG-04 directdb 纯项目化 | 已完成 | `sales-opportunity-advisor-directdb` 保持 `langgraph` 100%，引用已迁到 project refs。 |
+| AG-05 smart-entry 迁移 | 已完成 | `sales-opportunity-smart-entry` 已 `langgraph` 100%，fixture 已进入 self-contained manifest。 |
+| AG-06 direct-model OpenClaw 残留清理 | 已完成 | direct-model 场景模型元数据引用已迁到 `project://runtime-assets/model-profiles/...`。 |
+| AG-07 文档、控制台与图示清理 | 已完成当前口径收口 | 用户可见运行文档已指向项目内 runtime；控制台新写入的 RAG settings 文档版本已改为 `agent.console/v1`；历史迁移文档和旧回归输出仍可保留 OpenClaw 命中。 |
+| AG-08 health/bootstrap/startup 去 OpenClaw | 已完成 | health/bootstrap 不再依赖 OpenClaw Gateway、`~/.openclaw` 或 `OPENCLAW_GATEWAY_TOKEN`。 |
+| AG-09 删除 legacy OpenClaw 主链路 | 已完成 | agent-runtime legacy runner 已退役，gateway 不再调用 OpenClaw agent 主链路。 |
+| AG-10 runtime namespace 清理 | 已完成 | `runtime://project-runtime/...` 是唯一运行解析 namespace；历史 `runtime://openclaw/...` 不再被 path resolver / bundle renderer 静默兼容，剩余命中来自历史文档和旧回归输出。 |
+| AG-11 最终回归与上线门槛 | 已完成 | 已有 `npm run regression:no-openclaw` 和最终验收报告，扫描无 runtime/config blocker。 |
 
 ## 回归样本状态
 
@@ -68,14 +73,12 @@ openclaw, OpenClaw, OPENCLAW, 18789, runtime://openclaw, .openclaw, openclaw/sal
 - `tests/fixtures/self-contained/sales-opportunity-advisor.smoke.request.json`
 - `tests/fixtures/self-contained/sales-opportunity-advisor-directdb.gateway-boundary.request.json`
 
-本轮新增：
+本轮新增并已纳入默认 self-contained suite：
 
 - `tests/fixtures/self-contained/sales-opportunity-smart-entry.smoke.request.json`
 
-`sales-opportunity-smart-entry` 目前未加入默认 `manifest.json`，因为该 scene 仍是 legacy routing；后续 AG-05 切到项目内 LangGraph 后，再把它纳入默认 self-contained suite。
-
 ## 后续建议
 
-1. 下一优先级是 AG-01：给 LangGraph fallback 增加显式开关，默认关闭或至少可关闭，避免迁移 scene 悄悄回到 OpenClaw。
-2. 随后做 AG-02：落地项目内 LLM tool/client，并替换 `tool://llm/openclaw-sales-agent-default@v1` 的主链路语义。
-3. AG-03/AG-04/AG-05 再分别切三个销售机会场景；其中 directdb 已有较多基础，适合在 AG-02 后较快纯项目化。
+1. 持续把新增运行文档限定在项目内 Platform Gateway、LangGraph Runtime、ContextHelper、DirectDbRunner、ModelTool、RAG 和 Project LLM Client 口径，历史迁移文档保留时应标注为历史链路。
+2. 保持 `node scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker --fail-on-config-blocker` 和 `npm run regression:no-openclaw` 作为上线前守门命令。
+3. 若后续清理历史回归输出或历史文档，需要区分“历史记录命中”和“运行配置命中”，避免误删迁移审计材料。

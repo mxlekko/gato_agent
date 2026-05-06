@@ -63,8 +63,11 @@ async function main() {
       path.join("platform", "skills", "sales-opportunity-advisor.v1.yaml"),
       path.join("platform", "tools", "sales-opportunity-by-opportunity-id.query.yaml"),
       path.join("platform", "assets", "prompts", "sales-opportunity-advisor.draft-business-output.v1.md"),
-      path.join("runtime-assets", "openclaw", "workspace", "skills", "sales-opportunity-advisor", "SKILL.md"),
-      path.join("runtime-assets", "openclaw", "workspace", "skills", "sales-opportunity-advisor", "references", "decision_rules.md"),
+      path.join("references", "sales-opportunity-advisor", "skill_contract.md"),
+      path.join("references", "sales-opportunity-advisor", "output_schema.json"),
+      path.join("references", "sales-opportunity-advisor", "decision_rules.md"),
+      path.join("runtime-assets", "project-runtime", "workspace", "skills", "sales-opportunity-advisor", "SKILL.md"),
+      path.join("runtime-assets", "project-runtime", "workspace", "skills", "sales-opportunity-advisor", "references", "decision_rules.md"),
       path.join("runtime-assets", "model-profiles", "payment-fast-agent", "models.json"),
       path.join("ContextHelper", "generated-queries", "sales-opportunity-advisor.generated.js"),
       path.join("metadata", "sales_opportunity_dictionary.tsv"),
@@ -123,7 +126,7 @@ async function main() {
     if (advisorPromptPath !== "project://platform/assets/prompts/sales-opportunity-advisor.draft-business-output.v1.md") {
       throw new Error(`Unexpected prompt source.path: ${advisorPromptPath || "missing"}`);
     }
-    if (advisorSchemaPath !== "runtime://openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json") {
+    if (advisorSchemaPath !== "project://references/sales-opportunity-advisor/output_schema.json") {
       throw new Error(`Unexpected schema source.path: ${advisorSchemaPath || "missing"}`);
     }
     if (advisorDictionaryPath !== "project://metadata/sales_opportunity_dictionary.tsv") {
@@ -146,7 +149,7 @@ async function main() {
     if (helperManifestPath !== "project://ContextHelper/generated-queries/manifest.json") {
       throw new Error(`Unexpected helperManifestPath: ${helperManifestPath || "missing"}`);
     }
-    if (querySkillPath !== "runtime://openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md") {
+    if (querySkillPath !== "project://references/sales-opportunity-advisor/skill_contract.md") {
       throw new Error(`Unexpected migrationSource.skillPath: ${querySkillPath || "missing"}`);
     }
 
@@ -162,7 +165,7 @@ async function main() {
       "utf8"
     );
     const bundleRulesText = await fs.readFile(
-      path.join(bundleDir, "runtime-assets", "openclaw", "workspace", "skills", "sales-opportunity-advisor", "references", "decision_rules.md"),
+      path.join(bundleDir, "references", "sales-opportunity-advisor", "decision_rules.md"),
       "utf8"
     );
     const bundleHelperScriptText = await fs.readFile(
@@ -199,7 +202,7 @@ async function main() {
         `Unexpected helper manifest declaredFilePath: ${advisorManifestEntry.declaredFilePath || "missing"}`
       );
     }
-    if (advisorManifestEntry.skillPath !== "runtime://openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md") {
+    if (advisorManifestEntry.skillPath !== "project://references/sales-opportunity-advisor/skill_contract.md") {
       throw new Error(`Unexpected helper manifest skillPath: ${advisorManifestEntry.skillPath || "missing"}`);
     }
     if (!advisorManifestEntry.definitionHash) {

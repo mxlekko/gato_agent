@@ -180,7 +180,7 @@ cat /Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_smart_entry_dic
 
 输出 schema 文件位于：
 
-`/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json`
+`/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json`
 
 在草拟完候选 payload 后，使用 `exec` 工具按下面这种固定模式调用：
 
@@ -230,7 +230,7 @@ curl -sS -X POST http://127.0.0.1:19003/internal/model/validate-structured-outpu
     - `opportunityId`
     - `salesScene`
     - `data`
-13. 读取 `/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json`。
+13. 读取 `/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json`。
 14. 调用本地 model tool 校验草拟的 payload。
 15. 如果 model tool 返回成功，则使用 `data.payload` 作为最终 payload。
 16. 最终只返回 wrapped JSON 结果块。

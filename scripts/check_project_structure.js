@@ -16,7 +16,7 @@ const requiredPaths = [
   "utils",
   "platform",
   "scene-configs",
-  "runtime-assets/openclaw",
+  "runtime-assets",
   "ContextHelper/server.js",
   "DirectDbRunner/server.js",
   "ModelTool/server.js",

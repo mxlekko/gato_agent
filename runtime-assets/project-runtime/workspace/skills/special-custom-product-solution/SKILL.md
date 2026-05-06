@@ -63,12 +63,12 @@ curl -sS -X POST http://127.0.0.1:19104/internal/rag/search \
 
 schema 路径：
 
-`/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json`
+`/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/special-custom-product-solution/references/output_schema.json`
 
 读取方式：
 
 ```bash
-cat /Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json
+cat /Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/special-custom-product-solution/references/output_schema.json
 ```
 
 ## Tool 2：结构校验

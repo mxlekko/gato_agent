@@ -81,12 +81,36 @@ function validateSceneConfig(config, filePath) {
   const executionMode = config.execution?.mode || "agent-runtime";
 
   if (executionMode === "agent-runtime") {
+    const routingMode = String(config.routing?.mode || "legacy").trim() || "legacy";
+    if (routingMode !== "langgraph") {
+      throw createAppError("INVALID_REQUEST", "Agent-runtime legacy routing has been retired; use routing.mode=langgraph.", {
+        stage: "scene-config",
+        details: {
+          filePath,
+          scene: config.scene,
+          routingMode,
+          requiredMode: "langgraph"
+        }
+      });
+    }
+
     if (!config.agent || typeof config.agent !== "object" || !config.agent.id || !config.agent.gatewayModel) {
       throw createAppError("INVALID_REQUEST", "Scene config must define agent.id and agent.gatewayModel.", {
         stage: "scene-config",
         details: {
           filePath,
           scene: config.scene
+        }
+      });
+    }
+
+    if (String(config.agent.gatewayModel).trim().startsWith("openclaw/")) {
+      throw createAppError("INVALID_REQUEST", "Agent-runtime scene must not use an OpenClaw gatewayModel.", {
+        stage: "scene-config",
+        details: {
+          filePath,
+          scene: config.scene,
+          gatewayModel: config.agent.gatewayModel
         }
       });
     }
@@ -491,5 +515,6 @@ module.exports = {
   getSceneConfigs,
   getSceneConfigSourceState,
   getSupportedScenes,
-  resolveSceneConfigPaths
+  resolveSceneConfigPaths,
+  validateSceneConfig
 };

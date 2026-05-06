@@ -317,6 +317,29 @@ function summarizeFindings(findings) {
   };
 }
 
+function getCategoryCount(summary, category) {
+  return summary.byCategory.find((item) => item.category === category)?.count || 0;
+}
+
+function resolveFailingCategories(summary, args) {
+  const failOnAny = args["fail-on-any"] || args["fail-on-findings"];
+  const failOnBlocker = args["fail-on-blocker"] || args["fail-on-blockers"];
+  const flagByCategory = {
+    "runtime-blocker": args["fail-on-runtime-blocker"] || failOnBlocker || failOnAny,
+    "config-blocker": args["fail-on-config-blocker"] || failOnBlocker || failOnAny,
+    "asset-namespace": args["fail-on-asset-namespace"] || failOnAny,
+    documentation: args["fail-on-documentation"] || failOnAny
+  };
+
+  return CATEGORY_ORDER
+    .filter((category) => flagByCategory[category])
+    .map((category) => ({
+      category,
+      count: getCategoryCount(summary, category)
+    }))
+    .filter((item) => item.count > 0);
+}
+
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -350,20 +373,24 @@ function main() {
   };
 
   writeJson(outputPath, report);
-  if (args["print-findings"] || args.full) {
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    return;
-  }
+  const outputPayload = (args["print-findings"] || args.full)
+    ? report
+    : {
+        reportType: report.reportType,
+        observedAt: report.observedAt,
+        rootDir: report.rootDir,
+        reportFile: outputPath,
+        scannedTargets: report.scannedTargets,
+        scannedFileCount: report.scannedFileCount,
+        summary: report.summary
+      };
+  process.stdout.write(`${JSON.stringify(outputPayload, null, 2)}\n`);
 
-  process.stdout.write(`${JSON.stringify({
-    reportType: report.reportType,
-    observedAt: report.observedAt,
-    rootDir: report.rootDir,
-    reportFile: outputPath,
-    scannedTargets: report.scannedTargets,
-    scannedFileCount: report.scannedFileCount,
-    summary: report.summary
-  }, null, 2)}\n`);
+  const failingCategories = resolveFailingCategories(report.summary, args);
+  if (failingCategories.length > 0) {
+    process.stderr.write(`OpenClaw dependency scan failed: ${failingCategories.map((item) => `${item.category}=${item.count}`).join(", ")}\n`);
+    process.exitCode = 1;
+  }
 }
 
 if (require.main === module) {

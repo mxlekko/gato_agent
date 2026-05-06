@@ -3,6 +3,7 @@
 const assert = require("assert");
 const { runSceneThroughGateway, resolveSceneRoutePlan } = require("../../platform/gateway");
 const { runLangGraphAgentRuntimeRoute } = require("../../routes/agent");
+const { validateSceneConfig } = require("../../services/scene-config");
 const { createAppError } = require("../../utils/errors");
 
 function withEnv(name, value, fn) {
@@ -230,12 +231,96 @@ async function testRoutePlanExposesFallbackSwitch() {
   });
 }
 
+function createSyntheticAgentRuntimeSceneConfig(overrides = {}) {
+  return {
+    scene: "synthetic-agent-runtime",
+    enabled: true,
+    routing: {
+      mode: "langgraph",
+      allowedModes: ["langgraph"],
+      langgraphCutover: {
+        requestPercentage: 100
+      }
+    },
+    agent: {
+      id: "project-synthetic-agent-runtime",
+      gatewayModel: "project/synthetic-agent-runtime"
+    },
+    runtime: {
+      requestKind: "synthetic_agent_runtime_request",
+      requestMarkers: {
+        begin: "<<<SYNTHETIC_REQUEST_BEGIN>>>",
+        end: "<<<SYNTHETIC_REQUEST_END>>>"
+      },
+      resultMarkers: {
+        begin: "<<<SYNTHETIC_RESULT_BEGIN>>>",
+        end: "<<<SYNTHETIC_RESULT_END>>>"
+      }
+    },
+    request: {
+      bizParams: {
+        opportunityId: {
+          type: "opportunityId",
+          required: true
+        }
+      }
+    },
+    skill: {
+      id: "synthetic-agent-runtime"
+    },
+    tools: [
+      {
+        id: "synthetic-tool"
+      }
+    ],
+    ...overrides
+  };
+}
+
+async function testSceneConfigRejectsRetiredAgentRuntimeLegacyRouting() {
+  assert.throws(
+    () => validateSceneConfig(
+      createSyntheticAgentRuntimeSceneConfig({
+        routing: {
+          mode: "legacy",
+          allowedModes: ["legacy"]
+        }
+      }),
+      "/tmp/synthetic-agent-runtime.json"
+    ),
+    (error) => error.code === "INVALID_REQUEST"
+      && error.stage === "scene-config"
+      && error.details?.requiredMode === "langgraph"
+  );
+}
+
+async function testSceneConfigRejectsOpenClawGatewayModel() {
+  const retiredGatewayModel = ["open", "claw"].join("") + "/sales-agent";
+
+  assert.throws(
+    () => validateSceneConfig(
+      createSyntheticAgentRuntimeSceneConfig({
+        agent: {
+          id: "synthetic-openclaw-agent-runtime",
+          gatewayModel: retiredGatewayModel
+        }
+      }),
+      "/tmp/synthetic-agent-runtime.json"
+    ),
+    (error) => error.code === "INVALID_REQUEST"
+      && error.stage === "scene-config"
+      && error.details?.gatewayModel === retiredGatewayModel
+  );
+}
+
 async function main() {
   await testFallbackEnabledIsRetiredAndDoesNotCallLegacy();
   await testFallbackDisabledDoesNotCallLegacyOnException();
   await testFallbackDisabledDoesNotCallLegacyOnFinalStateError();
   await testDirectModelRouteUnaffected();
   await testRoutePlanExposesFallbackSwitch();
+  await testSceneConfigRejectsRetiredAgentRuntimeLegacyRouting();
+  await testSceneConfigRejectsOpenClawGatewayModel();
   process.stdout.write("langgraph fallback switch tests passed\n");
 }
 

@@ -309,7 +309,7 @@ function resolveSceneRoutePlan(sceneConfig, routingContext = {}) {
       reason,
       shadowExecutionEnabled: false,
       platformManagedScene,
-      legacyRole: determineLegacyRole({
+      deprecatedLegacyRole: determineLegacyRole({
         requestedMode,
         effectiveMode: "legacy",
         executionMode,
@@ -338,7 +338,7 @@ function resolveSceneRoutePlan(sceneConfig, routingContext = {}) {
         cutover: cutoverDecision,
         platformManagedScene,
         legacyFallbackEnabled,
-        legacyRole: null
+        deprecatedLegacyRole: null
       };
     }
 
@@ -400,7 +400,7 @@ async function runSceneThroughGateway({
       userId
     }),
     platformManagedScene: routePlan.platformManagedScene ?? null,
-    legacyRole: routePlan.legacyRole || null
+    deprecatedLegacyRole: routePlan.deprecatedLegacyRole || null
   };
 
   info("agent-gateway.route.selected", traceContext);

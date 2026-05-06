@@ -20,7 +20,7 @@
   -> routes/*
   -> services/*
   -> platform/gateway + platform/runtime + platform/nodes
-  -> ContextHelper / DirectDbRunner / ModelTool / RAG service / OpenClaw runtime assets
+  -> ContextHelper / DirectDbRunner / ModelTool / RAG service / project runtime assets
 ```
 
 ## 根目录文件
@@ -57,8 +57,8 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `services/runtime.js` | legacy/direct-model/agent-runtime 执行主逻辑和兼容边界信息。 |
-| `services/runtime-message.js` | 构造 OpenClaw Gateway 请求、session key、markers 等消息协议。 |
+| `services/runtime.js` | direct-model 执行入口和已退役 agent-runtime legacy 边界。 |
+| `services/runtime-message.js` | runtime marker 和机器消息序列化辅助；不再构造外部 Gateway 请求。 |
 | `services/direct-model.js` | direct-model scene 的模型调用、RAG 注入、schema 校验和结果归一。 |
 | `services/response-parser.js` | 模型/agent 响应解析与业务 payload 提取。 |
 | `services/request-validation.js` | agent run 请求参数校验。 |
@@ -93,14 +93,14 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `platform/gateway/index.js` | routing 决策，处理 legacy/shadow/langgraph/direct-model 的模式选择。 |
+| `platform/gateway/index.js` | routing 决策，处理 langgraph/direct-model 的模式选择；agent-runtime legacy 已退役。 |
 | `platform/compiler/compile-workflow.js` | 根据 scene skill/template/query/tool 配置编译 workflow graph。 |
 | `platform/compiler/validate.js` | 平台配置结构校验。 |
 | `platform/runtime/README.md` | runtime 状态结构和运行说明。 |
 | `platform/runtime/state.js` | workflow state 合并、node run 记录等状态工具。 |
 | `platform/runtime/graphs/index.js` | 编译后 workflow 的节点调度器。 |
-| `platform/runtime/shadow.js` | shadow 模式同时跑 legacy 与新图并生成 diff。 |
-| `platform/runtime/fallback.js` | langgraph 失败后回退 legacy 的策略。 |
+| `platform/runtime/shadow.js` | 历史 shadow/diff 工具；当前主路由不再依赖 legacy 对比。 |
+| `platform/runtime/fallback.js` | langgraph failure 审计与回退禁用策略。 |
 | `platform/nodes/authorize-scope.js` | 权限和字段范围校验节点。 |
 | `platform/nodes/draft-output.js` | 调模型生成业务初稿节点。 |
 | `platform/nodes/fetch-context.js` | 调数据工具取上下文节点。 |
@@ -132,8 +132,8 @@
 | `platform/tools/generic-query-runner.tool.yaml` | 通用查询执行工具配置。 |
 | `platform/tools/local-rag-search.tool.yaml` | 本地 RAG 检索工具配置。 |
 | `platform/tools/model-tool-structured-output.tool.yaml` | ModelTool 结构化输出校验工具配置。 |
-| `platform/tools/openclaw-product-solution-agent.tool.yaml` | 产品方案 OpenClaw agent 工具配置。 |
-| `platform/tools/openclaw-sales-agent-default.tool.yaml` | 销售 agent OpenClaw 工具配置。 |
+| `platform/tools/project-advisory-llm.tool.yaml` | 项目内销售建议 LLM 工具配置。 |
+| `platform/tools/project-product-solution-llm.tool.yaml` | 项目内产品方案 LLM 工具配置。 |
 | `platform/tools/sales-opportunity-by-opportunity-id.query.yaml` | 销售机会按 opportunityId 查询 profile。 |
 | `platform/tools/sales-opportunity-context-helper.tool.yaml` | ContextHelper 工具配置。 |
 | `platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml` | directdb 按 opportunityId 查询 profile。 |
@@ -160,26 +160,13 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `runtime-assets/openclaw/agents/payment-fast-agent/agent/auth-profiles.json` | payment agent 认证 profile 元数据。 |
-| `runtime-assets/openclaw/agents/payment-fast-agent/agent/models.json` | payment agent 模型元数据。 |
-| `runtime-assets/openclaw/agents/sales-agent/agent/auth-profiles.json` | sales agent 认证 profile 元数据。 |
-| `runtime-assets/openclaw/agents/sales-agent/agent/models.json` | sales agent 模型元数据。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md` | OpenClaw 销售机会推进建议 skill。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md` | 推进建议业务决策规则。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/field_dictionary.md` | 推进建议字段字典。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/helper_contract.md` | ContextHelper 交互契约。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/model_tool_contract.md` | ModelTool 交互契约。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json` | 推进建议输出 schema。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md` | directdb 版本 OpenClaw skill。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md` | 智能录入 OpenClaw skill。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md` | 智能录入决策规则。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/field_dictionary.md` | 智能录入字段字典。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/helper_contract.md` | 智能录入 helper 契约。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/model_tool_contract.md` | 智能录入 ModelTool 契约。 |
-| `runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json` | 智能录入输出 schema。 |
-| `runtime-assets/openclaw/workspace/skills/special-custom-product-solution/SKILL.md` | 特殊定制产品方案 OpenClaw skill。 |
-| `runtime-assets/openclaw/workspace/skills/special-custom-product-solution/references/decision_rules.md` | 特殊定制产品方案规则。 |
-| `runtime-assets/openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json` | 特殊定制产品方案输出 schema。 |
+| `runtime-assets/model-profiles/payment-fast-agent/models.json` | 收款信息 direct-model fallback 模型元数据。 |
+| `runtime-assets/model-profiles/sales-agent/models.json` | 销售/产品 direct-model fallback 模型元数据。 |
+| `references/sales-opportunity-advisor/` | 销售机会推进建议项目内契约、规则和输出 schema。 |
+| `references/sales-opportunity-advisor-directdb/` | directdb 版本项目内 SQL 定义。 |
+| `references/sales-opportunity-smart-entry/` | 智能录入项目内契约、规则和输出 schema。 |
+| `references/special-custom-product-solution/` | 特殊定制产品方案项目内规则和输出 schema。 |
+| `runtime-assets/project-runtime/workspace/skills/**` | 历史 skill 资产迁入的项目 runtime 命名空间，主链路不再以该目录作为执行入口。 |
 
 ## ContextHelper 服务
 
@@ -430,4 +417,3 @@
 | `logs/`、`rag-service/logs/`、`tmp/`、`.tmp/` | 本地日志和临时文件。 |
 | `console/dist/` | 前端构建输出。 |
 | `tests/regression/output/`、`platform/tests/output/` | 测试输出。 |
-

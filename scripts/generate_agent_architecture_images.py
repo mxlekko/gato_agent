@@ -413,12 +413,12 @@ def build_overview_image() -> Path:
     draw = ImageDraw.Draw(base)
     add_header(
         base,
-        "本地 API / Agent Gateway / Agent 架构框图",
-        "强调部署边界、职责归属，以及请求与回包的主链路",
+        "本地 API / Platform Gateway / LangGraph 架构框图",
+        "强调部署边界、职责归属，以及请求与回包的项目内主链路",
         [
             ("当前入口：POST /api/agent/run", PANEL_WARM),
             ("scene-config 驱动", PANEL_BLUE),
-            ("Agent：openclaw/sales-agent", PANEL_MINT),
+            ("Runtime：LangGraph StateGraph", PANEL_MINT),
         ],
     )
 
@@ -434,33 +434,33 @@ def build_overview_image() -> Path:
 
     draw_card(base, caller_box, "调用方", "业务系统 / 前端 / 内部服务\n只感知统一 API\n提交 scene + bizParams", BLUE, PANEL_BLUE)
     draw_container(base, local_domain, "本机部署域", NAVY, with_alpha(NAVY, 18)[:3])
-    draw_container(base, agent_domain, "Agent 执行域", AMBER, with_alpha(AMBER, 18)[:3], title_fill=WHITE)
+    draw_container(base, agent_domain, "项目内运行域", AMBER, with_alpha(AMBER, 18)[:3], title_fill=WHITE)
 
     draw_card(base, api_box, "本地 API 服务", "server.js + routes/agent.js\n对外统一入口\n负责桥接而不做业务清洗", TEAL, PANEL_MINT, badge="API")
-    draw_card(base, gateway_box, "Agent Gateway", "127.0.0.1:18789\n接收 runtime request\n按模型与 session 路由", NAVY, PANEL_ALT, badge="gateway")
-    draw_card(base, agent_box, "对应 Agent", "openclaw/sales-agent\n承接 scene 对应 skill\n返回 wrapped result JSON", AMBER, PANEL_WARM, badge="agent")
+    draw_card(base, gateway_box, "Platform Gateway", "按 scene-config 决策\n选择 langgraph/direct-model\n记录 routePlan", NAVY, PANEL_ALT, badge="gateway")
+    draw_card(base, agent_box, "LangGraph Runtime", "编译 BusinessSkill + Template\n调度平台节点\n返回标准 result state", AMBER, PANEL_WARM, badge="graph")
 
     draw_card(base, api_resp, "API 负责什么", "校验请求\n读取 scene-config\n组装 runtime body\n解析返回并统一回包", TEAL, WHITE)
-    draw_card(base, gateway_resp, "Gateway 负责什么", "转发到本机 agent\n维护会话上下文\n不承载业务判断", NAVY, WHITE)
-    draw_card(base, agent_resp, "Agent 负责什么", "承接 scene 逻辑\n命中对应 skill\n在 skill 内完成业务编排", AMBER, WHITE)
+    draw_card(base, gateway_resp, "Gateway 负责什么", "执行 routing 策略\n拒绝退役 legacy 主链路\n不承载业务判断", NAVY, WHITE)
+    draw_card(base, agent_resp, "Runtime 负责什么", "加载 workflow contract\n调用数据/LLM/校验节点\n产出统一 envelope", AMBER, WHITE)
 
     draw_connector(draw, [(300, 524), (430, 524)], fill=BLUE, width=7)
     draw_connector(draw, [(720, 524), (790, 524)], fill=TEAL, width=7)
     draw_connector(draw, [(1060, 524), (1170, 524)], fill=NAVY, width=7)
 
     draw_tag(base, (332, 470), "HTTP POST /api/agent/run", PANEL_BLUE, text_fill=BLUE, h_pad=16, v_pad=8)
-    draw_tag(base, (715, 470), "runtime request", PANEL_MINT, text_fill=TEAL, h_pad=16, v_pad=8)
-    draw_tag(base, (1050, 470), "路由到 openclaw/sales-agent", PANEL_WARM, text_fill=AMBER, h_pad=16, v_pad=8)
+    draw_tag(base, (715, 470), "routePlan", PANEL_MINT, text_fill=TEAL, h_pad=16, v_pad=8)
+    draw_tag(base, (1050, 470), "执行项目内 LangGraph", PANEL_WARM, text_fill=AMBER, h_pad=16, v_pad=8)
 
     draw_connector(draw, [(1390, 596), (1390, 902), (575, 902), (575, 812)], fill=ROSE, width=6, dashed=True)
     draw_connector(draw, [(430, 740), (300, 740)], fill=ROSE, width=6, dashed=True)
-    draw_tag(base, (930, 872), "Agent -> API：wrapped result JSON", PANEL_ROSE, text_fill=ROSE, h_pad=16, v_pad=8)
+    draw_tag(base, (930, 872), "Runtime -> API：标准 result state", PANEL_ROSE, text_fill=ROSE, h_pad=16, v_pad=8)
     draw_tag(base, (108, 770), "API -> 调用方：统一 HTTP response", PANEL_ROSE, text_fill=ROSE, h_pad=16, v_pad=8)
 
-    draw_tag(base, (1188, 346), "scene 命中哪个 skill，在 agent 内部处理", PANEL_WARM, text_fill=AMBER, h_pad=16, v_pad=8)
-    draw_tag(base, (480, 336), "第二张图展开 skill / tool / reference", PANEL_BLUE, text_fill=BLUE, h_pad=16, v_pad=8)
+    draw_tag(base, (1188, 346), "scene 绑定 BusinessSkill 与模板", PANEL_WARM, text_fill=AMBER, h_pad=16, v_pad=8)
+    draw_tag(base, (480, 336), "第二张图展开 node / tool / reference", PANEL_BLUE, text_fill=BLUE, h_pad=16, v_pad=8)
 
-    add_footer(base, "宏观上只有一条主链：调用方 -> 本地 API -> Agent Gateway -> 对应 Agent；回程由 Agent 先返回 wrapped result，API 再统一封装给调用方。")
+    add_footer(base, "宏观上只有一条主链：调用方 -> 本地 API -> Platform Gateway -> LangGraph Runtime；回程由 Runtime 产出标准 state，API 再统一封装给调用方。")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output_path = OUTPUT_DIR / "agent-overview-chain.png"

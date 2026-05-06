@@ -2,17 +2,36 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { execFileSync, spawnSync } = require("child_process");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DEFAULT_MANIFEST = path.join(ROOT_DIR, "tests", "fixtures", "self-contained", "manifest.json");
 const DEFAULT_SCAN_SCRIPT = path.join(ROOT_DIR, "scripts", "scan_shared_runtime_paths.js");
+const DEFAULT_OPENCLAW_SCAN_SCRIPT = path.join(ROOT_DIR, "scripts", "scan_openclaw_dependencies.js");
 const DEFAULT_SCAN_TARGETS = [
   "scene-configs",
   "platform",
   "services",
   "deploy",
-  "runtime-assets/openclaw/workspace/skills"
+  "runtime-assets"
+];
+const DEFAULT_NO_OPENCLAW_SCAN_TARGETS = [
+  "services",
+  "platform",
+  "scene-configs",
+  "routes",
+  "server.js",
+  "scripts/bootstrap_local_runtime.js",
+  "package.json"
+];
+const DEFAULT_NO_OPENCLAW_LOG_FILES = [
+  path.join(ROOT_DIR, "logs", "api.stdout.log"),
+  path.join(ROOT_DIR, "logs", "api.stderr.log")
+];
+const NO_OPENCLAW_FORBIDDEN_LOG_PATTERNS = [
+  /gateway-http/i,
+  /OpenClaw Gateway request timed out/i,
+  /agent\.langgraph\.fallback\.triggered/i
 ];
 const API_BASE_URL = process.env.SELF_CONTAINED_API_BASE_URL || "http://127.0.0.1:3100";
 const MODEL_TOOL_BASE_URL = process.env.SELF_CONTAINED_MODEL_TOOL_BASE_URL || "http://127.0.0.1:19103";
@@ -41,6 +60,23 @@ function parseArgs(argv) {
   }
 
   return args;
+}
+
+function parseBooleanValue(value, defaultValue = false) {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on", "enabled"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off", "disabled"].includes(normalized)) {
+    return false;
+  }
+
+  return defaultValue;
 }
 
 function readJson(filePath) {
@@ -168,6 +204,29 @@ function evaluateExternalWarningExpectation(actual, expectation) {
   };
 }
 
+function evaluateSuccessOrExternalWarningExpectation(actual, expectation) {
+  const successEvaluation = evaluateSuccessExpectation(actual, expectation);
+  if (successEvaluation.classification === "pass") {
+    return {
+      ...successEvaluation,
+      expectationSummary: {
+        ...successEvaluation.expectationSummary,
+        type: "success-or-external-warning"
+      }
+    };
+  }
+
+  const warningEvaluation = evaluateExternalWarningExpectation(actual, expectation);
+  return {
+    ...warningEvaluation,
+    expectationSummary: {
+      ...warningEvaluation.expectationSummary,
+      type: "success-or-external-warning",
+      requiredDataFields: Array.isArray(expectation.requiredDataFields) ? expectation.requiredDataFields : []
+    }
+  };
+}
+
 function evaluateCaseResult(actual, expectation) {
   if (!expectation || expectation.type === "success") {
     return evaluateSuccessExpectation(actual, expectation || {});
@@ -175,6 +234,10 @@ function evaluateCaseResult(actual, expectation) {
 
   if (expectation.type === "external-warning") {
     return evaluateExternalWarningExpectation(actual, expectation);
+  }
+
+  if (expectation.type === "success-or-external-warning") {
+    return evaluateSuccessOrExternalWarningExpectation(actual, expectation);
   }
 
   throw new Error(`Unsupported expectation type: ${expectation.type}`);
@@ -194,6 +257,140 @@ function runScan({ scanScriptPath, scanTargets, outputDir }) {
   });
 
   return readJson(outputPath);
+}
+
+function getCategoryCount(report, category) {
+  return report?.summary?.byCategory?.find((item) => item.category === category)?.count || 0;
+}
+
+function runNoOpenClawDependencyScan({ scanScriptPath, scanTargets, outputDir }) {
+  const outputPath = path.join(outputDir, "openclaw-scan-report.json");
+  const args = [
+    scanScriptPath,
+    "--targets",
+    scanTargets.join(","),
+    "--output",
+    outputPath,
+    "--fail-on-runtime-blocker",
+    "--fail-on-config-blocker"
+  ];
+  const result = spawnSync(process.execPath, args, {
+    cwd: ROOT_DIR,
+    encoding: "utf8"
+  });
+  const report = fs.existsSync(outputPath) ? readJson(outputPath) : null;
+
+  return {
+    command: `node ${path.relative(ROOT_DIR, scanScriptPath)} --targets ${scanTargets.join(",")} --fail-on-runtime-blocker --fail-on-config-blocker`,
+    status: result.status,
+    failed: result.status !== 0,
+    reportFile: path.relative(ROOT_DIR, outputPath),
+    runtimeBlockers: getCategoryCount(report, "runtime-blocker"),
+    configBlockers: getCategoryCount(report, "config-blocker"),
+    stderr: String(result.stderr || "").trim() || null
+  };
+}
+
+function resolvePathList(rawValue, defaults) {
+  return String(rawValue || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => path.resolve(ROOT_DIR, item))
+    .concat(rawValue ? [] : defaults);
+}
+
+function snapshotLogFiles(logFiles) {
+  return logFiles.map((filePath) => {
+    if (!fs.existsSync(filePath)) {
+      return {
+        filePath,
+        exists: false,
+        size: 0
+      };
+    }
+
+    const stat = fs.statSync(filePath);
+    return {
+      filePath,
+      exists: true,
+      size: stat.size
+    };
+  });
+}
+
+function readLogDeltas(snapshots) {
+  return snapshots.map((snapshot) => {
+    if (!fs.existsSync(snapshot.filePath)) {
+      return {
+        filePath: snapshot.filePath,
+        exists: false,
+        text: ""
+      };
+    }
+
+    const stat = fs.statSync(snapshot.filePath);
+    const start = snapshot.exists && stat.size >= snapshot.size ? snapshot.size : 0;
+    const fd = fs.openSync(snapshot.filePath, "r");
+    try {
+      const length = stat.size - start;
+      const buffer = Buffer.alloc(Math.max(length, 0));
+      if (length > 0) {
+        fs.readSync(fd, buffer, 0, length, start);
+      }
+      return {
+        filePath: snapshot.filePath,
+        exists: true,
+        text: buffer.toString("utf8")
+      };
+    } finally {
+      fs.closeSync(fd);
+    }
+  });
+}
+
+function buildNoOpenClawLogCheck({ snapshots, requestIds }) {
+  const requestIdSet = new Set(requestIds.filter(Boolean));
+  const deltas = readLogDeltas(snapshots);
+  const checkedFiles = deltas.filter((item) => item.exists).map((item) => path.relative(ROOT_DIR, item.filePath));
+  const findings = [];
+
+  for (const delta of deltas) {
+    const lines = delta.text.split(/\r?\n/).filter(Boolean);
+    for (const line of lines) {
+      if (requestIdSet.size > 0 && !Array.from(requestIdSet).some((requestId) => line.includes(requestId))) {
+        continue;
+      }
+
+      const matchedPattern = NO_OPENCLAW_FORBIDDEN_LOG_PATTERNS.find((pattern) => pattern.test(line));
+      if (!matchedPattern) {
+        continue;
+      }
+
+      findings.push({
+        file: path.relative(ROOT_DIR, delta.filePath),
+        pattern: matchedPattern.source,
+        line: line.slice(0, 500)
+      });
+    }
+  }
+
+  return {
+    checked: checkedFiles.length > 0,
+    checkedFiles,
+    requestIds: Array.from(requestIdSet),
+    forbiddenPatterns: NO_OPENCLAW_FORBIDDEN_LOG_PATTERNS.map((pattern) => pattern.source),
+    findings,
+    failed: findings.length > 0
+  };
+}
+
+function buildNoOpenClawEnvironmentCheck() {
+  const openClawGatewayTokenSet = Boolean(String(process.env.OPENCLAW_GATEWAY_TOKEN || "").trim());
+  return {
+    openClawGatewayTokenSet,
+    failed: openClawGatewayTokenSet
+  };
 }
 
 async function runCase(caseItem, manifestDir, outputDir) {
@@ -224,6 +421,7 @@ async function runCase(caseItem, manifestDir, outputDir) {
     route: caseItem.route,
     classification: evaluation.classification,
     actualStatus: actual.status,
+    requestId: actual.body?.requestId || null,
     requestFile: path.relative(ROOT_DIR, requestPath),
     actualFile: path.relative(ROOT_DIR, actualFilePath),
     reportFile: path.relative(ROOT_DIR, reportFilePath),
@@ -245,11 +443,26 @@ async function main() {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  const noOpenClawRequired = Boolean(args["no-openclaw"]) || parseBooleanValue(process.env.NO_OPENCLAW_REQUIRED, false);
+  const noOpenClawScanScriptPath = path.resolve(args["openclaw-scan-script"] || DEFAULT_OPENCLAW_SCAN_SCRIPT);
+  const noOpenClawScanTargets = String(args["openclaw-scan-targets"] || DEFAULT_NO_OPENCLAW_SCAN_TARGETS.join(","))
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const noOpenClawLogFiles = resolvePathList(args["no-openclaw-log-files"] || process.env.NO_OPENCLAW_LOG_FILES, DEFAULT_NO_OPENCLAW_LOG_FILES);
 
   fs.mkdirSync(outputDir, { recursive: true });
 
   const scanReport = runScan({ scanScriptPath, scanTargets, outputDir });
   const scanFailed = Number(scanReport?.summary?.totalFindings || 0) > 0;
+  const noOpenClawScan = noOpenClawRequired
+    ? runNoOpenClawDependencyScan({
+        scanScriptPath: noOpenClawScanScriptPath,
+        scanTargets: noOpenClawScanTargets,
+        outputDir
+      })
+    : null;
+  const noOpenClawEnvironmentCheck = noOpenClawRequired ? buildNoOpenClawEnvironmentCheck() : null;
 
   const cases = Array.isArray(manifest.cases)
     ? manifest.cases.filter((item) => !selectedCaseId || item.id === selectedCaseId)
@@ -259,10 +472,17 @@ async function main() {
     throw new Error(selectedCaseId ? `No self-contained case found for id: ${selectedCaseId}` : "No self-contained cases found.");
   }
 
+  const noOpenClawLogSnapshots = noOpenClawRequired ? snapshotLogFiles(noOpenClawLogFiles) : null;
   const caseResults = [];
   for (const item of cases) {
     caseResults.push(await runCase(item, manifestDir, outputDir));
   }
+  const noOpenClawLogCheck = noOpenClawRequired
+    ? buildNoOpenClawLogCheck({
+        snapshots: noOpenClawLogSnapshots,
+        requestIds: caseResults.map((item) => item.requestId)
+      })
+    : null;
 
   const summary = {
     reportType: "self-contained-regression-summary",
@@ -282,13 +502,34 @@ async function main() {
       warnings: caseResults.filter((item) => item.classification === "warning").length,
       failed: caseResults.filter((item) => item.classification === "fail").length
     },
-    cases: caseResults
+    cases: caseResults,
+    noOpenClaw: noOpenClawRequired
+      ? {
+          required: true,
+          env: {
+            LANGGRAPH_LEGACY_FALLBACK_ENABLED: process.env.LANGGRAPH_LEGACY_FALLBACK_ENABLED || null,
+            LANGGRAPH_DRAFT_MODE: process.env.LANGGRAPH_DRAFT_MODE || null,
+            OPENCLAW_GATEWAY_TOKEN_SET: noOpenClawEnvironmentCheck.openClawGatewayTokenSet
+          },
+          environmentCheck: noOpenClawEnvironmentCheck,
+          dependencyScan: noOpenClawScan,
+          logCheck: noOpenClawLogCheck
+        }
+      : {
+          required: false
+        }
   };
 
   writeJson(path.join(outputDir, "summary.json"), summary);
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
 
-  if (scanFailed || summary.totals.failed > 0) {
+  if (
+    scanFailed
+    || summary.totals.failed > 0
+    || noOpenClawEnvironmentCheck?.failed
+    || noOpenClawScan?.failed
+    || noOpenClawLogCheck?.failed
+  ) {
     process.exitCode = 1;
   }
 }

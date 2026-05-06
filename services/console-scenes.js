@@ -11,7 +11,12 @@ const { isDirectModelScene } = require("./direct-model");
 const { SCENE_CONFIG_DIR, getSceneConfigs } = require("./scene-config");
 const { createConfigStore } = require("./config-store");
 const { createAppError, normalizeError } = require("../utils/errors");
-const { PROJECT_ROOT, resolvePathReference } = require("../utils/path-resolver");
+const {
+  CANONICAL_RUNTIME_NAMESPACE,
+  PROJECT_ROOT,
+  RUNTIME_PREFIX,
+  resolvePathReference
+} = require("../utils/path-resolver");
 
 const PLATFORM_BASE_DIR = path.resolve(__dirname, "..", "platform");
 const PLATFORM_CONFIG_DIRS = [
@@ -259,6 +264,18 @@ function buildProjectSkillEntryFileRef(skillName) {
   }) || "skill_contract.md";
 
   return `${buildProjectSkillWorkspaceRef(skillName)}/${selectedFile}`;
+}
+
+function isRuntimeSkillAssetRef(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) {
+    return false;
+  }
+
+  const prefixes = [
+    `${RUNTIME_PREFIX}${CANONICAL_RUNTIME_NAMESPACE}/`
+  ];
+  return prefixes.some((prefix) => trimmed.startsWith(prefix));
 }
 
 function getPlatformResourceKind(document) {
@@ -1526,10 +1543,10 @@ async function updateConsoleSceneSkillBinding(scene, body = {}) {
   nextSkillConfig.id = skillDocument?.metadata?.name || nextSkillSelection.name;
   nextSkillConfig.version = normalizeSkillVersion(skillDocument?.metadata?.version || nextSkillSelection.version);
   nextSkillConfig.type = nextSkillConfig.type || "main-skill";
-  if (!nextSkillConfig.workspacePath || String(nextSkillConfig.workspacePath).startsWith("runtime://openclaw")) {
+  if (!nextSkillConfig.workspacePath || isRuntimeSkillAssetRef(nextSkillConfig.workspacePath)) {
     nextSkillConfig.workspacePath = buildProjectSkillWorkspaceRef(nextSkillConfig.id);
   }
-  if (!nextSkillConfig.entryFile || String(nextSkillConfig.entryFile).startsWith("runtime://openclaw")) {
+  if (!nextSkillConfig.entryFile || isRuntimeSkillAssetRef(nextSkillConfig.entryFile)) {
     nextSkillConfig.entryFile = buildProjectSkillEntryFileRef(nextSkillConfig.id);
   }
   nextSkillConfig.responsibility = nextSkillConfig.responsibility

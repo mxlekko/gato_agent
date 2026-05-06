@@ -173,7 +173,7 @@ function buildRoutingSummary(sceneConfig, report) {
       routeReason: routePlan.reason,
       shadowExecutionEnabled: routePlan.shadowExecutionEnabled === true,
       platformManagedScene: routePlan.platformManagedScene === true,
-      legacyRole: routePlan.legacyRole || null
+      deprecatedLegacyRole: routePlan.deprecatedLegacyRole || null
     },
     cutover: {
       requestPercentage: cutover.requestPercentage,
@@ -284,7 +284,7 @@ function buildPreviewDecision(label, routePlan, details = {}) {
     effectiveMode: routePlan.effectiveMode,
     routeReason: routePlan.reason,
     shadowExecutionEnabled: routePlan.shadowExecutionEnabled === true,
-    legacyRole: routePlan.legacyRole || null,
+    deprecatedLegacyRole: routePlan.deprecatedLegacyRole || null,
     matchedBy: routePlan.cutover?.matchedBy || null,
     bucket: routePlan.cutover?.bucket ?? null,
     details

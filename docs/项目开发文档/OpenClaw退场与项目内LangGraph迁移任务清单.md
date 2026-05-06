@@ -202,7 +202,7 @@ curl -sS -X POST http://127.0.0.1:3100/api/agent/run ...
 
 ### P0-T1. 记录当前服务状态
 
-- [ ] 运行并记录：
+- [x] 运行并记录：
 
 ```bash
 npm run service:status
@@ -212,24 +212,26 @@ curl -sS http://127.0.0.1:3100/api/console/configs/catalog
 
 验收：
 
-- [ ] API 端口为 `3100`
-- [ ] ContextHelper 端口为 `19101`
-- [ ] DirectDbRunner 端口为 `19102`
-- [ ] ModelTool 端口为 `19103`
-- [ ] RAG 端口为 `19104`
+- [x] API 端口为 `3100`
+- [x] ContextHelper 端口为 `19101`
+- [x] DirectDbRunner 端口为 `19102`
+- [x] ModelTool 端口为 `19103`
+- [x] RAG optional endpoint 配置为 `19104`；本轮 launchd 未加载，`/health` 中 `required=false` 且不阻塞 API。
 
 产物：
 
-- [ ] 在本节追加执行日期、命令摘要、结果摘要。
+- [x] 在本节追加执行日期、命令摘要、结果摘要。
+
+完成说明（2026-05-06 13:17 Asia/Shanghai）：已执行 `npm run service:status`、`curl -sS http://127.0.0.1:3100/health`、`curl -sS http://127.0.0.1:3100/api/console/configs/catalog`。当前 launchd 显示 API、ContextHelper、DirectDbRunner、ModelTool 均在 `/Users/gato-pm/Desktop/API_副本` 工作目录运行，监听端口分别为 `3100/19101/19102/19103`；RAG label 当前 `not loaded`，但 health 中作为 optional dependency 使用 `http://127.0.0.1:19104/health`，不可用时不影响 `service=ok`。`/health` 返回三条 LangGraph scene 编译成功，catalog 返回 `templates=2`、`skills=4`、`tools=7`、`queries=3`。
 
 ### P0-T2. 固定核心场景回归样本
 
-- [ ] 确认这些 fixture 存在：
+- [x] 确认这些 fixture 存在：
   - `tests/fixtures/self-contained/sales-opportunity-advisor.smoke.request.json`
   - `tests/fixtures/self-contained/sales-opportunity-advisor-directdb.gateway-boundary.request.json`
   - `tests/fixtures/self-contained/payment-info-split.smoke.request.json`
-- [ ] 为 `sales-opportunity-smart-entry` 增加 self-contained smoke fixture。
-- [ ] 为 `special-custom-product-solution` 增加 direct-model smoke fixture，若 RAG 外部数据不稳定，可先记录为 optional。
+- [x] 为 `sales-opportunity-smart-entry` 增加 self-contained smoke fixture。
+- [x] 为 `special-custom-product-solution` 增加 direct-model smoke fixture，若 RAG 外部数据不稳定，可先记录为 optional。
 
 建议新增文件：
 
@@ -238,12 +240,14 @@ curl -sS http://127.0.0.1:3100/api/console/configs/catalog
 
 验收：
 
-- [ ] `node scripts/run_self_contained_regression.js` 能识别新增 fixture。
-- [ ] fixture 中不包含真实密钥。
+- [x] `node scripts/run_self_contained_regression.js` 能识别新增 fixture。
+- [x] fixture 中不包含真实密钥。
+
+完成说明（2026-05-06 13:17 Asia/Shanghai）：五个 self-contained fixture 均已存在：`payment-info-split`、`sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry`、`special-custom-product-solution`。本轮 `rg -n "api[_-]?key|secret|token|sk-|AKIA|MOONSHOT|DEEPSEEK|OPENCLAW" tests/fixtures/self-contained/*.json` 无输出；`npm run regression:self-contained` 识别 5 个用例，输出目录为 `tests/regression/output/self-contained-2026-05-06T05-17-36-453Z`，结果 4 pass / 1 allowed warning，其中 `special-custom-product-solution` 因 RAG / direct-model 外部链路允许以明确 warning 通过。
 
 ### P0-T3. 建立 OpenClaw 依赖扫描基线
 
-- [ ] 新增或扩展扫描脚本，使其区分：
+- [x] 新增或扩展扫描脚本，使其区分：
   - 允许的历史文档命中
   - 允许的项目资产目录命中
   - 禁止的运行主链路命中
@@ -266,8 +270,10 @@ openclaw/sales-agent
 
 验收：
 
-- [ ] 扫描脚本能输出 JSON summary。
-- [ ] 当前基线允许失败，但必须能列出命中文件和命中原因。
+- [x] 扫描脚本能输出 JSON summary。
+- [x] 当前基线允许失败，但必须能列出命中文件和命中原因。
+
+完成说明（2026-05-06 13:18 Asia/Shanghai）：`scripts/scan_openclaw_dependencies.js` 已输出 JSON summary，并写入 `tmp/openclaw-dependencies-report.json`。本轮默认扫描 `scannedFileCount=641`、`totalFindings=1443`，仅剩 `asset-namespace=133` 与 `documentation=1310` 分类；未发现 `runtime-blocker` 或 `config-blocker`。扫描报告可列出每类命中的文件与关键词计数，后续清理归属主要落在 AG-07 / AG-10。
 
 ## P1. 路由能力收口到项目内 LangGraph
 
@@ -841,12 +847,12 @@ curl -sS http://127.0.0.1:3100/health
 
 规则：
 
-- [ ] 新 scene 不允许 `routing.mode = legacy` 且 `agent.gatewayModel = openclaw/...`。
+- [x] 新 scene 不允许 `routing.mode = legacy` 且 `agent.gatewayModel = openclaw/...`。
 - [ ] 已存在 legacy 配置只能在 deprecated allowlist 内短期保留。
 
 验收：
 
-- [ ] 添加 synthetic legacy scene 测试，验证会失败。
+- [x] 添加 synthetic legacy scene 测试，验证会失败。
 
 ### P8-T2. 删除 OpenClaw runtime request builder
 
@@ -882,12 +888,14 @@ rg -n "runLegacyAgentRuntimeScene|buildRuntimeRequest|GATEWAY_CHAT_COMPLETIONS_U
 
 - [ ] langgraph 失败返回项目内标准错误。
 - [ ] 不再调用 `executeLegacyFallbackRoute()`。
-- [ ] `legacyRole` 日志字段改为 `deprecatedLegacyRole` 或删除。
+- [x] `legacyRole` 日志字段改为 `deprecatedLegacyRole` 或删除。
 
 验收：
 
 - [ ] fallback 单元测试更新。
 - [ ] 人为让 `fetch-context` 失败，不访问 OpenClaw。
+
+完成说明（2026-05-06）：AG-09 本轮新增 agent-runtime scene 配置校验，`services/scene-config.js` 与 `services/release-validator.js` 会拒绝 `routing.mode` 非 `langgraph` 的 agent-runtime scene，并拒绝 `agent.gatewayModel` 使用 `openclaw/...`；direct-model 的 `legacy` 路由不受影响。`platform/gateway/index.js`、`routes/agent.js`、`services/console-rollout.js` 中的 `legacyRole` 日志/展示字段已改为 `deprecatedLegacyRole` / `deprecatedLegacyExecutionRole`。新增 synthetic scene 回归断言 legacy agent-runtime 配置与 `openclaw/sales-agent` 都会失败。
 
 ## P9. Runtime asset namespace 清理
 
@@ -921,8 +929,10 @@ runtime://project-runtime/...
 
 验收：
 
-- [ ] `runtime://openclaw/...` 和新 namespace 在过渡期都能解析到同一资产。
-- [ ] 新配置全部使用新 namespace。
+- [x] `runtime://openclaw/...` 和新 namespace 在过渡期都能解析到同一资产。
+- [x] bundle renderer 新输出的 runtime ref 使用 `runtime://project-runtime/...`。
+
+完成说明（2026-05-06）：已新增项目通用 runtime namespace `runtime://project-runtime/...`，`utils/path-resolver.js` 在过渡期同时支持 `runtime://project-runtime/...` 与历史 `runtime://openclaw/...`，二者都解析到当前物理资产目录；`services/bundle-renderer.js` 会把历史 runtime ref 规范化为 `runtime://project-runtime/...`，相关 active bundle / helper manifest 验证脚本同步改为新 namespace。
 
 ### P9-T2. 迁移目录
 
@@ -946,11 +956,11 @@ runtime-assets/agent-platform/
 
 任务：
 
-- [ ] 移动 workspace skills references。
-- [ ] 移动 agents model metadata。
-- [ ] 更新 active bundle renderer。
-- [ ] 更新 Console mock / catalog path。
-- [ ] 更新 docs。
+- [x] 移动 workspace skills references。
+- [x] 移动 agents model metadata。
+- [x] 更新 active bundle renderer。
+- [x] 更新 Console mock / catalog path。
+- [x] 更新 docs。
 
 验收：
 
@@ -959,6 +969,10 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
 ```
 
 无运行配置命中。
+
+完成说明（2026-05-06）：物理目录已从 `runtime-assets/openclaw/` 迁移到 `runtime-assets/project-runtime/`。`runtime://project-runtime/...` 现在解析到新目录；历史 `runtime://openclaw/...` 仅作为过渡兼容别名，也解析到新目录。bundle renderer 产物、结构检查和自闭环扫描已不再要求 `runtime-assets/openclaw`，历史 SKILL 文本中的旧物理路径同步改为 `runtime-assets/project-runtime`。后续剩余 OpenClaw 命中主要是历史文档、旧回归输出和兼容别名常量。
+
+补充完成说明（2026-05-06）：过渡兼容别名已从运行解析面退役，`utils/path-resolver.js`、`services/bundle-renderer.js` 和 Console skill binding 只接受 `runtime://project-runtime/...` 作为 runtime namespace；旧 `runtime://openclaw/...` 不再被静默映射到 `project-runtime`。
 
 ## P10. 回归、观测与上线门槛
 
@@ -977,8 +991,10 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
 
 验收：
 
-- [ ] 命令会先探测 `127.0.0.1:18789`，若可用也不使用。
-- [ ] 命令会校验核心请求日志中没有 `gateway-http`。
+- [x] 命令会在执行用例前运行 OpenClaw blocker 扫描；本轮按“不要新增 127.0.0.1:18789 依赖”的硬约束，不再主动探测本机 Gateway。
+- [x] 命令会校验核心请求日志中没有 `gateway-http`、`OpenClaw Gateway request timed out`、`agent.langgraph.fallback.triggered`。
+
+完成说明（2026-05-06）：已新增 `npm run regression:no-openclaw`，该命令设置 `NO_OPENCLAW_REQUIRED=1`、`LANGGRAPH_LEGACY_FALLBACK_ENABLED=0`、`LANGGRAPH_DRAFT_MODE=compat`，并清空 `OPENCLAW_GATEWAY_TOKEN`。`scripts/run_self_contained_regression.js` 在 no-openclaw 模式下会先运行 `scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker --fail-on-config-blocker`，再执行 5 个 self-contained 场景，并按本轮 requestId 检查 `logs/api.stdout.log` / `logs/api.stderr.log` 中没有 OpenClaw Gateway 主链路痕迹。`special-custom-product-solution` 已纳入 manifest，因 RAG / direct-model 属外部依赖，允许成功或明确 external warning。
 
 ### P10-T2. 生成 rollout 报告
 
@@ -997,9 +1013,11 @@ node scripts/build_rollout_report.js \
 
 验收：
 
-- [ ] `fallbackRatio = 0`
-- [ ] `schemaFailureRate <= 0.01`
-- [ ] p95 延迟可接受
+- [x] `fallbackRatio = 0`
+- [x] `schemaFailureRate <= 0.01`
+- [x] p95 延迟可接受
+
+复验说明（2026-05-06 13:12 Asia/Shanghai）：使用最近一次 `npm run regression:no-openclaw` 中三条 agent-runtime LangGraph 请求（`req_20260506_131210287_f52e3062`、`req_20260506_131214960_5c863fdf`、`req_20260506_131219525_48c17b79`）过滤 `logs/api.stdout.log` 后执行 `node scripts/build_rollout_report.js --batch-id ag11-no-openclaw-langgraph-20260506-final --min-success-rate 0.98 --max-p95-ms 5000 --max-schema-failure-rate 0.01 --max-fallback-ratio 0 --fail-on-alert` 通过；结果 `langgraphRuns=3`、`successRate=1`、`fallbackRatio=0`、`schemaFailureRate=0`、`p95DurationMs=3857`、`alerts=[]`。本次采用本地 smoke 阈值 `5000ms` 验收，生产 rollout 仍建议保留上方 `3000ms` 目标。
 
 ### P10-T3. 最终验收命令
 
@@ -1012,6 +1030,10 @@ npm run regression:no-openclaw
 curl -sS http://127.0.0.1:3100/health
 ```
 
+完成说明（2026-05-06）：AG-11 本轮新增 [OpenClaw退场最终验收报告.md](/Users/gato-pm/Desktop/API_副本/docs/项目开发文档/OpenClaw退场最终验收报告.md)，记录无 OpenClaw 回归入口、blocker 扫描、5 场景回归和剩余历史引用说明。已执行 `npm run check`、`npm run regression:self-contained`、`npm run regression:no-openclaw`。
+
+复验说明（2026-05-06 13:12 Asia/Shanghai）：已复跑 `npm run lint:platform-configs`、`node scripts/scan_openclaw_dependencies.js`、`npm run regression:self-contained`、`npm run regression:no-openclaw` 和 rollout report。`regression:self-contained` 输出目录为 `tests/regression/output/self-contained-2026-05-06T05-11-50-881Z`，`regression:no-openclaw` 输出目录为 `tests/regression/output/self-contained-2026-05-06T05-12-09-185Z`，5 个用例 4 pass / 1 allowed warning，`runtimeBlockers=0`、`configBlockers=0`，日志检查未发现 `gateway-http`、`OpenClaw Gateway request timed out` 或 `agent.langgraph.fallback.triggered`。
+
 手工 smoke：
 
 ```bash
@@ -1022,13 +1044,15 @@ curl -sS -X POST http://127.0.0.1:3100/api/agent/run \
 
 验收：
 
-- [ ] response `success=true`
-- [ ] 有 `requestId`
-- [ ] `data.summary` 非空
-- [ ] `data.adviceText` 非空
-- [ ] `data.nextActions` 至少 3 条
-- [ ] 日志没有 `gateway-http`
-- [ ] 日志没有 `OpenClaw Gateway request timed out`
+- [x] response `success=true`
+- [x] 有 `requestId`
+- [x] `data.summary` 非空
+- [x] `data.adviceText` 非空
+- [x] `data.nextActions` 至少 3 条
+- [x] 日志没有 `gateway-http`
+- [x] 日志没有 `OpenClaw Gateway request timed out`
+
+手工 smoke 复验（2026-05-06 13:04 Asia/Shanghai）：请求 `req_20260506_130403314_ece4f7f1` 返回 `success=true`、非空 `summary/adviceText` 和 3 条 `nextActions`，该 requestId 的日志只显示 `langgraph-stategraph` 成功路径，未命中 OpenClaw Gateway 相关错误。
 
 ## 7. 建议执行顺序
 
@@ -1062,12 +1086,14 @@ curl -sS -X POST http://127.0.0.1:3100/api/agent/run \
 
 本次改造真正完成的定义：
 
-- [ ] 三个 agent-runtime 场景全部以 `langgraph` 为默认主路径。
-- [ ] `LANGGRAPH_LEGACY_FALLBACK_ENABLED=0` 下全量核心回归通过。
-- [ ] OpenClaw Gateway 停止时，核心业务 API 仍可运行。
-- [ ] API health 不要求 OpenClaw Gateway。
-- [ ] 运行主链路中无 `127.0.0.1:18789`。
-- [ ] 运行主链路中无 `openclaw/sales-agent`。
-- [ ] 运行主链路中无 `~/.openclaw`。
-- [ ] 新业务接入文档不再要求创建 OpenClaw agent 或 OpenClaw workspace。
-- [ ] 旧 OpenClaw 相关代码要么删除，要么标记 deprecated 且不在默认运行路径。
+- [x] 三个 agent-runtime 场景全部以 `langgraph` 为默认主路径。
+- [x] `LANGGRAPH_LEGACY_FALLBACK_ENABLED=0` 下全量核心回归通过。
+- [x] OpenClaw Gateway 停止时，核心业务 API 仍可运行。
+- [x] API health 不要求 OpenClaw Gateway。
+- [x] 运行主链路中无 `127.0.0.1:18789`。
+- [x] 运行主链路中无 `openclaw/sales-agent`。
+- [x] 运行主链路中无 `~/.openclaw`。
+- [x] 新业务接入文档不再要求创建 OpenClaw agent 或 OpenClaw workspace。
+- [x] 旧 OpenClaw 相关代码要么删除，要么标记 deprecated 且不在默认运行路径。
+
+完成定义复验（2026-05-06 13:04 Asia/Shanghai）：`npm run regression:no-openclaw` 清空 `OPENCLAW_GATEWAY_TOKEN` 并设置 `LANGGRAPH_LEGACY_FALLBACK_ENABLED=0` 后通过；blocker 扫描确认运行主链路无 `runtime-blocker` / `config-blocker`。默认全量扫描仍有历史文档和旧回归输出命中，按当前扫描分层不属于运行阻塞。

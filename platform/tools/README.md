@@ -73,12 +73,12 @@ V1 建议类别：
 V1 支持的受控驱动：
 
 - `http`
-- `agent-runtime`
+- `project-llm`
 
 其中：
 
 - `http` 工具必须显式声明 endpoint 和网络策略
-- `agent-runtime` 工具由平台运行时托管，不允许业务自己传 provider 密钥
+- `project-llm` 工具由项目内 LLM client 托管，不允许业务自己传 provider 密钥或外部 provider endpoint
 
 ### `spec.requestContract`
 
@@ -220,14 +220,17 @@ V1 必须限制：
 
 - [generic-query-runner.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/generic-query-runner.tool.yaml)
 - [sales-opportunity-context-helper.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-context-helper.tool.yaml)
-- [openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml)
+- [project-advisory-llm.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/project-advisory-llm.tool.yaml)
+- [project-product-solution-llm.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/project-product-solution-llm.tool.yaml)
 - [model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml)
 - [sales-opportunity-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-by-opportunity-id.query.yaml)
+- [sales-opportunity-directdb-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml)
+- [sales-opportunity-smart-entry-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-smart-entry-by-opportunity-id.query.yaml)
 
 这组配置证明：
 
-1. 当前 `sales-opportunity-advisor` 所需的三个能力可以受控注册
-2. 当前 helper 查询业务可以作为 `QueryProfile` 表达
+1. 当前销售机会 LangGraph 场景所需的数据、LLM 和校验能力可以受控注册
+2. helper/directdb 查询业务可以作为 `QueryProfile` 表达
 3. 查询配置表达的是“查什么”和“允许怎么查”，不是“直接执行什么 SQL”
 
 ## 5. V1 明确不允许

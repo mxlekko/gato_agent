@@ -22,7 +22,7 @@ This project is a Node.js agent platform with four runtime surfaces:
 ├── console/                   # React/Vite console
 ├── scene-configs/             # scene configuration files
 ├── references/                # direct-model prompts and schemas
-├── runtime-assets/            # bundled OpenClaw runtime assets
+├── runtime-assets/            # bundled runtime/config assets
 ├── metadata/                  # local business dictionaries/metadata
 ├── scripts/                   # maintenance, verification, migration scripts
 ├── deploy/                    # launchd deployment templates

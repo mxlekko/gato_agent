@@ -310,7 +310,7 @@ const sharedEditableAssets = {
   schema: {
     ref: "schema://sales-opportunity-advisor/output@v1",
     sourceType: "local-file",
-    path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json",
+    path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/output_schema.json",
     editable: true
   },
   dictionary: {
@@ -322,7 +322,7 @@ const sharedEditableAssets = {
   rules: {
     ref: "rules://sales-opportunity-advisor/decision-rules@v1",
     sourceType: "local-file",
-    path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md",
+    path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/decision_rules.md",
     editable: true
   }
 };
