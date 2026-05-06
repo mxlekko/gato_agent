@@ -49,7 +49,7 @@ spec:
     timeoutMsMax: 30000
     retryMaxAttempts: 1
   migrationSource:
-    skillPath: runtime://openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md
+    skillPath: project://references/sales-opportunity-advisor/skill_contract.md
     helperScriptPath: project://ContextHelper/generated-queries/sales-opportunity-advisor.generated.js
     helperManifestPath: project://ContextHelper/generated-queries/manifest.json
     definitionHash: ca345fd3cc7615b5925a67c9ceff112418c25a1ff6bf955a1075dd6503a462ce

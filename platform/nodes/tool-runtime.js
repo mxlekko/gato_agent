@@ -192,6 +192,10 @@ function buildStatePathCandidates(pathExpression) {
     candidates.push(`artifacts.facts.${normalized.slice("facts.".length)}`);
   }
 
+  if (normalized.startsWith("knowledge.")) {
+    candidates.push(`artifacts.knowledge.${normalized.slice("knowledge.".length)}`);
+  }
+
   if (normalized.startsWith("references.")) {
     candidates.push(`artifacts.references.${normalized.slice("references.".length)}`);
   }

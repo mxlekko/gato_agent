@@ -816,8 +816,7 @@ function buildRagSettingsReadonly() {
     chatApiKeyConfigured: hasConfiguredEnv([
       "CHAT_API_KEY",
       "MOONSHOT_API_KEY",
-      "OPENAI_API_KEY",
-      "OPENCLAW_GATEWAY_TOKEN"
+      "OPENAI_API_KEY"
     ]),
     pythonServiceVersion: String(process.env.RAG_PYTHON_SERVICE_VERSION || "").trim() || null,
     chromaPersistDirectory: path.join("rag-service", "data", "chroma")

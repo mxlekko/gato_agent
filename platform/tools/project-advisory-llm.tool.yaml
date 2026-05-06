@@ -1,35 +1,39 @@
 apiVersion: agent.platform/v1alpha1
 kind: ToolDefinition
 metadata:
-  name: openclaw-sales-agent-default
+  name: project-advisory-llm
   version: v1
-  title: OpenClaw Sales Agent Default LLM
+  title: Project Advisory LLM
   status: draft
 spec:
-  ref: tool://llm/openclaw-sales-agent-default@v1
+  ref: tool://llm/project-advisory@v1
   toolRole: advisory_llm
   category: llm
   driver:
-    type: agent-runtime
-    runtimeRef: openclaw/sales-agent
-    secretPolicy: runtime-managed
+    type: project-llm
+    providerRef: env
+    networkPolicy: provider-only
   requestContract:
     requiredFields:
-      - promptRef
+      - prompt
       - request
       - facts
       - rules
+      - schema
     inputSources:
-      promptRef: references.prompt
+      prompt: references.prompt
       request: request.normalized
       facts: facts.profile
+      basisFields: facts.basis_fields
+      knowledgeMatches: knowledge.matches
       rules: references.rules
+      schema: references.output_schema
   responseContract:
     resultPath: draft.payload
     errorPath: error
   limits:
     timeoutMsDefault: 30000
-    timeoutMsMax: 30000
+    timeoutMsMax: 35000
     retryMaxAttempts: 1
   policy:
     allowedScenes:

@@ -1,0 +1,119 @@
+{
+  "type": "object",
+  "required": [
+    "opportunityId",
+    "salesScene",
+    "data"
+  ],
+  "properties": {
+    "opportunityId": {
+      "type": "string_or_number"
+    },
+    "salesScene": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "opportunityName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "tenderType": {
+          "type": "string_or_number"
+        },
+        "ownerName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "customerName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "industry": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "smartContacts": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "productCategory": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "amount": {
+          "type": "string_or_number"
+        },
+        "discountRate": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "predictCloseDate": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "predictTenderDate": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "projectBudgetAndSchedule": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "projectReasonAndStandard": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "integratorCoverage": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "integratorInfluence": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "competitorSituation": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "tenderFlowAndKeyPerson": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "integratorKeyPerson": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "tenderBlueprintDate": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "tenderTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "bidTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "purchaseTime": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "canControlBid": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "productShare": {
+          "type": "string",
+          "maxLength": 100
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

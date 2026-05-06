@@ -1,10 +1,11 @@
 ---
 name: sales-opportunity-advisor-directdb
 description: 处理机器格式的销售机会推进建议 directdb 请求。当消息中包含 SALES_OPPORTUNITY_ADVISOR 请求标记且 scene 为 sales-opportunity-advisor-directdb 时，负责完成业务编排：让本地 directdb runner 根据本 skill 中的 SQL 业务定义首次生成或后续复用参数化 SQL 模板，获取原始销售机会数据，再读取本地字典完成字段清洗与映射，最后调用本地 model tool 校验结构化结果并返回 wrapped JSON。
-metadata: {"openclaw":{"requires":{"bins":["curl","cat"]},"os":["darwin"]}}
 ---
 
 # 销售机会推进建议 DirectDB Skill
+
+> Deprecated: 项目内 LangGraph 主链路不再读取此文件；DirectDbRunner 当前读取 `project://references/sales-opportunity-advisor-directdb/sql_definition.md` 作为 SQL 业务定义来源。本文件仅保留为旧运行资产参考。
 
 当当前消息中同时包含以下标记时，使用本 skill：
 
@@ -153,7 +154,7 @@ cat /Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_advisor_directd
 
 输出 schema 文件位于：
 
-`/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json`
+`/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/output_schema.json`
 
 在草拟完候选 payload 后，使用 `exec` 工具按下面这种固定模式调用：
 
@@ -202,14 +203,14 @@ curl -sS -X POST http://127.0.0.1:19003/internal/model/validate-structured-outpu
    - `amount`
    - `budgetConfirmed`
    - `predictTenderDate`
-11. 读取并应用 `/Users/gato-pm/.openclaw/workspace-sales-agent/skills/sales-opportunity-advisor/references/decision_rules.md` 中的业务规则。
+11. 读取并应用 `/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/decision_rules.md` 中的业务规则。
 12. 读取并应用 `/Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md`。
 13. 草拟最终业务 payload，字段以提示词文件与 output schema 为准，至少包含：
     - `opportunityId`
     - `summary`
     - `adviceText`
     - `nextActions`
-14. 读取 `/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json`。
+14. 读取 `/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/output_schema.json`。
 15. 调用本地 model tool 校验草拟的 payload。
 16. 如果 model tool 返回成功，则使用 `data.payload` 作为最终 payload。
 17. 最终只返回 wrapped JSON 结果块。
@@ -297,7 +298,7 @@ curl -sS -X POST http://127.0.0.1:19003/internal/model/validate-structured-outpu
 
 1. 基于 `rawRow` 和本地 TSV 字典静默整理映射后的事实。
 2. 只选出真正决定建议方向的少数字段。
-3. 应用 `/Users/gato-pm/.openclaw/workspace-sales-agent/skills/sales-opportunity-advisor/references/decision_rules.md` 中匹配的阶段、状态、预算、招标、竞争规则。
+3. 应用 `/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/decision_rules.md` 中匹配的阶段、状态、预算、招标、竞争规则。
 4. 静默草拟业务 payload。
 5. 使用本地 model tool 做校验。
 6. 然后只输出最终 wrapped JSON。

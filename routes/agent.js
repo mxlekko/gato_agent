@@ -1,15 +1,14 @@
-const { buildSessionKey, SUPPORTED_SCENES } = require("../services/runtime-message");
-const { getSceneConfig } = require("../services/scene-config");
+const { getSceneConfig, getSupportedScenes } = require("../services/scene-config");
 const { normalizeOpportunityId, validateSceneBizParams } = require("../services/request-validation");
 const { runLegacySceneExecution } = require("../services/runtime");
-const { buildFallbackRoutePlan, runSceneThroughGateway } = require("../platform/gateway");
+const { runSceneThroughGateway } = require("../platform/gateway");
 const {
-  buildLangGraphFallbackAudit,
+  buildLangGraphFallbackSuppressedAudit,
   resolveLangGraphFallbackDecision
 } = require("../platform/runtime/fallback");
 const { runCompiledSceneWorkflow } = require("../platform/runtime/graphs");
 const { createInitialWorkflowState } = require("../platform/runtime/state");
-const { buildHttpResponseFromState, runLegacyAndShadowCompat } = require("../platform/runtime/shadow");
+const { buildHttpResponseFromState } = require("../platform/runtime/shadow");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("../utils/errors");
 const { info, error } = require("../utils/logger");
 const { buildRequestId, buildTraceId } = require("../utils/request-id");
@@ -53,8 +52,9 @@ function validateAgentRunRequest(body) {
     throw createAppError("INVALID_REQUEST", "scene is required.");
   }
 
-  if (!SUPPORTED_SCENES.includes(body.scene)) {
-    throw createAppError("INVALID_REQUEST", `scene must be one of: ${SUPPORTED_SCENES.join(", ")}.`);
+  const supportedScenes = getSupportedScenes();
+  if (!supportedScenes.includes(body.scene)) {
+    throw createAppError("INVALID_REQUEST", `scene must be one of: ${supportedScenes.join(", ")}.`);
   }
 
   if (!body.bizParams || typeof body.bizParams !== "object") {
@@ -98,45 +98,6 @@ function buildSceneExecutionHttpResponse(execution, requestId) {
   };
 }
 
-function logShadowExecutionOutcome({ traceContext, legacySessionKey = null, shadowBundle }) {
-  if (!shadowBundle?.shadow) {
-    return;
-  }
-
-  if (!shadowBundle.shadow.ok) {
-    error("agent.shadow.failed", {
-      ...traceContext,
-      legacySessionKey,
-      shadowRequestId: shadowBundle.shadow.shadowRequestId,
-      shadowTraceId: shadowBundle.shadow.shadowTraceId,
-      code: shadowBundle.shadow.error?.code || null,
-      httpStatus: shadowBundle.shadow.error?.httpStatus || null,
-      stage: shadowBundle.shadow.error?.stage || null
-    });
-    return;
-  }
-
-  const shadowSessionKey = shadowBundle.shadow.summary?.compatArtifact?.session_key || null;
-  info("agent.shadow.completed", {
-    ...traceContext,
-    legacySessionKey,
-    shadowRequestId: shadowBundle.shadow.shadowRequestId,
-    shadowTraceId: shadowBundle.shadow.shadowTraceId,
-    shadowSessionKey,
-    sessionSeparated: Boolean(legacySessionKey && shadowSessionKey && legacySessionKey !== shadowSessionKey),
-    shadowNodeRunCount: shadowBundle.shadow.summary?.nodeRunCount || 0,
-    shadowNodeStatuses: shadowBundle.shadow.summary?.nodeStatuses || [],
-    shadowResultSuccess: shadowBundle.shadow.summary?.resultSuccess ?? null,
-    shadowErrorCode: shadowBundle.shadow.summary?.errorCode || null,
-    shadowDiffPassed: shadowBundle.diffSummary?.passed ?? null,
-    shadowHttpStatusMatch: shadowBundle.diffSummary?.httpStatusMatch ?? null,
-    shadowEnvelopeMatch: shadowBundle.diffSummary?.responseEnvelopeMatch ?? null,
-    shadowConsistencyMatch: shadowBundle.diffSummary?.consistencyFieldsMatch ?? null,
-    shadowStrictBodyMatch: shadowBundle.diffSummary?.strictBodyMatch ?? null,
-    shadowDifferenceCount: shadowBundle.diffSummary?.differenceCount ?? null
-  });
-}
-
 async function runLegacyDirectModelRoute({ requestId, scene, sceneConfig, bizParams, routePlan, traceContext }) {
   info("agent.run.start", {
     ...traceContext,
@@ -168,143 +129,20 @@ async function runLegacyDirectModelRoute({ requestId, scene, sceneConfig, bizPar
   };
 }
 
-async function runLegacyAgentRuntimeRoute({ requestId, scene, sceneConfig, bizParams, traceContext }) {
-  const sessionKey = buildSessionKey(sceneConfig, requestId);
-  info("agent.run.start", {
-    ...traceContext,
-    sessionKey,
-    sceneExecutionType: "agent-runtime",
-    platformManagedScene: traceContext?.platformManagedScene ?? null,
-    legacyExecutionRole: traceContext?.legacyRole || null
-  });
-
-  let execution;
-  if (traceContext.shadowExecutionEnabled) {
-    const shadowBundle = await runLegacyAndShadowCompat({
-      requestId,
-      traceId: traceContext.traceId,
-      scene,
-      sceneConfig,
-      bizParams,
-      routePlan: {
-        requestedMode: traceContext.requestedMode,
-        effectiveMode: traceContext.effectiveMode,
-        executionMode: traceContext.executionMode,
-        shadowExecutionEnabled: traceContext.shadowExecutionEnabled
-      }
-    });
-
-    logShadowExecutionOutcome({
-      traceContext,
-      legacySessionKey: sessionKey,
-      shadowBundle
-    });
-
-    if (shadowBundle.legacyError) {
-      throw shadowBundle.legacyError;
-    }
-
-    execution = shadowBundle.legacyExecution;
-  } else {
-    execution = await runLegacySceneExecution({
-      requestId,
-      sceneConfig,
-      bizParams
-    });
-  }
-
-  const businessResult = execution.businessResult;
-
-  if (businessResult.success === false) {
-    const responsePayload = buildHttpErrorResponse(
-      businessResult.error,
-      businessResult.requestId || requestId
-    );
-
-    info("agent.run.completed", {
-      ...traceContext,
-      sessionKey,
-      sceneExecutionType: execution.executionType,
-      legacyExecutionRole: execution?.compatibilityBoundary?.role || traceContext?.legacyRole || null,
-      success: false,
-      code: businessResult.error.code,
-      httpStatus: businessResult.error.httpStatus,
-      stage: businessResult.error.stage,
-      responseEnvelope: responsePayload
-    });
-
-    return {
-      statusCode: businessResult.error.httpStatus,
-      payload: responsePayload
-    };
-  }
-
-  const responsePayload = buildHttpSuccessResponse(
-    businessResult.payload,
-    businessResult.requestId || requestId
-  );
-
-  info("agent.run.success", {
-    ...traceContext,
-    sessionKey,
-    durationMs: execution.durationMs,
-    sceneExecutionType: execution.executionType,
-    legacyExecutionRole: execution?.compatibilityBoundary?.role || traceContext?.legacyRole || null,
-    responseEnvelope: responsePayload
-  });
-
+function buildSuppressedFallbackTraceContext(traceContext, fallbackSuppressedAudit) {
   return {
-    statusCode: 200,
-    payload: responsePayload
+    ...traceContext,
+    legacyFallbackEnabled: false,
+    fallbackSuppressed: true,
+    routeReason: "langgraph_auto_fallback_disabled",
+    ...fallbackSuppressedAudit
   };
 }
 
-async function executeLegacyFallbackRoute({
-  requestId,
-  scene,
-  sceneConfig,
-  bizParams,
-  traceContext,
-  fallbackAudit,
-  executeLegacyScene = runLegacySceneExecution
-} = {}) {
-  info("agent.langgraph.fallback.triggered", {
-    ...traceContext,
-    ...fallbackAudit
+function logSuppressedFallback(traceContext, fallbackSuppressedAudit) {
+  info("agent.langgraph.fallback.suppressed", {
+    ...buildSuppressedFallbackTraceContext(traceContext, fallbackSuppressedAudit)
   });
-
-  try {
-    const execution = await executeLegacyScene({
-      requestId,
-      sceneConfig,
-      bizParams
-    });
-    const response = buildSceneExecutionHttpResponse(execution, requestId);
-
-    info("agent.langgraph.fallback.completed", {
-      ...traceContext,
-      ...fallbackAudit,
-      fallbackLegacyExecutionType: execution?.executionType || null,
-      fallbackLegacyHttpStatus: response.statusCode,
-      fallbackLegacySuccess: response.statusCode < 400,
-      fallbackLegacyDurationMs: execution?.durationMs || null,
-      scene,
-      responseEnvelope: response.payload
-    });
-
-    return response;
-  } catch (caughtError) {
-    const legacyError = normalizeError(caughtError);
-    error("agent.langgraph.fallback.failed", {
-      ...traceContext,
-      ...fallbackAudit,
-      fallbackLegacyErrorCode: legacyError.code,
-      fallbackLegacyErrorStage: legacyError.stage,
-      fallbackLegacyErrorHttpStatus: legacyError.httpStatus,
-      scene
-    });
-    throw legacyError;
-  }
 }
 
 async function runLangGraphAgentRuntimeRoute({
@@ -318,13 +156,22 @@ async function runLangGraphAgentRuntimeRoute({
   routePlan,
   traceContext
 }, {
-  executeLangGraph = runCompiledSceneWorkflow,
-  executeLegacyScene = runLegacySceneExecution
+  executeLangGraph = runCompiledSceneWorkflow
 } = {}) {
   const startedAt = Date.now();
+  const langGraphRoutePlan = routePlan
+    ? {
+        ...routePlan,
+        legacyFallbackEnabled: false
+      }
+    : routePlan;
+  const langGraphTraceContext = {
+    ...traceContext,
+    legacyFallbackEnabled: false
+  };
 
   info("agent.run.start", {
-    ...traceContext,
+    ...langGraphTraceContext,
     sceneExecutionType: "langgraph-stategraph"
   });
 
@@ -342,7 +189,7 @@ async function runLangGraphAgentRuntimeRoute({
         userId
       }
     },
-    routePlan,
+    routePlan: langGraphRoutePlan,
     workflowBinding: {
       runtime_mode: "langgraph"
     },
@@ -359,76 +206,57 @@ async function runLangGraphAgentRuntimeRoute({
     });
   } catch (caughtError) {
     const fallbackDecision = resolveLangGraphFallbackDecision({
-      error: caughtError
+      error: caughtError,
+      legacyFallbackEnabled: false
     });
 
-    if (!fallbackDecision.shouldFallback) {
-      throw caughtError;
-    }
-
-    const fallbackAudit = buildLangGraphFallbackAudit({
+    const fallbackSuppressedAudit = buildLangGraphFallbackSuppressedAudit({
       requestId,
       traceId,
       scene,
-      routePlan: buildFallbackRoutePlan(routePlan, fallbackDecision),
+      routePlan: langGraphRoutePlan,
       fallbackDecision
     });
-
-    return executeLegacyFallbackRoute({
-      requestId,
-      scene,
-      sceneConfig,
-      bizParams,
-      traceContext: {
-        ...traceContext,
-        effectiveMode: "legacy",
-        routeReason: "langgraph_auto_fallback"
-      },
-      fallbackAudit,
-      executeLegacyScene
-    });
+    logSuppressedFallback(langGraphTraceContext, fallbackSuppressedAudit);
+    const normalized = fallbackDecision.error || normalizeError(caughtError);
+    normalized.traceContext = buildSuppressedFallbackTraceContext(langGraphTraceContext, fallbackSuppressedAudit);
+    throw normalized;
   }
 
   const fallbackDecision = resolveLangGraphFallbackDecision({
-    finalState
+    finalState,
+    legacyFallbackEnabled: false
   });
 
-  if (fallbackDecision.shouldFallback) {
-    const fallbackAudit = buildLangGraphFallbackAudit({
-      requestId,
-      traceId,
-      scene,
-      routePlan: buildFallbackRoutePlan(routePlan, fallbackDecision),
-      fallbackDecision
-    });
+  const fallbackSuppressedAudit = fallbackDecision.fallbackSuppressed
+    ? buildLangGraphFallbackSuppressedAudit({
+        requestId,
+        traceId,
+        scene,
+        routePlan: langGraphRoutePlan,
+        fallbackDecision
+      })
+    : null;
+  const completionTraceContext = fallbackSuppressedAudit
+    ? buildSuppressedFallbackTraceContext(langGraphTraceContext, fallbackSuppressedAudit)
+    : langGraphTraceContext;
 
-    return executeLegacyFallbackRoute({
-      requestId,
-      scene,
-      sceneConfig,
-      bizParams,
-      traceContext: {
-        ...traceContext,
-        effectiveMode: "legacy",
-        routeReason: "langgraph_auto_fallback"
-      },
-      fallbackAudit,
-      executeLegacyScene
-    });
+  if (fallbackSuppressedAudit) {
+    logSuppressedFallback(langGraphTraceContext, fallbackSuppressedAudit);
   }
 
   const response = buildHttpResponseFromState(finalState);
 
   if (finalState?.result?.success === true) {
     info("agent.run.success", {
-      ...traceContext,
+      ...completionTraceContext,
       durationMs: Date.now() - startedAt,
       sceneExecutionType: "langgraph-stategraph",
       responseEnvelope: response.payload
     });
   } else {
     info("agent.run.completed", {
-      ...traceContext,
+      ...completionTraceContext,
       sceneExecutionType: "langgraph-stategraph",
       success: false,
       code: finalState?.error?.code || null,
@@ -470,7 +298,6 @@ async function runAgentRoute(body) {
       userId,
       handlers: {
         runLegacyDirectModel: runLegacyDirectModelRoute,
-        runLegacyAgentRuntime: runLegacyAgentRuntimeRoute,
         runLangGraphAgentRuntime: runLangGraphAgentRuntimeRoute
       }
     });

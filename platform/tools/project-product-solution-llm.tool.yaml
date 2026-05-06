@@ -1,18 +1,18 @@
 apiVersion: agent.platform/v1alpha1
 kind: ToolDefinition
 metadata:
-  name: openclaw-product-solution-agent
+  name: project-product-solution-llm
   version: v1
-  title: OpenClaw Product Solution Agent
+  title: Project Product Solution LLM
   status: draft
 spec:
-  ref: tool://llm/openclaw-product-solution-agent@v1
+  ref: tool://llm/project-product-solution@v1
   toolRole: advisory_llm
   category: llm
   driver:
-    type: agent-runtime
-    runtimeRef: openclaw/sales-agent
-    secretPolicy: runtime-managed
+    type: project-llm
+    providerRef: env
+    networkPolicy: provider-only
   requestContract:
     requiredFields:
       - prompt
@@ -22,14 +22,14 @@ spec:
     inputSources:
       prompt: references.prompt
       request: request.normalized
-      knowledge: artifacts.knowledge.matches
+      knowledgeMatches: knowledge.matches
       schema: references.output_schema
   responseContract:
     resultPath: draft.payload
     errorPath: error
   limits:
     timeoutMsDefault: 30000
-    timeoutMsMax: 30000
+    timeoutMsMax: 35000
     retryMaxAttempts: 1
   policy:
     allowedScenes:

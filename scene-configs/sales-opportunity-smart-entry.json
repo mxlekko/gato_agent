@@ -4,17 +4,20 @@
   "title": "销售机会智能录入",
   "description": "通过 opportunityId 查询当前销售机会全部字段，结合 rawText 和字段字典，按销售场景输出基础字段加场景字段的结构化结果。",
   "routing": {
-    "mode": "legacy",
+    "mode": "langgraph",
     "allowedModes": [
       "legacy",
       "shadow",
       "langgraph"
-    ]
+    ],
+    "langgraphCutover": {
+      "requestPercentage": 100
+    }
   },
   "agent": {
-    "id": "sales-agent",
-    "gatewayModel": "openclaw/sales-agent",
-    "sessionKeyPrefix": "agent:sales-agent:api"
+    "id": "project-sales-opportunity-smart-entry",
+    "gatewayModel": "project/sales-opportunity-smart-entry",
+    "sessionKeyPrefix": "agent:project-sales-opportunity-smart-entry:api"
   },
   "runtime": {
     "requestKind": "sales_opportunity_smart_entry_request",
@@ -48,10 +51,10 @@
   },
   "skill": {
     "id": "sales-opportunity-smart-entry",
-    "type": "main-skill",
-    "workspacePath": "runtime://openclaw/workspace",
-    "entryFile": "runtime://openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md",
-    "responsibility": "业务编排、读取字典、清洗字段、结合 rawText 更新当前机会字段，并输出结构化结果。"
+    "type": "project-query-contract",
+    "workspacePath": "project://references/sales-opportunity-smart-entry",
+    "entryFile": "project://references/sales-opportunity-smart-entry/skill_contract.md",
+    "responsibility": "提供智能录入输入输出契约与受控查询定义；业务编排由 platform BusinessSkill 与项目内 LangGraph 执行。"
   },
   "tools": [
     {
@@ -90,13 +93,13 @@
     {
       "id": "sales-opportunity-decision-rules",
       "type": "local-file",
-      "path": "runtime://openclaw/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md",
+      "path": "project://references/sales-opportunity-smart-entry/decision_rules.md",
       "purpose": "销售机会智能录入字段更新约束"
     },
     {
       "id": "sales-opportunity-output-schema",
       "type": "local-file",
-      "path": "runtime://openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json",
+      "path": "project://references/sales-opportunity-smart-entry/output_schema.json",
       "purpose": "业务结构化输出 schema"
     }
   ],

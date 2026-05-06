@@ -4,17 +4,20 @@
   "title": "销售机会推进建议（helper）",
   "description": "通过 ContextHelper 数据 tool 获取销售机会 rawRow，由主 skill 完成字段清洗、字典映射、建议生成和结构化输出校验。",
   "routing": {
-    "mode": "legacy",
+    "mode": "langgraph",
     "allowedModes": [
       "legacy",
       "shadow",
       "langgraph"
-    ]
+    ],
+    "langgraphCutover": {
+      "requestPercentage": 100
+    }
   },
   "agent": {
-    "id": "sales-agent",
-    "gatewayModel": "openclaw/sales-agent",
-    "sessionKeyPrefix": "agent:sales-agent:api"
+    "id": "project-sales-opportunity-advisor",
+    "gatewayModel": "project/sales-opportunity-advisor",
+    "sessionKeyPrefix": "agent:project-sales-opportunity-advisor:api"
   },
   "runtime": {
     "requestKind": "sales_opportunity_advisor_request",
@@ -42,10 +45,10 @@
   },
   "skill": {
     "id": "sales-opportunity-advisor",
-    "type": "main-skill",
-    "workspacePath": "runtime://openclaw/workspace",
-    "entryFile": "runtime://openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md",
-    "responsibility": "业务编排、读取字典、清洗字段、映射业务文本、组织建议内容、调用模型校验 tool。",
+    "type": "project-query-contract",
+    "workspacePath": "project://references/sales-opportunity-advisor",
+    "entryFile": "project://references/sales-opportunity-advisor/skill_contract.md",
+    "responsibility": "提供销售机会推进建议输入输出契约与受控查询定义；业务编排由 platform BusinessSkill 与项目内 LangGraph 执行。",
     "version": "v1"
   },
   "tools": [
@@ -84,13 +87,13 @@
     {
       "id": "sales-opportunity-decision-rules",
       "type": "local-file",
-      "path": "runtime://openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md",
+      "path": "project://references/sales-opportunity-advisor/decision_rules.md",
       "purpose": "销售推进建议规则"
     },
     {
       "id": "sales-opportunity-output-schema",
       "type": "local-file",
-      "path": "runtime://openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json",
+      "path": "project://references/sales-opportunity-advisor/output_schema.json",
       "purpose": "业务结构化输出 schema"
     }
   ],

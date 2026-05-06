@@ -29,8 +29,7 @@
           "data.opportunityId",
           "data.summary",
           "data.adviceText",
-          "data.nextActions",
-          "data.basisFields"
+          "data.nextActions"
         ]
       }
     },
@@ -45,8 +44,21 @@
           "data.opportunityId",
           "data.summary",
           "data.adviceText",
-          "data.nextActions",
-          "data.basisFields"
+          "data.nextActions"
+        ]
+      }
+    },
+    {
+      "id": "sales-opportunity-smart-entry.smoke",
+      "scene": "sales-opportunity-smart-entry",
+      "route": "POST /api/agent/run",
+      "requestFile": "sales-opportunity-smart-entry.smoke.request.json",
+      "expectation": {
+        "type": "success",
+        "requiredDataFields": [
+          "data.opportunityId",
+          "data.salesScene",
+          "data.data"
         ]
       }
     }

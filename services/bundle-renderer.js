@@ -9,7 +9,7 @@ const { PROJECT_ROOT } = require("../utils/path-resolver");
 const PROJECT_PREFIX = "project://";
 const RUNTIME_NAMESPACE = "openclaw";
 const RUNTIME_PREFIX = `runtime://${RUNTIME_NAMESPACE}/`;
-const LEGACY_PROJECT_ROOTS = [PROJECT_ROOT, "/Users/gato-pm/Desktop/API"];
+const LEGACY_PROJECT_ROOTS_ENV = "BUNDLE_RENDERER_LEGACY_PROJECT_ROOTS";
 const PASS_THROUGH_RELATIVE_PATHS = [
   "runtime-assets",
   "metadata",
@@ -77,11 +77,20 @@ function ensureBundleRelativePath(relativePath, fieldName) {
   return normalized;
 }
 
+function getProjectRootsForBundleReference() {
+  const configuredRoots = String(process.env[LEGACY_PROJECT_ROOTS_ENV] || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => path.resolve(item));
+
+  return Array.from(new Set([PROJECT_ROOT, ...configuredRoots].map((item) => normalizeSlashes(item))));
+}
+
 function normalizeAbsolutePathToBundleReference(value) {
   const normalized = normalizeSlashes(value);
 
-  for (const root of LEGACY_PROJECT_ROOTS) {
-    const normalizedRoot = normalizeSlashes(root);
+  for (const normalizedRoot of getProjectRootsForBundleReference()) {
     if (normalized === normalizedRoot || normalized.startsWith(`${normalizedRoot}/`)) {
       const relativePath = ensureBundleRelativePath(normalized.slice(normalizedRoot.length + 1), "absolutePath");
       if (relativePath.startsWith(`runtime-assets/${RUNTIME_NAMESPACE}/`)) {

@@ -1,0 +1,11 @@
+{
+  "scene": "sales-opportunity-smart-entry",
+  "bizParams": {
+    "opportunityId": "2041377071732625408",
+    "rawText": "客户本周反馈预算已确认，预计下周安排技术评审，希望我们补充实施周期、交付风险和下一步推进建议。"
+  },
+  "runtimeContext": {
+    "tenantId": "tenant-a",
+    "userId": "user-a"
+  }
+}

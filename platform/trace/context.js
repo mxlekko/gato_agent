@@ -42,6 +42,7 @@ function buildTraceContext({
     effectiveMode: routePlan?.effectiveMode || null,
     executionMode: routePlan?.executionMode || null,
     shadowExecutionEnabled: Boolean(routePlan?.shadowExecutionEnabled),
+    legacyFallbackEnabled: routePlan?.legacyFallbackEnabled ?? null,
     routeReason: routePlan?.reason || null,
     bizParamKeys: Object.keys(safeBizParams),
     bizParamSummary: summarizeBizParams(safeBizParams, scene),

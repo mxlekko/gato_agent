@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "profiles": {
+    "moonshot:default": {
+      "type": "api_key",
+      "provider": "moonshot",
+      "keyEnv": "MOONSHOT_API_KEY"
+    }
+  },
+  "lastGood": {
+    "moonshot": "moonshot:default"
+  },
+  "usageStats": {
+    "moonshot:default": {
+      "errorCount": 0
+    }
+  }
+}

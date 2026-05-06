@@ -14,8 +14,6 @@ const { createAppError, normalizeError } = require("../utils/errors");
 const { PROJECT_ROOT, resolvePathReference } = require("../utils/path-resolver");
 
 const PLATFORM_BASE_DIR = path.resolve(__dirname, "..", "platform");
-const RUNTIME_ASSET_WORKSPACE_ROOT = path.join(PROJECT_ROOT, "runtime-assets", "openclaw", "workspace");
-const OPENCLAW_WORKSPACE_ROOT = path.join(process.env.HOME || "", ".openclaw", "workspace-sales-agent");
 const PLATFORM_CONFIG_DIRS = [
   path.join(PLATFORM_BASE_DIR, "templates"),
   path.join(PLATFORM_BASE_DIR, "tools"),
@@ -242,8 +240,25 @@ function resolveSceneConfigFilePath(scene) {
   return filePath;
 }
 
-function buildSkillEntryFileRef(skillName) {
-  return `runtime://openclaw/workspace/skills/${skillName}/SKILL.md`;
+function fileExists(relativePath) {
+  return fs.existsSync(path.join(PROJECT_ROOT, relativePath));
+}
+
+function buildProjectSkillWorkspaceRef(skillName) {
+  return `project://references/${skillName}`;
+}
+
+function buildProjectSkillEntryFileRef(skillName) {
+  const candidates = [
+    "skill_contract.md",
+    "sql_definition.md",
+    "README.md"
+  ];
+  const selectedFile = candidates.find((fileName) => {
+    return fileExists(path.join("references", skillName, fileName));
+  }) || "skill_contract.md";
+
+  return `${buildProjectSkillWorkspaceRef(skillName)}/${selectedFile}`;
 }
 
 function getPlatformResourceKind(document) {
@@ -1100,26 +1115,6 @@ function resolveSceneInputMapping(scene, sceneConfig = null, platformIndex = nul
   };
 }
 
-function getAssetSyncTargetPaths(resolvedPath) {
-  const relativePath = path.relative(RUNTIME_ASSET_WORKSPACE_ROOT, resolvedPath);
-  if (
-    !relativePath
-    || relativePath.startsWith("..")
-    || path.isAbsolute(relativePath)
-    || !OPENCLAW_WORKSPACE_ROOT
-    || !fs.existsSync(OPENCLAW_WORKSPACE_ROOT)
-  ) {
-    return [];
-  }
-
-  const mirrorPath = path.join(OPENCLAW_WORKSPACE_ROOT, relativePath);
-  if (mirrorPath === resolvedPath || !fs.existsSync(mirrorPath) || !fs.statSync(mirrorPath).isFile()) {
-    return [];
-  }
-
-  return [mirrorPath];
-}
-
 function inferDataSource(toolRef, toolRecord = null) {
   if (typeof toolRef === "string" && toolRef.includes("generic-query-runner")) {
     return {
@@ -1531,11 +1526,15 @@ async function updateConsoleSceneSkillBinding(scene, body = {}) {
   nextSkillConfig.id = skillDocument?.metadata?.name || nextSkillSelection.name;
   nextSkillConfig.version = normalizeSkillVersion(skillDocument?.metadata?.version || nextSkillSelection.version);
   nextSkillConfig.type = nextSkillConfig.type || "main-skill";
-  nextSkillConfig.workspacePath = nextSkillConfig.workspacePath || "runtime://openclaw/workspace";
-  nextSkillConfig.entryFile = buildSkillEntryFileRef(nextSkillConfig.id);
+  if (!nextSkillConfig.workspacePath || String(nextSkillConfig.workspacePath).startsWith("runtime://openclaw")) {
+    nextSkillConfig.workspacePath = buildProjectSkillWorkspaceRef(nextSkillConfig.id);
+  }
+  if (!nextSkillConfig.entryFile || String(nextSkillConfig.entryFile).startsWith("runtime://openclaw")) {
+    nextSkillConfig.entryFile = buildProjectSkillEntryFileRef(nextSkillConfig.id);
+  }
   nextSkillConfig.responsibility = nextSkillConfig.responsibility
-    || currentDocument?.skill?.responsibility
-    || "业务编排、读取字典、清洗字段、映射业务文本、组织建议内容、调用模型校验 tool。";
+    || currentSceneConfig?.skill?.responsibility
+    || "提供项目内业务契约；业务编排由 platform BusinessSkill 与项目内 LangGraph 执行。";
   nextDocument.skill = nextSkillConfig;
 
   if (isObject(skillSpec.runtimeContract)) {

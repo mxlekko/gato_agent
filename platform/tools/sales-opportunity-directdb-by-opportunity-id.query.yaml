@@ -49,7 +49,7 @@ spec:
     timeoutMsMax: 30000
     retryMaxAttempts: 1
   migrationSource:
-    skillPath: /Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md
+    skillPath: project://references/sales-opportunity-advisor-directdb/sql_definition.md
     runnerServicePath: /Users/gato-pm/Desktop/API_副本/DirectDbRunner/services/sql-template.js
     sqlCacheFile: /Users/gato-pm/Desktop/API_副本/DirectDbRunner/sql-cache/sales-opportunity-advisor-directdb.sql.json
     definitionHash: directdb-sales-opportunity-advisor-v1

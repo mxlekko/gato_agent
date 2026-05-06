@@ -27,6 +27,15 @@ async function ensureFile(filePath) {
   }
 }
 
+function summarizePlatformResourceRecords(records) {
+  return {
+    templates: records.filter((item) => item.kind === "template").length,
+    skills: records.filter((item) => item.kind === "skill").length,
+    tools: records.filter((item) => item.kind === "tool").length,
+    queries: records.filter((item) => item.kind === "query").length
+  };
+}
+
 async function main() {
   const verificationRoot = path.join(PROJECT_ROOT, ".tmp", `bundle-renderer-verify-${Date.now()}`);
   const manager = createReleaseManager({
@@ -56,7 +65,7 @@ async function main() {
       path.join("platform", "assets", "prompts", "sales-opportunity-advisor.draft-business-output.v1.md"),
       path.join("runtime-assets", "openclaw", "workspace", "skills", "sales-opportunity-advisor", "SKILL.md"),
       path.join("runtime-assets", "openclaw", "workspace", "skills", "sales-opportunity-advisor", "references", "decision_rules.md"),
-      path.join("runtime-assets", "openclaw", "agents", "payment-fast-agent", "agent", "models.json"),
+      path.join("runtime-assets", "model-profiles", "payment-fast-agent", "models.json"),
       path.join("ContextHelper", "generated-queries", "sales-opportunity-advisor.generated.js"),
       path.join("metadata", "sales_opportunity_dictionary.tsv"),
       path.join("references", "payment-info-split", "prompt.md"),
@@ -88,9 +97,17 @@ async function main() {
       tools: platformResources.tools.length,
       queries: platformResources.queries.length
     };
+    const expectedResourceSummary = summarizePlatformResourceRecords(
+      await store.listPlatformResources({ status: "draft" })
+    );
 
-    if (resourceSummary.templates !== 1 || resourceSummary.skills !== 3 || resourceSummary.tools !== 5 || resourceSummary.queries !== 3) {
-      throw new Error(`Unexpected platform resource counts: ${JSON.stringify(resourceSummary)}`);
+    if (JSON.stringify(resourceSummary) !== JSON.stringify(expectedResourceSummary)) {
+      throw new Error(
+        `Unexpected platform resource counts: ${JSON.stringify({
+          actual: resourceSummary,
+          expected: expectedResourceSummary
+        })}`
+      );
     }
 
     const advisorSkill = platformResources.skills.find(
@@ -201,6 +218,7 @@ async function main() {
           releaseId: createdReleaseId,
           entryCount: created.entries.length,
           resourceSummary,
+          expectedResourceSummary,
           requiredFileCount: requiredFiles.length,
           bundleDir
         },

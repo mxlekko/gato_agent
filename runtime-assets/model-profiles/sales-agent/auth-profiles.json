@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "profiles": {
+    "moonshot:default": {
+      "type": "api_key",
+      "provider": "moonshot",
+      "keyEnv": "MOONSHOT_API_KEY"
+    },
+    "deepseek:default": {
+      "type": "api_key",
+      "provider": "deepseek",
+      "keyEnv": "DEEPSEEK_API_KEY"
+    }
+  },
+  "lastGood": {
+    "moonshot": "moonshot:default",
+    "deepseek": "deepseek:default"
+  },
+  "usageStats": {
+    "moonshot:default": {
+      "errorCount": 0,
+      "lastUsed": 1776046647462
+    },
+    "deepseek:default": {
+      "errorCount": 0,
+      "lastUsed": null
+    }
+  }
+}

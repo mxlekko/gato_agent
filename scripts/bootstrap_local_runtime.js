@@ -21,7 +21,6 @@ const REQUIRED_ENV_KEYS = [
   "CONTEXT_HELPER_PORT",
   "DIRECTDB_RUNNER_PORT",
   "MODEL_TOOL_PORT",
-  "OPENCLAW_GATEWAY_TOKEN",
   "MOONSHOT_API_KEY",
   "DEEPSEEK_API_KEY",
   "SQLSERVER_HOST",
@@ -37,12 +36,6 @@ const REQUIRED_ENV_KEYS = [
 ];
 
 const OPTIONAL_EXTERNAL_ENDPOINTS = [
-  {
-    name: "OpenClaw Gateway",
-    url: "http://127.0.0.1:18789/v1/models",
-    method: "GET",
-    tokenEnv: "OPENCLAW_GATEWAY_TOKEN"
-  },
   {
     name: "special-custom-product-solution RAG",
     url: "http://127.0.0.1:19104/internal/rag/search",
@@ -134,7 +127,7 @@ Options:
   --skip-schema            Do not apply MySQL config-center schema.
   --skip-import            Do not import file configs into MySQL config-center tables.
   --skip-publish           Do not create and activate a local runtime bundle.
-  --skip-external-checks   Do not probe Gateway/RAG endpoints, including RAG /health.
+  --skip-external-checks   Do not probe RAG endpoints, including RAG /health.
   --environment <name>     Release environment. Default: local.
   --scope-type <type>      Release scope type. Default: all.
   --scope-value <value>    Release scope value. Default: *.

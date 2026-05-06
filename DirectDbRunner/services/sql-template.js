@@ -3,6 +3,7 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const { createAppError } = require("../../utils/errors");
+const { resolvePathReference } = require("../../utils/path-resolver");
 const { getDbPool, sql } = require("../../ContextHelper/services/db");
 const { filterNonEmptyFields } = require("../../ContextHelper/providers/sales-opportunity/filter");
 const { normalizeOpportunityId } = require("../../ContextHelper/providers/sales-opportunity/schema");
@@ -13,6 +14,7 @@ const SCENE_CONFIG_PATH = path.join(PROJECT_ROOT, "scene-configs", "sales-opport
 const DICTIONARY_PATH = path.join(PROJECT_ROOT, "metadata", "sales_opportunity_advisor_directdb_dictionary.tsv");
 const SQL_CACHE_DIR = path.join(PROJECT_ROOT, "DirectDbRunner", "sql-cache");
 const SQL_CACHE_FILE = path.join(SQL_CACHE_DIR, "sales-opportunity-advisor-directdb.sql.json");
+const RUNTIME_ROOT = path.join(PROJECT_ROOT, "runtime-assets");
 const SQL_DEFINITION_BEGIN = "<<<SQL_BUSINESS_DEFINITION_BEGIN>>>";
 const SQL_DEFINITION_END = "<<<SQL_BUSINESS_DEFINITION_END>>>";
 const DEFAULT_SQL_MODEL = process.env.DIRECTDB_SQL_TEMPLATE_MODEL || "kimi-k2-turbo-preview";
@@ -58,9 +60,24 @@ async function loadSkillContext() {
     });
   }
 
-  const skillPath = sceneConfig?.skill?.entryFile;
-  if (!skillPath) {
+  const skillPathRef = sceneConfig?.skill?.entryFile;
+  if (!skillPathRef) {
     throw createAppError("INVALID_SQL_TEMPLATE", "Directdb scene config is missing skill.entryFile.");
+  }
+
+  let skillPath;
+  try {
+    skillPath = resolvePathReference(skillPathRef, {
+      projectRoot: PROJECT_ROOT,
+      runtimeRoot: RUNTIME_ROOT
+    }).resolvedPath;
+  } catch (error) {
+    throw createAppError("INVALID_SQL_TEMPLATE", "Failed to resolve directdb skill.entryFile.", {
+      details: {
+        skillPath: skillPathRef,
+        cause: error?.message || "skill_path_resolve_failed"
+      }
+    });
   }
 
   const [skillContent, dictionaryContent] = await Promise.all([
@@ -79,7 +96,7 @@ async function loadSkillContext() {
   return {
     scene: sceneConfig.scene,
     skillId: sceneConfig?.skill?.id || "sales-opportunity-advisor-directdb",
-    skillPath,
+    skillPath: skillPathRef,
     skillHash: sha256(skillContent),
     businessDefinition: extractSqlBusinessDefinition(skillContent),
     dictionaryContent

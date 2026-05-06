@@ -17,7 +17,7 @@
     "model": "deepseek-v4-flash",
     "baseUrl": "https://api.deepseek.com",
     "apiKeyEnv": "DEEPSEEK_API_KEY",
-    "fallbackModelsFile": "runtime://openclaw/agents/sales-agent/agent/models.json",
+    "fallbackModelsFile": "project://runtime-assets/model-profiles/sales-agent/models.json",
     "promptFile": "project://platform/assets/prompts/special-custom-product-solution.draft-business-output.v1.md",
     "schemaReferenceId": "schema://special-custom-product-solution/output@v1",
     "temperature": 1,
@@ -28,11 +28,6 @@
       "topK": 3,
       "timeoutMs": 12000
     }
-  },
-  "agent": {
-    "id": "sales-agent",
-    "gatewayModel": "openclaw/sales-agent",
-    "sessionKeyPrefix": "agent:sales-agent:api"
   },
   "runtime": {
     "requestKind": "special_custom_product_solution_request",
@@ -68,14 +63,6 @@
       }
     }
   },
-  "skill": {
-    "id": "special-custom-product-solution",
-    "type": "main-skill",
-    "workspacePath": "runtime://openclaw/workspace",
-    "entryFile": "runtime://openclaw/workspace/skills/special-custom-product-solution/SKILL.md",
-    "responsibility": "读取定制要求，调用本地 RAG 检索相似片段，参照相似片段生成产品部方案 JSON。",
-    "version": "v1"
-  },
   "tools": [
     {
       "id": "local-rag-search",
@@ -107,7 +94,7 @@
     {
       "id": "schema://special-custom-product-solution/output@v1",
       "type": "local-file",
-      "path": "runtime://openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json",
+      "path": "project://references/special-custom-product-solution/output_schema.json",
       "purpose": "产品部方案结构化输出 schema"
     },
     {
@@ -125,7 +112,7 @@
     {
       "id": "special-custom-product-solution-rules",
       "type": "local-file",
-      "path": "runtime://openclaw/workspace/skills/special-custom-product-solution/references/decision_rules.md",
+      "path": "project://references/special-custom-product-solution/decision_rules.md",
       "purpose": "产品部方案生成约束"
     }
   ],

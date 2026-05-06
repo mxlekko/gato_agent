@@ -104,7 +104,7 @@ toolBindings:
   context_fetcher:
     toolRef: tool://data/generic-query-runner@v1
   advisory_llm:
-    toolRef: tool://llm/openclaw-sales-agent-default@v1
+    toolRef: tool://llm/project-advisory@v1
   output_validator:
     toolRef: tool://validation/model-tool-structured-output@v1
 ```

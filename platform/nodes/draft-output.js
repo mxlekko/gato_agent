@@ -1,5 +1,6 @@
 const { normalizeError } = require("../../utils/errors");
 const { mergeWorkflowState, recordNodeRun } = require("../runtime/state");
+const { invokeProjectAdvisoryLlm } = require("../runtime/llm-client");
 const {
   buildToolRequestPayload,
   isObject,
@@ -12,6 +13,97 @@ const {
 const NODE_ID = "draft-output";
 const OVERRIDE_NODE_ID = "draft_business_output";
 const DEFAULT_TOOL_ROLE = "advisory_llm";
+const DRAFT_MODE_ENV = "LANGGRAPH_DRAFT_MODE";
+const SUPPORTED_DRAFT_MODES = new Set([
+  "compat",
+  "mock",
+  "project-llm"
+]);
+const SMART_ENTRY_BASE_FIELDS = Object.freeze([
+  "opportunityName",
+  "tenderType",
+  "ownerName",
+  "customerName",
+  "industry",
+  "smartContacts",
+  "productCategory",
+  "amount",
+  "discountRate",
+  "predictCloseDate",
+  "predictTenderDate"
+]);
+const SMART_ENTRY_SCENE_FIELDS = Object.freeze({
+  tenderNoDesign: [
+    "projectBudgetAndSchedule",
+    "projectReasonAndStandard",
+    "integratorCoverage",
+    "integratorInfluence",
+    "competitorSituation",
+    "tenderFlowAndKeyPerson",
+    "integratorKeyPerson",
+    "tenderBlueprintDate",
+    "tenderTime",
+    "bidTime",
+    "purchaseTime"
+  ],
+  tenderDesigned: [
+    "integratorCoverage",
+    "integratorInfluence",
+    "competitorSituation",
+    "integratorKeyPerson",
+    "canControlBid",
+    "productShare",
+    "tenderTime",
+    "bidTime",
+    "purchaseTime"
+  ],
+  noTender: [
+    "projectBudgetAndSchedule",
+    "projectReasonAndStandard",
+    "competitorSituation",
+    "integratorKeyPerson",
+    "purchaseTime"
+  ],
+  smallProject: [
+    "projectBudgetAndSchedule",
+    "projectReasonAndStandard",
+    "competitorSituation",
+    "integratorKeyPerson",
+    "purchaseTime"
+  ],
+  designInstitute: []
+});
+const SMART_ENTRY_SCENE_ALIASES = Object.freeze({
+  招标未设计: "tenderNoDesign",
+  招标已设计: "tenderDesigned",
+  不招标: "noTender",
+  小项目: "smallProject",
+  设计院: "designInstitute"
+});
+const SMART_ENTRY_STRING_ONLY_FIELDS = new Set([
+  "opportunityName",
+  "ownerName",
+  "customerName",
+  "industry",
+  "smartContacts",
+  "productCategory",
+  "discountRate",
+  "predictCloseDate",
+  "predictTenderDate",
+  "projectBudgetAndSchedule",
+  "projectReasonAndStandard",
+  "integratorCoverage",
+  "integratorInfluence",
+  "competitorSituation",
+  "tenderFlowAndKeyPerson",
+  "integratorKeyPerson",
+  "tenderBlueprintDate",
+  "tenderTime",
+  "bidTime",
+  "purchaseTime",
+  "canControlBid",
+  "productShare"
+]);
 
 function toStateError(error) {
   return {
@@ -53,6 +145,167 @@ function uniqueStrings(values) {
 
 function getFactValueText(itemsByField, fieldName) {
   return itemsByField.get(fieldName)?.value_text || null;
+}
+
+function isPresentValue(value) {
+  return value !== undefined
+    && value !== null
+    && !(typeof value === "string" && value.trim().length === 0);
+}
+
+function normalizeDraftScalar(fieldName, value) {
+  if (!isPresentValue(value)) {
+    return undefined;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  if (SMART_ENTRY_STRING_ONLY_FIELDS.has(fieldName)) {
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return value;
+}
+
+function getFactRawValue(itemsByField, fieldName) {
+  const item = itemsByField.get(fieldName);
+  if (!item) {
+    return undefined;
+  }
+
+  if (isPresentValue(item.raw_value)) {
+    return item.raw_value;
+  }
+
+  return item.value_text;
+}
+
+function normalizeSmartEntryScene(rawScene) {
+  if (!isPresentValue(rawScene)) {
+    return "designInstitute";
+  }
+
+  const candidate = String(rawScene).trim();
+  if (SMART_ENTRY_SCENE_FIELDS[candidate]) {
+    return candidate;
+  }
+
+  return SMART_ENTRY_SCENE_ALIASES[candidate] || candidate;
+}
+
+function getSmartEntryAllowedFields(salesScene) {
+  return uniqueStrings([
+    ...SMART_ENTRY_BASE_FIELDS,
+    ...(SMART_ENTRY_SCENE_FIELDS[salesScene] || [])
+  ]);
+}
+
+function readSmartEntryFieldValue(fieldName, rawRow, itemsByField) {
+  if (isPresentValue(rawRow?.[fieldName])) {
+    return rawRow[fieldName];
+  }
+
+  return getFactRawValue(itemsByField, fieldName);
+}
+
+function clampText(value, maxLength = 2000) {
+  const text = String(value || "").trim();
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return text.slice(0, maxLength);
+}
+
+function mergeRawTextIntoSmartEntryField(data, fieldName, rawText) {
+  const note = `本次智能录入：${rawText}`;
+  const current = isPresentValue(data[fieldName]) ? String(data[fieldName]).trim() : "";
+  data[fieldName] = clampText(current ? `${current}；${note}` : note);
+}
+
+function applySmartEntryRawTextUpdates(data, salesScene, rawText) {
+  const text = String(rawText || "").trim();
+  if (!text) {
+    return data;
+  }
+
+  const allowedFields = new Set(getSmartEntryAllowedFields(salesScene));
+  const targetFields = [];
+
+  if (/预算|进度|周期|实施|交付|风险|排期|计划|安排|本周|下周/u.test(text)) {
+    targetFields.push("projectBudgetAndSchedule");
+  }
+
+  if (/原因|标准|技术评审|评审|需求|方案/u.test(text)) {
+    targetFields.push("projectReasonAndStandard");
+  }
+
+  if (/竞争|竞品|对手/u.test(text)) {
+    targetFields.push("competitorSituation");
+  }
+
+  if (/集成商|关键人|联系人|负责人/u.test(text)) {
+    targetFields.push("integratorKeyPerson");
+  }
+
+  if (/招标|投标|开标|标书/u.test(text)) {
+    targetFields.push("tenderFlowAndKeyPerson");
+  }
+
+  const selectedField = targetFields.find((fieldName) => allowedFields.has(fieldName))
+    || [
+      "projectBudgetAndSchedule",
+      "projectReasonAndStandard",
+      "competitorSituation",
+      "integratorKeyPerson",
+      "tenderFlowAndKeyPerson"
+    ].find((fieldName) => allowedFields.has(fieldName));
+
+  if (selectedField) {
+    mergeRawTextIntoSmartEntryField(data, selectedField, text);
+  }
+
+  return data;
+}
+
+function createSmartEntryCompatDraftPayload({
+  state,
+  itemsByField
+} = {}) {
+  const rawRow = isObject(state?.artifacts?.context?.raw?.rawRow)
+    ? state.artifacts.context.raw.rawRow
+    : {};
+  const bizParams = state?.request?.normalized?.biz_params || state?.request?.biz_params || {};
+  const opportunityId = bizParams.opportunityId || rawRow.opportunityId || getFactRawValue(itemsByField, "opportunityId") || null;
+  const salesScene = normalizeSmartEntryScene(
+    rawRow.salesScene || getFactRawValue(itemsByField, "salesScene") || getFactValueText(itemsByField, "salesScene")
+  );
+  const allowedFields = getSmartEntryAllowedFields(salesScene);
+  const data = {};
+
+  for (const fieldName of allowedFields) {
+    const value = normalizeDraftScalar(fieldName, readSmartEntryFieldValue(fieldName, rawRow, itemsByField));
+    if (isPresentValue(value)) {
+      data[fieldName] = value;
+    }
+  }
+
+  applySmartEntryRawTextUpdates(data, salesScene, bizParams.rawText);
+
+  return {
+    opportunityId,
+    salesScene,
+    data
+  };
 }
 
 function buildSummary(payloadContext) {
@@ -238,6 +491,13 @@ function createCompatDraftPayload({
     requestPayload
   };
 
+  if (state?.request?.scene === "sales-opportunity-smart-entry") {
+    return createSmartEntryCompatDraftPayload({
+      state,
+      itemsByField
+    });
+  }
+
   return {
     opportunityId,
     summary: buildSummary(payloadContext),
@@ -253,10 +513,95 @@ function createCompatDraftPayload({
   };
 }
 
-function summarizeOutput(payload, toolRef, mode) {
+function normalizeDraftMode(rawMode) {
+  const normalized = String(rawMode || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "llm") {
+    return "project-llm";
+  }
+
+  if (SUPPORTED_DRAFT_MODES.has(normalized)) {
+    return normalized;
+  }
+
+  return null;
+}
+
+function resolveDraftMode(env = process.env) {
+  const envMode = normalizeDraftMode(env?.[DRAFT_MODE_ENV]);
+  return envMode || "compat";
+}
+
+function buildEnrichedRequestPayload({
+  requestPayload,
+  promptRef
+} = {}) {
+  const promptText = requestPayload?.prompt
+    || requestPayload?.promptText
+    || requestPayload?.promptRef
+    || "";
+
+  return {
+    ...requestPayload,
+    prompt: promptText,
+    promptRef: promptRef || requestPayload?.promptRef || null
+  };
+}
+
+async function executeDraftTool({
+  state,
+  toolDocument,
+  requestPayload,
+  promptRef,
+  compatPayload,
+  invokeTool = null,
+  invokeProjectLlm = invokeProjectAdvisoryLlm
+} = {}) {
+  const enrichedRequestPayload = buildEnrichedRequestPayload({
+    requestPayload,
+    promptRef
+  });
+
+  if (invokeTool) {
+    return invokeTool({
+      toolDocument,
+      requestPayload: enrichedRequestPayload,
+      compatPayload
+    });
+  }
+
+  const draftMode = resolveDraftMode();
+  if (draftMode === "mock") {
+    return {
+      payload: compatPayload,
+      mode: "mock"
+    };
+  }
+
+  if (draftMode === "project-llm") {
+    return invokeProjectLlm({
+      toolDocument,
+      requestPayload: enrichedRequestPayload,
+      promptRef,
+      scene: state?.request?.scene || null
+    });
+  }
+
+  return {
+    payload: compatPayload,
+    mode: "compat"
+  };
+}
+
+function summarizeOutput(payload, toolRef, mode, execution = null) {
   return {
     toolRef,
     mode,
+    provider: execution?.provider || null,
+    model: execution?.model || null,
     summaryLength: typeof payload?.summary === "string" ? payload.summary.length : 0,
     adviceLength: typeof payload?.adviceText === "string" ? payload.adviceText.length : 0,
     nextActionCount: Array.isArray(payload?.nextActions) ? payload.nextActions.length : 0,
@@ -268,7 +613,8 @@ function summarizeOutput(payload, toolRef, mode) {
 async function runDraftOutputNode({
   state,
   skillSpec = null,
-  invokeTool = null
+  invokeTool = null,
+  invokeProjectLlm = invokeProjectAdvisoryLlm
 } = {}) {
   const startedAt = new Date();
   const startMs = Date.now();
@@ -295,19 +641,15 @@ async function runDraftOutputNode({
       state,
       requestPayload
     });
-    const execution = invokeTool
-      ? await invokeTool({
-          toolDocument,
-          requestPayload: {
-            ...requestPayload,
-            promptRef
-          },
-          compatPayload
-        })
-      : {
-          payload: compatPayload,
-          mode: "compat"
-        };
+    const execution = await executeDraftTool({
+      state,
+      toolDocument,
+      requestPayload,
+      promptRef,
+      compatPayload,
+      invokeTool,
+      invokeProjectLlm
+    });
     const payload = isObject(execution?.payload) ? execution.payload : compatPayload;
     const mode = execution?.mode || "compat";
     const existingRepairAttempts = Array.isArray(state?.artifacts?.draft?.repair_attempts)
@@ -321,7 +663,7 @@ async function runDraftOutputNode({
       finishedAt: new Date().toISOString(),
       durationMs: Date.now() - startMs,
       inputSummary,
-      outputSummary: summarizeOutput(payload, toolRef, mode)
+      outputSummary: summarizeOutput(payload, toolRef, mode, execution)
     });
 
     nextState = mergeWorkflowState(nextState, {
@@ -384,6 +726,9 @@ async function runDraftOutputNode({
 
 module.exports = {
   NODE_ID,
+  buildEnrichedRequestPayload,
   createCompatDraftPayload,
+  executeDraftTool,
+  resolveDraftMode,
   runDraftOutputNode
 };

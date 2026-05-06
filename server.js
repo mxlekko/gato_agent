@@ -65,13 +65,18 @@ const {
   updateConsoleRagDbSyncJobRoute,
   uploadConsoleRagDocumentRoute
 } = require("./routes/console-rag");
+const { compileWorkflowGraphForScene } = require("./platform/compiler/compile-workflow");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("./utils/errors");
 const { info, error } = require("./utils/logger");
-const { GATEWAY_BASE_URL } = require("./services/runtime-message");
 
 const API_HOST = process.env.API_HOST || "0.0.0.0";
 const API_PORT = Number(process.env.API_PORT || 3000);
-const GATEWAY_MODELS_URL = `${GATEWAY_BASE_URL}/v1/models`;
+const HEALTH_PROBE_TIMEOUT_MS = Number(process.env.HEALTH_PROBE_TIMEOUT_MS || 1500);
+const LANGGRAPH_HEALTH_SCENES = [
+  "sales-opportunity-advisor",
+  "sales-opportunity-advisor-directdb",
+  "sales-opportunity-smart-entry"
+];
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
@@ -106,57 +111,151 @@ async function readJsonBody(req) {
   }
 }
 
-async function checkGatewayHealth() {
-  const token = process.env.OPENCLAW_GATEWAY_TOKEN;
-  if (!token) {
-    throw createAppError(
-      "MISSING_GATEWAY_TOKEN",
-      "OPENCLAW_GATEWAY_TOKEN is required for Gateway health checks."
-    );
-  }
+function buildHealthUrl(port, pathname = "/health") {
+  return `http://127.0.0.1:${port}${pathname}`;
+}
+
+function buildRagHealthUrl() {
+  const rawBaseUrl = process.env.RAG_SERVICE_BASE_URL
+    || `http://${process.env.RAG_SEARCH_HOST || "127.0.0.1"}:${process.env.RAG_SEARCH_PORT || "19104"}`;
 
   try {
-    const response = await fetch(GATEWAY_MODELS_URL, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+    const parsed = new URL(rawBaseUrl);
+    const basePath = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
+    return new URL(`${basePath}/health`, parsed).toString();
+  } catch {
+    return buildHealthUrl(19104);
+  }
+}
+
+function getProjectServiceHealthTargets() {
+  return [
+    {
+      key: "contextHelper",
+      name: "ContextHelper",
+      required: true,
+      url: buildHealthUrl(Number(process.env.CONTEXT_HELPER_PORT || 19101))
+    },
+    {
+      key: "directDbRunner",
+      name: "DirectDbRunner",
+      required: true,
+      url: buildHealthUrl(Number(process.env.DIRECTDB_RUNNER_PORT || 19102))
+    },
+    {
+      key: "modelTool",
+      name: "ModelTool",
+      required: true,
+      url: buildHealthUrl(Number(process.env.MODEL_TOOL_PORT || 19103))
+    },
+    {
+      key: "rag",
+      name: "RAG",
+      required: false,
+      url: buildRagHealthUrl()
+    }
+  ];
+}
+
+async function probeHealthTarget(target) {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HEALTH_PROBE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(target.url, {
+      method: "GET",
+      signal: controller.signal
     });
-
-    if (response.status === 401 || response.status === 403) {
-      throw createAppError("GATEWAY_AUTH_FAILED", "Gateway authentication failed.");
-    }
-
-    if (!response.ok) {
-      throw createAppError("GATEWAY_UNAVAILABLE", `Gateway health probe returned HTTP ${response.status}.`, {
-        details: {
-          httpStatus: response.status
-        }
-      });
-    }
 
     return {
-      ok: true,
-      httpStatus: response.status
+      name: target.name,
+      required: target.required,
+      ok: response.ok,
+      httpStatus: response.status,
+      durationMs: Date.now() - startedAt,
+      url: target.url
     };
   } catch (caughtError) {
-    if (caughtError.name === "AppError") {
-      throw caughtError;
-    }
-
-    throw createAppError("GATEWAY_UNAVAILABLE", "Gateway health probe failed.", {
-      details: {
-        cause: caughtError.message
-      }
-    });
+    return {
+      name: target.name,
+      required: target.required,
+      ok: false,
+      durationMs: Date.now() - startedAt,
+      url: target.url,
+      error: caughtError?.name === "AbortError" ? "timeout" : caughtError?.message || "request_failed"
+    };
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+function checkLangGraphRuntime() {
+  const sceneResults = LANGGRAPH_HEALTH_SCENES.map((scene) => {
+    try {
+      const graph = compileWorkflowGraphForScene({ scene });
+      return {
+        scene,
+        ok: true,
+        engine: "langgraph-stategraph",
+        nodeCount: Array.isArray(graph?.orderedNodeIds) ? graph.orderedNodeIds.length : 0,
+        entryNode: graph?.entryNode || null,
+        exitNode: graph?.exitNode || null
+      };
+    } catch (caughtError) {
+      const appError = normalizeError(caughtError);
+      return {
+        scene,
+        ok: false,
+        engine: "langgraph-stategraph",
+        error: {
+          code: appError.code,
+          message: appError.message,
+          stage: appError.stage
+        }
+      };
+    }
+  });
+
+  return {
+    ok: sceneResults.every((item) => item.ok),
+    engine: "langgraph-stategraph",
+    scenes: sceneResults
+  };
+}
+
+async function checkProjectRuntimeHealth() {
+  const dependencyEntries = await Promise.all(
+    getProjectServiceHealthTargets().map(async (target) => [
+      target.key,
+      await probeHealthTarget(target)
+    ])
+  );
+  const dependencies = Object.fromEntries(dependencyEntries);
+  const langgraphRuntime = checkLangGraphRuntime();
+  const requiredDependenciesOk = Object.values(dependencies)
+    .filter((item) => item.required)
+    .every((item) => item.ok);
+  const ok = requiredDependenciesOk && langgraphRuntime.ok;
+
+  return {
+    status: ok ? "ok" : "degraded",
+    api: {
+      ok: true,
+      host: API_HOST,
+      port: API_PORT
+    },
+    langgraphRuntime,
+    dependencies
+  };
 }
 
 async function handleHealth(_req, res) {
   try {
-    const gateway = await checkGatewayHealth();
+    const health = await checkProjectRuntimeHealth();
     sendJson(res, 200, buildSuccessResponse({
-      service: "ok",
-      gateway
+      service: health.status,
+      ...health
     }, "healthcheck"));
   } catch (caughtError) {
     const appError = normalizeError(caughtError);

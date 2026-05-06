@@ -17,7 +17,7 @@
     "model": "kimi-k2-turbo-preview",
     "baseUrl": "https://api.moonshot.cn/v1",
     "apiKeyEnv": "MOONSHOT_API_KEY",
-    "fallbackModelsFile": "runtime://openclaw/agents/payment-fast-agent/agent/models.json",
+    "fallbackModelsFile": "project://runtime-assets/model-profiles/payment-fast-agent/models.json",
     "promptFile": "project://references/payment-info-split/prompt.md",
     "schemaReferenceId": "payment-info-output-schema",
     "temperature": 0,

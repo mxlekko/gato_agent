@@ -52,7 +52,7 @@ spec:
         schemaRef: schema://sales-opportunity-smart-entry/output@v1
         source:
           type: local-file
-          path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json"
+          path: project://references/sales-opportunity-smart-entry/output_schema.json
     dictionaries:
       salesOpportunityFields:
         dictionaryRef: dictionary://sales-opportunity-smart-entry/fields@v1
@@ -64,13 +64,13 @@ spec:
         rulesRef: rules://sales-opportunity-smart-entry/decision-rules@v1
         source:
           type: local-file
-          path: "/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md"
+          path: project://references/sales-opportunity-smart-entry/decision_rules.md
   toolBindings:
     context_fetcher:
       toolRef: tool://data/generic-query-runner@v1
       purpose: execute controlled query profile and fetch sales opportunity data
     advisory_llm:
-      toolRef: tool://llm/openclaw-sales-agent-default@v1
+      toolRef: tool://llm/project-advisory@v1
       purpose: draft grounded structured smart-entry payload
     output_validator:
       toolRef: tool://validation/model-tool-structured-output@v1

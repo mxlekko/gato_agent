@@ -56,7 +56,7 @@ spec:
         schemaRef: schema://special-custom-product-solution/output@v1
         source:
           type: local-file
-          path: runtime://openclaw/workspace/skills/special-custom-product-solution/references/output_schema.json
+          path: project://references/special-custom-product-solution/output_schema.json
     dictionaries:
       requestFields:
         dictionaryRef: dictionary://special-custom-product-solution/fields@v1
@@ -68,13 +68,13 @@ spec:
         rulesRef: rules://special-custom-product-solution/decision-rules@v1
         source:
           type: local-file
-          path: runtime://openclaw/workspace/skills/special-custom-product-solution/references/decision_rules.md
+          path: project://references/special-custom-product-solution/decision_rules.md
   toolBindings:
     knowledge_retriever:
       toolRef: tool://knowledge/local-rag-search@v1
       purpose: retrieve similar local RAG snippets from customRequirement
     advisory_llm:
-      toolRef: tool://llm/openclaw-product-solution-agent@v1
+      toolRef: tool://llm/project-product-solution@v1
       purpose: draft product department solution JSON using RAG evidence
     output_validator:
       toolRef: tool://validation/model-tool-structured-output@v1
