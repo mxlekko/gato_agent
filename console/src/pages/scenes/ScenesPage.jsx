@@ -103,9 +103,9 @@ export function ScenesPage() {
           detail="可以映射到流程模板的业务场景。"
         />
         <StatCard
-          label="仅旧链路"
+          label="非模板编排"
           value={metrics.legacyOnlyCount}
-          detail="仍走旧链路、尚未进入模板编排的场景。"
+          detail="直连模型或尚未进入模板编排的场景。"
         />
         <StatCard
           label="支持影子运行"
@@ -151,7 +151,7 @@ export function ScenesPage() {
               <div className="scene-meta">
                 <span className="tag">{item.executionMode}</span>
                 <span className="tag tag-soft">
-                  {item.routingMode || "旧链路"}
+                  {item.routingMode || "未配置路由"}
                 </span>
                 <span className="meta-value">
                   {item.allowedModes?.join(" / ") || "-"}
@@ -162,7 +162,7 @@ export function ScenesPage() {
                 <span className="meta-value">
                   {item.templateRef
                     ? `${item.templateRef.name}@${item.templateRef.version}`
-                    : "仅旧链路"}
+                    : "非模板编排"}
                 </span>
                 <span className="meta-value">
                   {item.skillRef

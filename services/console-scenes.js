@@ -1427,7 +1427,7 @@ function buildDirectModelWorkflow(scene, sceneConfig) {
       }))
     ),
     legacyOrchestration: cloneJson(sceneConfig.orchestration || []),
-    legacyOnlyReason: "该场景当前仍属于 direct-model legacy-only 场景。"
+    legacyOnlyReason: "该场景使用 direct-model 独立执行边界，由直连模型链路处理，不进入模板化 LangGraph 节点编排。"
   };
 }
 

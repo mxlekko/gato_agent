@@ -89,7 +89,7 @@ export function ShadowComparePage() {
     <PageFrame
       eyebrow="影子对比"
       title={runId}
-      description="对比旧链路返回与影子流程返回之间的差异摘要，并跳转到追踪页继续排查。"
+      description="对比基线返回与影子流程返回之间的差异摘要，并跳转到追踪页继续排查。"
       actions={<span className="pill">真实接口：GET /api/console/runs/:runId/shadow</span>}
     >
       {status === "error" ? (

@@ -1034,6 +1034,8 @@ curl -sS http://127.0.0.1:3100/health
 
 复验说明（2026-05-06 13:12 Asia/Shanghai）：已复跑 `npm run lint:platform-configs`、`node scripts/scan_openclaw_dependencies.js`、`npm run regression:self-contained`、`npm run regression:no-openclaw` 和 rollout report。`regression:self-contained` 输出目录为 `tests/regression/output/self-contained-2026-05-06T05-11-50-881Z`，`regression:no-openclaw` 输出目录为 `tests/regression/output/self-contained-2026-05-06T05-12-09-185Z`，5 个用例 4 pass / 1 allowed warning，`runtimeBlockers=0`、`configBlockers=0`，日志检查未发现 `gateway-http`、`OpenClaw Gateway request timed out` 或 `agent.langgraph.fallback.triggered`。
 
+补充复验说明（2026-05-06 15:12 Asia/Shanghai）：已复跑 `npm run lint:platform-configs`、`node scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker --fail-on-config-blocker`、`npm run regression:self-contained`、`npm run regression:no-openclaw`。`regression:self-contained` 输出目录为 `tests/regression/output/self-contained-2026-05-06T07-11-53-463Z`，`regression:no-openclaw` 输出目录为 `tests/regression/output/self-contained-2026-05-06T07-12-11-590Z`，5 个用例 4 pass / 1 allowed warning / 0 fail，`OPENCLAW_GATEWAY_TOKEN_SET=false`，`runtimeBlockers=0`、`configBlockers=0`，日志检查未发现 `gateway-http`、`OpenClaw Gateway request timed out` 或 `agent.langgraph.fallback.triggered`。`payment-info-split` 仍优先验成功；若外部 direct-model provider 明确失败，则按 allowed external warning 处理，不把 provider 过载误判为 OpenClaw 依赖回归。
+
 手工 smoke：
 
 ```bash

@@ -59,7 +59,7 @@ openclaw, OpenClaw, OPENCLAW, 18789, runtime://openclaw, .openclaw, openclaw/sal
 | AG-04 directdb 纯项目化 | 已完成 | `sales-opportunity-advisor-directdb` 保持 `langgraph` 100%，引用已迁到 project refs。 |
 | AG-05 smart-entry 迁移 | 已完成 | `sales-opportunity-smart-entry` 已 `langgraph` 100%，fixture 已进入 self-contained manifest。 |
 | AG-06 direct-model OpenClaw 残留清理 | 已完成 | direct-model 场景模型元数据引用已迁到 `project://runtime-assets/model-profiles/...`。 |
-| AG-07 文档、控制台与图示清理 | 已完成当前口径收口 | 用户可见运行文档已指向项目内 runtime；控制台新写入的 RAG settings 文档版本已改为 `agent.console/v1`；历史迁移文档和旧回归输出仍可保留 OpenClaw 命中。 |
+| AG-07 文档、控制台与图示清理 | 已完成当前口径收口 | 用户可见运行文档已指向项目内 runtime；控制台新写入的 RAG settings 文档版本已改为 `agent.console/v1`；本轮追加清理 Console mock 和页面中的 direct-model `legacy-only` / `旧链路` 误导文案，历史迁移文档和旧回归输出仍可保留 OpenClaw 命中。 |
 | AG-08 health/bootstrap/startup 去 OpenClaw | 已完成 | health/bootstrap 不再依赖 OpenClaw Gateway、`~/.openclaw` 或 `OPENCLAW_GATEWAY_TOKEN`。 |
 | AG-09 删除 legacy OpenClaw 主链路 | 已完成 | agent-runtime legacy runner 已退役，gateway 不再调用 OpenClaw agent 主链路。 |
 | AG-10 runtime namespace 清理 | 已完成 | `runtime://project-runtime/...` 是唯一运行解析 namespace；历史 `runtime://openclaw/...` 不再被 path resolver / bundle renderer 静默兼容，剩余命中来自历史文档和旧回归输出。 |

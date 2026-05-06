@@ -223,7 +223,7 @@ export function TraceDetailPage() {
               ) : (
                 <div className="callout callout-neutral">
                   <strong>当前追踪没有关联到流程模板</strong>
-                  <p>通常意味着这条链路来自旧链路或直模，或当前场景还没有纳入模板编译。</p>
+                  <p>通常意味着这条链路来自非模板编排或直模，或当前场景还没有纳入模板编译。</p>
                 </div>
               )}
             </section>
@@ -381,7 +381,7 @@ export function TraceDetailPage() {
             ) : (
               <div className="callout callout-neutral">
                 <strong>当前追踪没有节点级运行记录</strong>
-                <p>这通常意味着当前链路走的是旧链路或直模，或者节点运行记录还没有持久化。</p>
+                <p>这通常意味着当前链路走的是非模板编排或直模，或者节点运行记录还没有持久化。</p>
               </div>
             )}
           </section>

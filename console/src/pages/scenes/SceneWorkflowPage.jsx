@@ -326,7 +326,7 @@ export function SceneWorkflowPage() {
               <strong>
                 {workflow.template
                   ? `${workflow.template.name}@${workflow.template.version}`
-                  : "仅旧链路"}
+                  : "非模板编排"}
               </strong>
               <p>{workflow.template?.title || workflow.legacyOnlyReason}</p>
             </article>
@@ -393,7 +393,7 @@ export function SceneWorkflowPage() {
               <div className="asset-grid">
                 <AssetCard
                   label="流程模板"
-                  value={workflow.template?.title || "仅旧链路"}
+                  value={workflow.template?.title || "非模板编排"}
                   detail={
                     workflow.template
                       ? `${workflow.template.name}@${workflow.template.version}`
@@ -640,7 +640,7 @@ export function SceneWorkflowPage() {
               <section className="section-card">
                 <div className="section-header">
                   <div>
-                    <p className="eyebrow">仅旧链路</p>
+                    <p className="eyebrow">直连模型</p>
                     <h4>当前直模配置</h4>
                   </div>
                 </div>

@@ -570,7 +570,7 @@ export function RolloutPage() {
                   { label: "允许模式", value: (routing.current?.allowedModes || []).join(" / ") || "-" },
                   { label: "生效模式", value: routing.current?.effectiveMode || "-" },
                   { label: "路由原因", value: routing.current?.routeReason || "-" },
-                  { label: "旧链路角色", value: routing.current?.legacyRole || "-" },
+                  { label: "兼容执行角色", value: routing.current?.deprecatedLegacyRole || routing.current?.legacyRole || "-" },
                   { label: "影子执行", value: String(Boolean(routing.current?.shadowExecutionEnabled)) },
                   { label: "平台管理", value: routing.current?.platformManagedScene ? "是" : "否" },
                   { label: "执行方式", value: routing.executionMode || "-" }

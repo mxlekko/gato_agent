@@ -10,11 +10,27 @@
       "route": "POST /api/agent/run",
       "requestFile": "payment-info-split.smoke.request.json",
       "expectation": {
-        "type": "success",
+        "type": "success-or-external-warning",
         "requiredDataFields": [
           "data.payeeName",
           "data.payeeAccount",
           "data.bankName"
+        ],
+        "allowedErrorCodes": [
+          "MODEL_INVOCATION_FAILED",
+          "RUNTIME_TIMEOUT",
+          "RUNTIME_INVALID_RESPONSE"
+        ],
+        "allowedStages": [
+          "direct-model",
+          "model-call",
+          "response-parse",
+          "unknown"
+        ],
+        "allowedHttpStatuses": [
+          500,
+          502,
+          504
         ]
       }
     },

@@ -557,7 +557,7 @@ const workflowsByScene = {
     title: "销售机会推进建议（helper）",
     description:
       "通过 GenericQueryRunner 执行受控查询，再按 grounded-structured-advisory 模板完成归一、起草、校验和结果收口。",
-    routingMode: "legacy",
+    routingMode: "langgraph",
     allowedModes: ["legacy", "shadow", "langgraph"],
     skill: {
       name: "sales-opportunity-advisor",
@@ -578,7 +578,7 @@ const workflowsByScene = {
         purpose: "按 QueryProfile 执行受控查询并获取销售机会数据"
       },
       advisory_llm: {
-        toolRef: "tool://llm/openclaw-sales-agent-default@v1",
+        toolRef: "tool://llm/project-advisory@v1",
         purpose: "生成 grounded business advice payload"
       },
       output_validator: {
@@ -644,8 +644,8 @@ const workflowsByScene = {
     title: "销售机会推进建议（directdb）",
     description:
       "通过 GenericQueryRunner 执行受控查询，再复用 grounded-structured-advisory 模板完成归一、起草、校验和结果收口。",
-    routingMode: "legacy",
-    allowedModes: ["legacy"],
+    routingMode: "langgraph",
+    allowedModes: ["legacy", "langgraph"],
     skill: {
       name: "sales-opportunity-advisor-directdb",
       version: "v1",
@@ -665,7 +665,7 @@ const workflowsByScene = {
         purpose: "按 QueryProfile 执行受控查询并获取销售机会数据"
       },
       advisory_llm: {
-        toolRef: "tool://llm/openclaw-sales-agent-default@v1",
+        toolRef: "tool://llm/project-advisory@v1",
         purpose: "生成 grounded business advice payload"
       },
       output_validator: {
@@ -767,7 +767,7 @@ const workflowsByScene = {
         purpose: "收款信息拆分单轮模型提示词"
       }
     ],
-    legacyOnlyReason: "该场景在 V1 仍属于 direct-model legacy-only 场景。"
+    legacyOnlyReason: "该场景使用 direct-model 独立执行边界，由直连模型链路处理，不进入模板化 LangGraph 节点编排。"
   }
 };
 
@@ -1018,7 +1018,7 @@ export const mockClient = {
         .map((scene) => `${scene.skillRef.name}@${scene.skillRef.version}`),
       tools: [
         "tool://data/generic-query-runner@v1",
-        "tool://llm/openclaw-sales-agent-default@v1",
+        "tool://llm/project-advisory@v1",
         "tool://validation/model-tool-structured-output@v1"
       ],
       queries: [
