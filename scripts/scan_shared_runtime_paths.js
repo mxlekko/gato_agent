@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { RETIRED_AGENT_SHARED_HOME_PATTERN } = require("../utils/retired-runtime-markers");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DEFAULT_TARGETS = ["scene-configs", "platform", "services", "deploy"];
@@ -17,11 +18,11 @@ const RULES = [
     reason: "运行时仍依赖旧项目目录，副本迁移后容易串到旧仓。"
   },
   {
-    id: "shared-openclaw-path",
-    label: "Shared OpenClaw path",
-    pattern: /\/Users\/gato-pm\/\.openclaw[^\s"'`,)]*/g,
+    id: "shared-legacy-agent-path",
+    label: "Shared legacy agent path",
+    pattern: RETIRED_AGENT_SHARED_HOME_PATTERN,
     riskLevel: "high",
-    reason: "运行时仍依赖共享 OpenClaw 目录，副本无法真正自闭环。"
+    reason: "运行时仍依赖共享旧 agent 目录，副本无法真正自闭环。"
   }
 ];
 

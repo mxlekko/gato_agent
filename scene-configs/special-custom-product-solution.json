@@ -4,30 +4,21 @@
   "title": "特殊定制产品部方案",
   "description": "根据特殊定制单号和定制要求，先调用本地 RAG 检索相似片段，再参照相似片段生成产品部方案 JSON。",
   "execution": {
-    "mode": "direct-model"
+    "mode": "agent-runtime"
   },
   "routing": {
-    "mode": "legacy",
+    "mode": "langgraph",
     "allowedModes": [
-      "legacy"
-    ]
-  },
-  "directModel": {
-    "provider": "deepseek",
-    "model": "deepseek-v4-flash",
-    "baseUrl": "https://api.deepseek.com",
-    "apiKeyEnv": "DEEPSEEK_API_KEY",
-    "fallbackModelsFile": "project://runtime-assets/model-profiles/sales-agent/models.json",
-    "promptFile": "project://platform/assets/prompts/special-custom-product-solution.draft-business-output.v1.md",
-    "schemaReferenceId": "schema://special-custom-product-solution/output@v1",
-    "temperature": 1,
-    "maxTokens": 512,
-    "timeoutMs": 30000,
-    "ragSearch": {
-      "endpoint": "http://127.0.0.1:19104/internal/rag/search",
-      "topK": 3,
-      "timeoutMs": 12000
+      "langgraph"
+    ],
+    "langgraphCutover": {
+      "requestPercentage": 100
     }
+  },
+  "agent": {
+    "id": "project-special-custom-product-solution",
+    "gatewayModel": "project/special-custom-product-solution",
+    "sessionKeyPrefix": "agent:project-special-custom-product-solution:api"
   },
   "runtime": {
     "requestKind": "special_custom_product_solution_request",
@@ -62,6 +53,13 @@
         "label": "定制要求"
       }
     }
+  },
+  "skill": {
+    "id": "special-custom-product-solution",
+    "type": "project-rag-grounded-generation",
+    "workspacePath": "project://references/special-custom-product-solution",
+    "entryFile": "project://references/special-custom-product-solution/skill_contract.md",
+    "responsibility": "提供特殊定制产品部方案输入输出契约；业务编排由 platform BusinessSkill 与项目内 LangGraph 执行。"
   },
   "tools": [
     {
@@ -120,20 +118,20 @@
     {
       "order": 1,
       "step": "retrieve-similar-snippets",
-      "owner": "knowledge-tool",
+      "owner": "langgraph:retrieve_knowledge_context",
       "toolId": "local-rag-search",
       "description": "使用定制要求调用本地 RAG，返回相似片段。"
     },
     {
       "order": 2,
       "step": "generate-product-solution",
-      "owner": "model-tool",
-      "description": "调用 deepseek-v4-flash，参照 RAG 相似片段和定制要求生成产品部方案 JSON。"
+      "owner": "langgraph:draft_business_output",
+      "description": "调用项目 LLM，参照 RAG 相似片段和定制要求生成产品部方案 JSON。"
     },
     {
       "order": 3,
       "step": "validate-output",
-      "owner": "runtime",
+      "owner": "langgraph:validate_output",
       "description": "运行时校验结构化输出，确保 payload 只包含 productSolution。"
     }
   ]

@@ -1,7 +1,7 @@
 ---
 name: special-custom-product-solution
 description: 处理特殊定制产品部方案请求。当消息中包含 SPECIAL_CUSTOM_PRODUCT_SOLUTION 请求标记且 scene 为 special-custom-product-solution 时，先调用本地 RAG 检索相似片段，再基于定制要求和相似片段输出产品部方案 JSON。
-metadata: {"openclaw":{"requires":{"bins":["curl","cat"]},"os":["darwin"]}}
+metadata: {"runtime":{"requires":{"bins":["curl","cat"]},"os":["darwin"]}}
 ---
 
 # 特殊定制产品部方案 Skill

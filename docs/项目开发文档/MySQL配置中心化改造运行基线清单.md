@@ -13,7 +13,7 @@
 | --- | ---: | --- |
 | `scene-configs` | 5 | 场景入口配置 |
 | `platform` | 41 | 平台资源注册、模板、工具、技能与节点实现 |
-| `runtime-assets/openclaw/workspace` | 13 | legacy/openclaw skill 与业务 references |
+| `runtime-assets/project-runtime/workspace` | 13 | legacy/retired-runtime skill 与业务 references |
 | `ContextHelper/generated-queries` | 3 | helper 查询脚本与 manifest |
 
 说明：
@@ -49,7 +49,7 @@
 - `references/payment-info-split/*`
 - `metadata/*.tsv`
 - `DirectDbRunner/sql-cache/*`（directdb 场景的 SQL 缓存）
-- `runtime://openclaw/agents/payment-fast-agent/agent/models.json`（`payment-info-split` 的 fallback models file）
+- `runtime://project-runtime/agents/payment-fast-agent/agent/models.json`（`payment-info-split` 的 fallback models file）
 
 结论：
 
@@ -70,7 +70,7 @@
   - [references/payment-info-split/output_schema.json](/Users/gato-pm/Desktop/API_副本/references/payment-info-split/output_schema.json)
 - 运行补充依赖：
   - 环境变量 `MOONSHOT_API_KEY`
-  - `runtime://openclaw/agents/payment-fast-agent/agent/models.json`
+  - `runtime://project-runtime/agents/payment-fast-agent/agent/models.json`
 
 判定：
 
@@ -89,10 +89,10 @@
 当前 legacy 主链直接依赖：
 
 - Skill 入口：
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/SKILL.md)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/SKILL.md)
 - 本地 references：
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md)
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/decision_rules.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/decision_rules.md)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/output_schema.json](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/output_schema.json)
 - 提示词与字典：
   - [platform/assets/prompts/sales-opportunity-advisor.draft-business-output.v1.md](/Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-advisor.draft-business-output.v1.md)
   - [metadata/sales_opportunity_dictionary.tsv](/Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_dictionary.tsv)
@@ -108,7 +108,7 @@
   - [platform/templates/grounded-structured-advisory.v1.yaml](/Users/gato-pm/Desktop/API_副本/platform/templates/grounded-structured-advisory.v1.yaml)
 - ToolDefinition：
   - [platform/tools/generic-query-runner.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/generic-query-runner.tool.yaml)
-  - [platform/tools/openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml)
+  - [platform/tools/旧 LLM tool 配置](/Users/gato-pm/Desktop/API_副本/platform/tools/旧 LLM tool 配置)
   - [platform/tools/model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml)
   - [platform/tools/sales-opportunity-context-helper.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-context-helper.tool.yaml)
 - QueryProfile：
@@ -131,10 +131,10 @@
 当前 legacy 主链直接依赖：
 
 - Skill 入口：
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/SKILL.md)
 - 本地 references：
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md)
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/references/decision_rules.md)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json)
 - 提示词与字典：
   - [platform/assets/prompts/sales-opportunity-smart-entry.draft-business-output.v1.md](/Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-smart-entry.draft-business-output.v1.md)
   - [metadata/sales_opportunity_smart_entry_dictionary.tsv](/Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_smart_entry_dictionary.tsv)
@@ -147,7 +147,7 @@
   - [platform/templates/grounded-structured-advisory.v1.yaml](/Users/gato-pm/Desktop/API_副本/platform/templates/grounded-structured-advisory.v1.yaml)
 - ToolDefinition：
   - [platform/tools/generic-query-runner.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/generic-query-runner.tool.yaml)
-  - [platform/tools/openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml)
+  - [platform/tools/旧 LLM tool 配置](/Users/gato-pm/Desktop/API_副本/platform/tools/旧 LLM tool 配置)
   - [platform/tools/model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml)
 - QueryProfile：
   - [platform/tools/sales-opportunity-smart-entry-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-smart-entry-by-opportunity-id.query.yaml)
@@ -174,13 +174,13 @@
 当前直接依赖文件：
 
 - Skill 入口：
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor-directdb/SKILL.md)
 - 提示词与字典：
   - [platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md](/Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md)
   - [metadata/sales_opportunity_advisor_directdb_dictionary.tsv](/Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_advisor_directdb_dictionary.tsv)
 - 共用规则与 schema：
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/decision_rules.md)
-  - [runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-advisor/references/output_schema.json)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/decision_rules.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/decision_rules.md)
+  - [runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/output_schema.json](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-advisor/references/output_schema.json)
 
 当前平台注册资源文件：
 
@@ -190,7 +190,7 @@
   - [platform/templates/grounded-structured-advisory.v1.yaml](/Users/gato-pm/Desktop/API_副本/platform/templates/grounded-structured-advisory.v1.yaml)
 - ToolDefinition：
   - [platform/tools/generic-query-runner.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/generic-query-runner.tool.yaml)
-  - [platform/tools/openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml)
+  - [platform/tools/旧 LLM tool 配置](/Users/gato-pm/Desktop/API_副本/platform/tools/旧 LLM tool 配置)
   - [platform/tools/model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml)
   - [platform/tools/sales-opportunity-directdb-runner.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-directdb-runner.tool.yaml)
 - QueryProfile：
@@ -210,7 +210,7 @@
 1. `payment-info-split` 的 prompt 和 schema 不在 4 个主基线目录中，后续如果做 bundle，必须补充这一类本地 references。
 2. `sales-opportunity-advisor` 与 `sales-opportunity-smart-entry` 当前运行链路仍显著依赖 `runtime-assets` 中的 `SKILL.md` 与 `ContextHelper/generated-queries/*`。
 3. `sales-opportunity-advisor-directdb` 既依赖平台注册 YAML，也依赖 `runtime-assets` 中的 skill 与共享 references，不能只迁移一半。
-4. `sales-opportunity-advisor-directdb` 的 skill 文本中仍出现 `~/.openclaw/.../decision_rules.md` 的旧路径说明，后续迁移时需要统一为当前仓库或 bundle 路径。
+4. `sales-opportunity-advisor-directdb` 的 skill 文本中仍出现 `旧共享运行时目录/.../decision_rules.md` 的旧路径说明，后续迁移时需要统一为当前仓库或 bundle 路径。
 5. `sales-opportunity-advisor-directdb` 在 [scene-configs/sales-opportunity-advisor-directdb.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-advisor-directdb.json) 中声明了 `sales-opportunity-directdb-runner`，但在 [platform/skills/sales-opportunity-advisor-directdb.v1.yaml](/Users/gato-pm/Desktop/API_副本/platform/skills/sales-opportunity-advisor-directdb.v1.yaml) 中 `context_fetcher` 绑定的是 `tool://data/generic-query-runner@v1`，后续迁移前必须先确认当前主路由到底以哪一侧为准。
 
 ## 8. T0-01 验收结论

@@ -1,4 +1,4 @@
-# OpenClaw 退场迁移通用 Agent 提示词
+# 退役 Agent 运行时 退场迁移通用 Agent 提示词
 
 ## 用途
 
@@ -19,7 +19,7 @@
 
 /Users/gato-pm/Desktop/API_副本
 
-你的总目标是推进“OpenClaw 退场，迁移到项目内 LangGraph/runtime”的改造。
+你的总目标是推进“退役 Agent 运行时 退场，迁移到项目内 LangGraph/runtime”的改造。
 
 你不需要我指定具体 AG 工单。请你自己根据迁移文档、当前代码状态、git 状态、扫描结果和测试结果，找出当前最应该执行的一个未完成任务，然后完成它。
 
@@ -29,10 +29,10 @@
 
 请先阅读这些文档：
 
-1. docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md
-2. docs/项目开发文档/OpenClaw退场迁移Agent任务拆分与提示词.md
-3. 如果存在，阅读 docs/项目开发文档/OpenClaw退场依赖扫描基线.md
-4. 如果存在，阅读 docs/项目开发文档/OpenClaw退场最终验收报告.md
+1. docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md
+2. docs/项目开发文档/退役 Agent 运行时退场迁移Agent任务拆分与提示词.md
+3. 如果存在，阅读 docs/项目开发文档/退役 Agent 运行时退场依赖扫描基线.md
+4. 如果存在，阅读 docs/项目开发文档/退役 Agent 运行时退场最终验收报告.md
 
 然后用 rg/sed 读取相关代码，不要只凭文档判断。
 
@@ -41,9 +41,9 @@
 请执行或等价检查：
 
 1. git status --short
-2. rg -n "openclaw|OpenClaw|OPENCLAW|18789|runtime://openclaw|\\.openclaw|openclaw/sales-agent" services platform scene-configs scripts tests docs package.json
-3. 如果存在 scripts/scan_openclaw_dependencies.js，优先运行：
-   node scripts/scan_openclaw_dependencies.js
+2. rg -n "retired-runtime|退役 Agent 运行时|RETIRED_RUNTIME|旧 Gateway 端口|runtime://project-runtime|\\旧共享运行时目录|旧 agent gateway model" services platform scene-configs scripts tests docs package.json
+3. 如果存在 scripts/scan_retired_runtime_dependencies.js，优先运行：
+   node scripts/scan_retired_runtime_dependencies.js
 4. 读取 package.json scripts，确认当前有哪些验证命令。
 5. 读取 scene-configs/*.json，确认以下场景当前 routing 状态：
    - sales-opportunity-advisor
@@ -51,8 +51,8 @@
    - sales-opportunity-smart-entry
    - payment-info-split
    - special-custom-product-solution
-6. 读取 platform/skills/*.yaml，确认 advisory_llm toolRef 是否还指向 OpenClaw tool。
-7. 读取 server.js、scripts/bootstrap_local_runtime.js、services/runtime-message.js、services/runtime.js，确认 health/bootstrap/runtime 主链路是否还依赖 OpenClaw。
+6. 读取 platform/skills/*.yaml，确认 advisory_llm toolRef 是否还指向 退役 Agent 运行时 tool。
+7. 读取 server.js、scripts/bootstrap_local_runtime.js、services/runtime-message.js、services/runtime.js，确认 health/bootstrap/runtime 主链路是否还依赖 退役 Agent 运行时。
 
 三、不要覆盖他人改动
 
@@ -72,29 +72,29 @@
 
 第一优先级：
 1. 如果 AG-00 未完成，优先做 AG-00。
-2. 如果没有 fallback 开关或 langgraph fallback 仍强依赖 legacy OpenClaw，做 AG-01。
-3. 如果还没有 project 内 LLM tool/client，或者 draft-output 仍只能表达 OpenClaw agent tool，做 AG-02。
+2. 如果没有 fallback 开关或 langgraph fallback 仍强依赖 legacy 退役 Agent 运行时，做 AG-01。
+3. 如果还没有 project 内 LLM tool/client，或者 draft-output 仍只能表达 退役 Agent 运行时 agent tool，做 AG-02。
 
 第二优先级：
-1. 如果 sales-opportunity-advisor 仍是 legacy 或仍引用 openclaw/sales-agent，做 AG-03。
-2. 如果 sales-opportunity-advisor-directdb 仍引用 OpenClaw agent/tool 主链路，做 AG-04。
-3. 如果 sales-opportunity-smart-entry 仍是 legacy 或仍引用 openclaw/sales-agent，做 AG-05。
+1. 如果 sales-opportunity-advisor 仍是 legacy 或仍引用 旧 agent gateway model，做 AG-03。
+2. 如果 sales-opportunity-advisor-directdb 仍引用 退役 Agent 运行时 agent/tool 主链路，做 AG-04。
+3. 如果 sales-opportunity-smart-entry 仍是 legacy 或仍引用 旧 agent gateway model，做 AG-05。
 
 第三优先级：
-1. 如果 direct-model 场景仍引用 runtime://openclaw/agents 或 openclaw-product-solution-agent，做 AG-06。
-2. 如果文档、控制台、图示仍把 OpenClaw 当主链路，做 AG-07。
-3. 如果 health/bootstrap/startup 仍要求 OPENCLAW_GATEWAY_TOKEN 或探测 127.0.0.1:18789，做 AG-08。
+1. 如果 direct-model 场景仍引用 runtime://project-runtime/agents 或 旧 product-solution tool，做 AG-06。
+2. 如果文档、控制台、图示仍把 退役 Agent 运行时 当主链路，做 AG-07。
+3. 如果 health/bootstrap/startup 仍要求 旧 gateway token 或探测 旧本机 Gateway 端点，做 AG-08。
 
 收尾优先级：
-1. 如果主要场景都已迁移，但 legacy OpenClaw runtime 主链路仍默认可用，做 AG-09。
-2. 如果运行配置仍大量使用 runtime://openclaw namespace，且主链路已不依赖 OpenClaw，做 AG-10。
-3. 如果所有迁移都基本完成，但缺少 regression:no-openclaw 或最终验收报告，做 AG-11。
+1. 如果主要场景都已迁移，但 legacy 退役 Agent 运行时 runtime 主链路仍默认可用，做 AG-09。
+2. 如果运行配置仍大量使用 runtime://project-runtime namespace，且主链路已不依赖 退役 Agent 运行时，做 AG-10。
+3. 如果所有迁移都基本完成，但缺少 regression:no-retired-runtime 或最终验收报告，做 AG-11。
 
 如果多个任务都未完成，请选择：
 
 1. 前置依赖最少的任务。
 2. 当前代码改动冲突最少的任务。
-3. 对 OpenClaw 退场最关键的任务。
+3. 对 退役 Agent 运行时 退场最关键的任务。
 
 一次只做一个任务，不要同时横跨多个 AG 工单大改。
 
@@ -113,10 +113,10 @@
 
 通用目标：
 
-1. 不要新增对 OpenClaw Gateway 127.0.0.1:18789 的调用。
-2. 不要新增对 ~/.openclaw 的依赖。
-3. 不要新增 OPENCLAW_GATEWAY_TOKEN 必填项。
-4. 不要做 NullClaw 兼容层。
+1. 不要新增对 旧 Gateway 旧本机 Gateway 端点 的调用。
+2. 不要新增对 旧共享运行时目录 的依赖。
+3. 不要新增 旧 gateway token 必填项。
+4. 不要做空壳兼容层。
 5. 不要改变外部 API：POST /api/agent/run。
 6. 不要改变 response envelope。
 7. 尽量保持改动范围小。
@@ -136,13 +136,13 @@ npm run lint:platform-configs
 
 npm run regression:self-contained
 
-无 OpenClaw 验证，如果已有命令：
+无 退役 Agent 运行时 验证，如果已有命令：
 
-npm run regression:no-openclaw
+npm run regression:no-retired-runtime
 
 扫描验证，如果已有脚本：
 
-node scripts/scan_openclaw_dependencies.js
+node scripts/scan_retired_runtime_dependencies.js
 
 如果任务涉及 health/bootstrap：
 
@@ -203,16 +203,16 @@ node scripts/verify_active_bundle_load_assets.js
 ```text
 你是本项目的开发 agent，工作目录是 /Users/gato-pm/Desktop/API_副本。
 
-目标：推进 OpenClaw 退场，迁移到项目内 LangGraph/runtime。不要做 NullClaw 兼容，不要新增对 127.0.0.1:18789、~/.openclaw、OPENCLAW_GATEWAY_TOKEN 的依赖。
+目标：推进 退役 Agent 运行时 退场，迁移到项目内 LangGraph/runtime。不要做空壳兼容，不要新增对旧本机 Gateway 端点、旧共享运行时目录、旧 gateway token 的依赖。
 
 请先阅读：
-1. docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md
-2. docs/项目开发文档/OpenClaw退场迁移Agent任务拆分与提示词.md
+1. docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md
+2. docs/项目开发文档/退役 Agent 运行时退场迁移Agent任务拆分与提示词.md
 
 然后自己扫描当前状态：
 - git status --short
-- rg -n "openclaw|OpenClaw|OPENCLAW|18789|runtime://openclaw|\\.openclaw|openclaw/sales-agent" services platform scene-configs scripts tests docs package.json
-- 如果存在 scripts/scan_openclaw_dependencies.js，就运行 node scripts/scan_openclaw_dependencies.js
+- rg -n "retired-runtime|退役 Agent 运行时|RETIRED_RUNTIME|旧 Gateway 端口|runtime://project-runtime|\\旧共享运行时目录|旧 agent gateway model" services platform scene-configs scripts tests docs package.json
+- 如果存在 scripts/scan_retired_runtime_dependencies.js，就运行 node scripts/scan_retired_runtime_dependencies.js
 - 读取 scene-configs/*.json、platform/skills/*.yaml、server.js、scripts/bootstrap_local_runtime.js、services/runtime*.js，判断 AG-00 到 AG-11 哪些已完成、哪些未完成、哪些被依赖阻塞。
 
 请自动选择一个当前最应该做且前置依赖满足的未完成 AG 工单，一次只做一个。
@@ -236,8 +236,8 @@ AG-00 -> AG-01 -> AG-02 -> AG-03/AG-04/AG-05 -> AG-06/AG-07/AG-08 -> AG-09 -> AG
 完成后运行相关验证，至少优先考虑：
 - npm run lint:platform-configs
 - npm run regression:self-contained
-- 如果有 npm run regression:no-openclaw，也运行它
-- 如果有 scripts/scan_openclaw_dependencies.js，也运行它
+- 如果有 npm run regression:no-retired-runtime，也运行它
+- 如果有 scripts/scan_retired_runtime_dependencies.js，也运行它
 
 最终用中文回复：
 1. 本次完成的 AG 工单和选择原因。
@@ -262,4 +262,3 @@ AG-00 -> AG-01 -> AG-02 -> AG-03/AG-04/AG-05 -> AG-06/AG-07/AG-08 -> AG-09 -> AG
 ```text
 本轮只分析未完成任务并输出建议，不要修改文件。
 ```
-

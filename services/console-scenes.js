@@ -8,7 +8,7 @@ const {
   validatePlatformConfigs
 } = require("../platform/compiler/validate");
 const { isDirectModelScene } = require("./direct-model");
-const { SCENE_CONFIG_DIR, getSceneConfigs } = require("./scene-config");
+const { getSceneConfigs, getSceneConfigSourceState } = require("./scene-config");
 const { createConfigStore } = require("./config-store");
 const { createAppError, normalizeError } = require("../utils/errors");
 const {
@@ -163,8 +163,9 @@ function listConfigFiles(directoryPath, extension) {
 }
 
 function buildCacheSignature() {
+  const { sceneConfigDir } = getSceneConfigSourceState();
   const filePaths = [
-    ...listConfigFiles(SCENE_CONFIG_DIR, ".json"),
+    ...listConfigFiles(sceneConfigDir, ".json"),
     ...PLATFORM_CONFIG_DIRS.flatMap((directoryPath) => listConfigFiles(directoryPath, ".yaml"))
   ];
 
@@ -231,7 +232,8 @@ function resolveSceneSkillSelection(sceneConfig) {
 }
 
 function resolveSceneConfigFilePath(scene) {
-  const filePath = path.join(SCENE_CONFIG_DIR, `${scene}.json`);
+  const { sceneConfigDir } = getSceneConfigSourceState();
+  const filePath = path.join(sceneConfigDir, `${scene}.json`);
   if (!fs.existsSync(filePath)) {
     throw createAppError("INVALID_REQUEST", `Scene config file not found for ${scene}.`, {
       stage: "console-scene",

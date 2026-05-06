@@ -1,7 +1,7 @@
 ---
 name: sales-opportunity-advisor
 description: 处理机器格式的销售机会推进建议请求。当消息中包含 SALES_OPPORTUNITY_ADVISOR 请求标记且 scene 为 sales-opportunity-advisor 时，负责完成业务编排：调用本地 helper data tool 获取原始销售机会数据，读取本地字典文件完成字段清洗与映射，再调用本地 model tool 校验结构化结果，最后只返回 wrapped JSON。
-metadata: {"openclaw":{"requires":{"bins":["curl","cat"]},"os":["darwin"]}}
+metadata: {"runtime":{"requires":{"bins":["curl","cat"]},"os":["darwin"]}}
 ---
 
 # 销售机会推进建议 Skill

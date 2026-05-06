@@ -22,9 +22,9 @@
           "RUNTIME_INVALID_RESPONSE"
         ],
         "allowedStages": [
-          "direct-model",
-          "model-call",
-          "response-parse",
+          "project-llm",
+          "validate-output",
+          "graph-runtime",
           "unknown"
         ],
         "allowedHttpStatuses": [
@@ -95,10 +95,10 @@
           "RUNTIME_INVALID_RESPONSE"
         ],
         "allowedStages": [
-          "direct-model-rag",
-          "direct-model",
-          "model-call",
-          "response-parse",
+          "retrieve-knowledge",
+          "project-llm",
+          "validate-output",
+          "graph-runtime",
           "unknown"
         ],
         "allowedHttpStatuses": [

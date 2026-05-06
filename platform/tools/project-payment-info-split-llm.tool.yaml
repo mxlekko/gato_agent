@@ -1,45 +1,41 @@
 apiVersion: agent.platform/v1alpha1
 kind: ToolDefinition
 metadata:
-  name: project-advisory-llm
+  name: project-payment-info-split-llm
   version: v1
-  title: Project Advisory LLM
+  title: Project Payment Info Split LLM
   status: draft
 spec:
-  ref: tool://llm/project-advisory@v1
+  ref: tool://llm/project-payment-info-split@v1
   toolRole: advisory_llm
   category: llm
   driver:
     type: project-llm
     providerRef: env
     networkPolicy: provider-only
+    provider: moonshot
+    model: kimi-k2-turbo-preview
+    temperature: 1
+    maxTokens: 1024
   requestContract:
     requiredFields:
       - prompt
       - request
-      - facts
-      - rules
       - schema
     inputSources:
       prompt: references.prompt
       request: request.normalized
-      facts: facts.profile
-      basisFields: facts.basis_fields
-      knowledgeMatches: knowledge.matches
-      rules: references.rules
       schema: references.output_schema
   responseContract:
     resultPath: draft.payload
     errorPath: error
   limits:
-    timeoutMsDefault: 60000
-    timeoutMsMax: 90000
+    timeoutMsDefault: 30000
+    timeoutMsMax: 60000
     retryMaxAttempts: 1
   policy:
     allowedScenes:
-      - sales-opportunity-advisor
-      - sales-opportunity-advisor-directdb
-      - sales-opportunity-smart-entry
+      - payment-info-split
     deny:
       providerKeyOverride: true
       inlinePromptText: true

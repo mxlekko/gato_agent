@@ -1,7 +1,7 @@
 ---
 name: sales-opportunity-smart-entry
 description: 处理机器格式的销售机会智能录入请求。当消息中包含 SALES_OPPORTUNITY_SMART_ENTRY 请求标记且 scene 为 sales-opportunity-smart-entry 时，负责完成业务编排：调用本地通用查询执行器获取当前销售机会全字段，读取本地字典文件完成字段清洗与映射，再结合 rawText 输出按销售场景裁剪的结构化字段结果，最后只返回 wrapped JSON。
-metadata: {"openclaw":{"requires":{"bins":["curl","cat"]},"os":["darwin"]}}
+metadata: {"runtime":{"requires":{"bins":["curl","cat"]},"os":["darwin"]}}
 ---
 
 # 销售机会智能录入 Skill

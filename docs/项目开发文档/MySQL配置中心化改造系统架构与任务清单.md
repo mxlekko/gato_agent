@@ -23,7 +23,7 @@
 - `platform/skills/*.yaml`
 - `platform/tools/*.yaml`
 - `platform/templates/*.yaml`
-- `runtime-assets/openclaw/workspace/skills/**/references/*`
+- `runtime-assets/project-runtime/workspace/skills/**/references/*`
 - `metadata/*.tsv`
 - `ContextHelper/generated-queries/*`
 
@@ -422,7 +422,7 @@ runtime-bundles/
       references/
         payment-info-split/
       runtime-assets/
-        openclaw/
+        retired-runtime/
           workspace/
             skills/
               sales-opportunity-smart-entry/
@@ -439,7 +439,7 @@ runtime-bundles/
 说明：
 
 - `current` 所指向的目录建议保持“**自包含 project root 镜像**”结构。
-- 这样后续切换到 bundle 时，`project://...` 可以解析到 bundle current 根目录，`runtime://openclaw/...` 可以解析到 bundle current 下的 `runtime-assets/openclaw/...`，避免遗漏当前基线依赖。
+- 这样后续切换到 bundle 时，`project://...` 可以解析到 bundle current 根目录，`runtime://project-runtime/...` 可以解析到 bundle current 下的 `runtime-assets/project-runtime/...`，避免遗漏当前基线依赖。
 - 详细规范见 `MySQL配置中心化改造Bundle与环境变量规范.md`。
 
 ### 7.3 bundle manifest 必须包含
@@ -578,7 +578,7 @@ MySQL 做主存储，控制台改为操作 MySQL 草稿；运行时仍读取 bun
 - 记录以下目录为 baseline：
   - `scene-configs`
   - `platform`
-  - `runtime-assets/openclaw/workspace`
+  - `runtime-assets/project-runtime/workspace`
   - `ContextHelper/generated-queries`
 - 补一份当前场景运行清单：
   - `payment-info-split`

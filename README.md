@@ -110,12 +110,12 @@ POST /api/agent/run
   - active bundle 存在时解析到 `.local/runtime-bundles/local/current/runtime-assets/project-runtime`
   - 否则解析到 `runtime-assets/project-runtime`
 
-历史 `runtime://openclaw/...` namespace 已退役，运行时只接受 `runtime://project-runtime/...`。
+历史 `runtime://project-runtime/...` namespace 已退役，运行时只接受 `runtime://project-runtime/...`。
 
 禁止继续引用：
 
 - `/Users/gato-pm/Desktop/API/...`
-- `/Users/gato-pm/.openclaw/...`
+- `旧共享运行时目录/...`
 
 命中旧路径时，scene 配置和 direct-model 资产解析会直接报错。
 
@@ -349,15 +349,15 @@ npm run regression:self-contained
 - `sales-opportunity-smart-entry.smoke`
 - `special-custom-product-solution.smoke`
 
-回归会先扫描运行配置和主链路是否残留旧仓或共享 `.openclaw` 路径，再回放 manifest 中的请求。
+回归会先扫描运行配置和主链路是否残留旧仓或共享 `旧共享运行时目录` 路径，再回放 manifest 中的请求。
 
-无 OpenClaw 回归入口：
+无 退役 Agent 运行时 回归入口：
 
 ```bash
-npm run regression:no-openclaw
+npm run regression:no-retired-runtime
 ```
 
-该命令会清空 `OPENCLAW_GATEWAY_TOKEN`，关闭 langgraph legacy fallback，并检查本轮请求日志中没有 OpenClaw Gateway 主链路痕迹。
+该命令不设置旧 gateway token，会关闭 langgraph legacy fallback，并检查本轮请求日志中没有旧 Gateway 主链路痕迹。
 
 ## Git 和发布注意
 

@@ -37,6 +37,7 @@ spec:
     - sales-opportunity-advisor
     - sales-opportunity-advisor-directdb
     - sales-opportunity-smart-entry
+    - payment-info-split
     - special-custom-product-solution
     deny:
       endpointOverride: true

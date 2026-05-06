@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { createAppError } = require("../utils/errors");
 const { PROJECT_ROOT, RUNTIME_ROOT, resolvePathReference } = require("../utils/path-resolver");
+const { RETIRED_AGENT_GATEWAY_MODEL_PREFIX } = require("../utils/retired-runtime-markers");
 
 const DEFAULT_ACTIVE_ENV = "local";
 const DEFAULT_BUNDLE_ROOT = path.join(PROJECT_ROOT, ".local", "runtime-bundles");
@@ -14,7 +15,7 @@ const CONFIG_CURRENT_BUNDLE = path.resolve(
 const CONFIG_PROJECT_ROOT = path.resolve(process.env.CONFIG_PROJECT_ROOT || CONFIG_CURRENT_BUNDLE);
 const CONFIG_RUNTIME_ROOT = path.resolve(process.env.CONFIG_RUNTIME_ROOT || path.join(CONFIG_PROJECT_ROOT, "runtime-assets"));
 const SCENE_CONFIG_DIR = path.resolve(process.env.CONFIG_SCENE_CONFIG_DIR || path.join(CONFIG_CURRENT_BUNDLE, "scene-configs"));
-const BLOCKED_PATH_WARNING_CODES = new Set(["legacy-project-path", "shared-openclaw-path"]);
+const BLOCKED_PATH_WARNING_CODES = new Set(["legacy-project-path", "shared-legacy-agent-path"]);
 
 function getSceneConfigSourceState() {
   if (fs.existsSync(SCENE_CONFIG_DIR)) {
@@ -104,8 +105,8 @@ function validateSceneConfig(config, filePath) {
       });
     }
 
-    if (String(config.agent.gatewayModel).trim().startsWith("openclaw/")) {
-      throw createAppError("INVALID_REQUEST", "Agent-runtime scene must not use an OpenClaw gatewayModel.", {
+    if (String(config.agent.gatewayModel).trim().startsWith(RETIRED_AGENT_GATEWAY_MODEL_PREFIX)) {
+      throw createAppError("INVALID_REQUEST", "Agent-runtime scene must not use a retired agent gatewayModel.", {
         stage: "scene-config",
         details: {
           filePath,

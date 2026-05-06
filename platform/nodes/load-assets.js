@@ -5,7 +5,7 @@ const { resolvePathReference } = require("../../utils/path-resolver");
 const { mergeWorkflowState, recordNodeRun } = require("../runtime/state");
 
 const NODE_ID = "load-assets";
-const BLOCKED_PATH_WARNING_CODES = new Set(["legacy-project-path", "shared-openclaw-path"]);
+const BLOCKED_PATH_WARNING_CODES = new Set(["legacy-project-path", "shared-legacy-agent-path"]);
 const CATEGORY_DEFINITIONS = Object.freeze({
   prompts: {
     refKey: "promptRef",

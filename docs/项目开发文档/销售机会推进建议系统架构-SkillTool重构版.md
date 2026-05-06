@@ -30,7 +30,7 @@
 
 ### 2.1 对外调用链
 
-`调用方 -> API -> OpenClaw Gateway -> sales-agent -> 主 skill -> data tool -> SQL Server -> 主 skill -> model tool -> API -> 调用方`
+`调用方 -> API -> 旧 Gateway -> sales-agent -> 主 skill -> data tool -> SQL Server -> 主 skill -> model tool -> API -> 调用方`
 
 ### 2.2 当前原则
 
@@ -49,7 +49,7 @@
 |---|---|---|---|
 | 调用方层 | 外部系统 | 调 API，传 `scene/opportunityId` | 不关心 agent、skill、tool |
 | API 层 | 本机 API 服务 | 校验、组装 runtime request、调 Gateway、统一回包 | 不负责业务清洗 |
-| Runtime 层 | OpenClaw Gateway | 路由到 `sales-agent` 和独立 session | 不负责业务判断 |
+| Runtime 层 | 旧 Gateway | 路由到 `sales-agent` 和独立 session | 不负责业务判断 |
 | Agent 层 | `sales-agent` | 承接主 skill | 不直接对外 |
 | Skill 层 | 主 skill | 业务编排、字典读取、字段清洗、建议生成、调用 model tool | 不直接管理 DB 实现 |
 | Tool 层 | data tool / model tool | `rawRow` 取数、helper 查询脚本生成复用、schema 校验、directdb SQL 模板缓存执行 | 不负责业务建议 |
@@ -89,13 +89,13 @@ API 负责：
 
 当前正式入口：
 
-- `POST http://127.0.0.1:18789/v1/chat/completions`
+- `旧本机 Gateway chat completions 端点`
 
 固定约束：
 
-- `model = openclaw/sales-agent`
-- `x-openclaw-session-key = agent:sales-agent:api:<requestId>`
-- `Authorization: Bearer <OPENCLAW_GATEWAY_TOKEN>`
+- `model = 旧 agent gateway model`
+- `旧 session header = agent:sales-agent:api:<requestId>`
+- `Authorization: Bearer <旧 gateway token>`
 
 message 里会包裹 scene 对应的 request JSON。
 
@@ -119,7 +119,7 @@ Gateway 路由到：
 
 文件：
 
-- [sales-opportunity-advisor/SKILL.md](/Users/gato-pm/.openclaw/workspace-sales-agent/skills/sales-opportunity-advisor/SKILL.md)
+- [sales-opportunity-advisor/SKILL.md](旧共享运行时目录/workspace-sales-agent/skills/sales-opportunity-advisor/SKILL.md)
 
 负责：
 
@@ -137,7 +137,7 @@ Gateway 路由到：
 
 文件：
 
-- [sales-opportunity-advisor-directdb/SKILL.md](/Users/gato-pm/.openclaw/workspace-sales-agent/skills/sales-opportunity-advisor-directdb/SKILL.md)
+- [sales-opportunity-advisor-directdb/SKILL.md](旧共享运行时目录/workspace-sales-agent/skills/sales-opportunity-advisor-directdb/SKILL.md)
 
 与 helper scene 的差异主要是：
 
@@ -235,13 +235,13 @@ Gateway 路由到：
 
 文件：
 
-- [decision_rules.md](/Users/gato-pm/.openclaw/workspace-sales-agent/skills/sales-opportunity-advisor/references/decision_rules.md)
+- [decision_rules.md](旧共享运行时目录/workspace-sales-agent/skills/sales-opportunity-advisor/references/decision_rules.md)
 
 ### 7.3 输出 schema 文件
 
 文件：
 
-- [output_schema.json](/Users/gato-pm/.openclaw/workspace-sales-agent/skills/sales-opportunity-advisor/references/output_schema.json)
+- [output_schema.json](旧共享运行时目录/workspace-sales-agent/skills/sales-opportunity-advisor/references/output_schema.json)
 
 ## 8. 当前 Scene 配置设计
 

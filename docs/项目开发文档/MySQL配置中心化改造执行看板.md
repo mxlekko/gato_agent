@@ -90,7 +90,7 @@ AI 必须严格按以下流程执行：
 - 完成时间：2026-04-16 11:17:50 +0800
 - 改动文件：`MySQL配置中心化改造执行看板.md`
 - 新增文件：`MySQL配置中心化改造运行基线清单.md`
-- 验证命令：`rg --files scene-configs platform runtime-assets/openclaw/workspace/skills ContextHelper/generated-queries | sort`；`sed -n '1,260p' MySQL配置中心化改造运行基线清单.md`；`rg -n '^### 6\\.[1-4]|^## 8\\.' MySQL配置中心化改造运行基线清单.md`
+- 验证命令：`rg --files scene-configs platform runtime-assets/project-runtime/workspace/skills ContextHelper/generated-queries | sort`；`sed -n '1,260p' MySQL配置中心化改造运行基线清单.md`；`rg -n '^### 6\\.[1-4]|^## 8\\.' MySQL配置中心化改造运行基线清单.md`
 - 风险 / 备注：已冻结 4 类主基线目录并列出 4 个场景的当前生效配置来源；同时确认当前运行还依赖 `platform/assets/prompts/*.md`、`references/payment-info-split/*`、`metadata/*.tsv`、`DirectDbRunner/sql-cache/*` 等主基线外路径；`sales-opportunity-advisor-directdb` 存在 scene-config 与 BusinessSkill 数据工具绑定不完全一致的问题，需在后续任务中继续核准。
 - 回退方式：删除 `MySQL配置中心化改造运行基线清单.md`，并将任务总表中的 `T0-01` 状态改回 `TODO`，清空本任务卡片记录。
 
@@ -496,7 +496,7 @@ NODE`；`npm --prefix console run build`
 - 改动文件：`MySQL配置中心化改造执行看板.md`；`platform/nodes/load-assets.js`
 - 新增文件：`scripts/verify_active_bundle_load_assets.js`
 - 验证命令：`node --check platform/nodes/load-assets.js`；`node --check scripts/verify_active_bundle_load_assets.js`；`node scripts/verify_active_bundle_load_assets.js`
-- 风险 / 备注：`platform/nodes/load-assets.js` 现在会对 `BusinessSkill.spec.assetRefs` 与 legacy fallback 中的 `source.path` 统一走 `resolvePathReference()`，并使用当前 `scene-config` 的 `projectRoot / runtimeRoot` 解析 `project://` 与 `runtime://`，因此在存在 active bundle 时会优先读取 `.local/runtime-bundles/local/current` 下的 prompt / schema / dictionary / rules 资产；当本地尚未建立 current bundle 时，则自动回退到仓库根目录解析。为避免 runtime 继续踩旧路径，本轮还复用了 `scene-config` 的 legacy path 拦截策略，若资产仍指向旧项目目录或共享 `.openclaw` 路径，会在 `load-assets` 节点直接报错而不是继续读取。验证脚本复用了现有 active release `rel_20260416T062914556Z_local_all_all_9ba884ad8d28`，实际编译并运行 `sales-opportunity-advisor` 的 `load_reference_bundle` 节点，确认四类资产都来自 current bundle，`reference_meta` / `outputs.load_assets.categories` 也已补充解析后的实际文件路径以及原始 `path_ref`。本轮没有让 runtime 直接读取 MySQL 草稿，direct-model 资产解析仍留给 `T4-05`。
+- 风险 / 备注：`platform/nodes/load-assets.js` 现在会对 `BusinessSkill.spec.assetRefs` 与 legacy fallback 中的 `source.path` 统一走 `resolvePathReference()`，并使用当前 `scene-config` 的 `projectRoot / runtimeRoot` 解析 `project://` 与 `runtime://`，因此在存在 active bundle 时会优先读取 `.local/runtime-bundles/local/current` 下的 prompt / schema / dictionary / rules 资产；当本地尚未建立 current bundle 时，则自动回退到仓库根目录解析。为避免 runtime 继续踩旧路径，本轮还复用了 `scene-config` 的 legacy path 拦截策略，若资产仍指向旧项目目录或共享 `旧共享运行时目录` 路径，会在 `load-assets` 节点直接报错而不是继续读取。验证脚本复用了现有 active release `rel_20260416T062914556Z_local_all_all_9ba884ad8d28`，实际编译并运行 `sales-opportunity-advisor` 的 `load_reference_bundle` 节点，确认四类资产都来自 current bundle，`reference_meta` / `outputs.load_assets.categories` 也已补充解析后的实际文件路径以及原始 `path_ref`。本轮没有让 runtime 直接读取 MySQL 草稿，direct-model 资产解析仍留给 `T4-05`。
 - 回退方式：回退 `platform/nodes/load-assets.js` 中本轮改动，使其恢复为直接按 `source.path` 原样读取文件并移除新增的 `path_ref / path_source_type` 元数据，删除 `scripts/verify_active_bundle_load_assets.js`，并将任务总表中的 `T4-04` 状态改回 `TODO`，清空本任务卡片记录；本轮验证复用了已有 active release，没有新增 release / pointer 变更，因此无需额外清理数据库或 bundle 目录。
 
 ### T4-05 改造 direct-model 资产解析

@@ -1,4 +1,5 @@
 const path = require("path");
+const { RETIRED_AGENT_SHARED_HOME } = require("./retired-runtime-markers");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const RUNTIME_ROOT = path.join(PROJECT_ROOT, "runtime-assets");
@@ -17,10 +18,10 @@ const LEGACY_RULES = [
     message: "Path still points to the legacy project directory."
   },
   {
-    code: "shared-openclaw-path",
+    code: "shared-legacy-agent-path",
     riskLevel: "high",
-    prefix: "/Users/gato-pm/.openclaw",
-    message: "Path still points to the shared OpenClaw directory."
+    prefix: RETIRED_AGENT_SHARED_HOME,
+    message: "Path still points to the shared legacy agent runtime directory."
   }
 ];
 

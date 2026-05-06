@@ -16,7 +16,7 @@ spec:
       endpoint: http://127.0.0.1:19999/internal/context/override
       scriptPath: /tmp/unsafe-query.js
     advisory_llm:
-      toolRef: tool://llm/openclaw-sales-agent-default@v1
+      toolRef: tool://llm/invalid-inline-endpoint@v1
     output_validator:
       toolRef: tool://validation/model-tool-structured-output@v1
   dataBindings:

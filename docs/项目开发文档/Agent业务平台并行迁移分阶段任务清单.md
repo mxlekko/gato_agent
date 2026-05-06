@@ -29,7 +29,7 @@
 - [routes/agent.js](/Users/gato-pm/Desktop/API_副本/routes/agent.js)
 - [ContextHelper/server.js](/Users/gato-pm/Desktop/API_副本/ContextHelper/server.js)
 - [ModelTool/server.js](/Users/gato-pm/Desktop/API_副本/ModelTool/server.js)
-- `.openclaw` 下当前正在运行的 `sales-agent` 和现有 `SKILL.md`
+- `旧共享运行时目录` 下当前正在运行的 `sales-agent` 和现有 `SKILL.md`
 - `deploy/` 下常驻启动脚本
 
 说明：
@@ -378,7 +378,7 @@ console/
     3. 约束 allowed fields、required inputs、tool role、超时和重试上限
   - 产出物：`platform/tools/*.yaml`
   - 完成判定：查询业务能以受控 profile 表达，而不是自由 SQL
-  - 完成说明（2026-04-12）：已新增 [platform/tools/README.md](/Users/gato-pm/Desktop/API_副本/platform/tools/README.md)、[sales-opportunity-context-helper.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-context-helper.tool.yaml)、[openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml)、[model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml)、[sales-opportunity-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-by-opportunity-id.query.yaml)，固定了 `ToolDefinition` 与 `QueryProfile` 的 V1 资源格式，并为当前 `sales-opportunity-advisor` 注册了 3 个受控 tool 与 1 个查询 profile。查询 profile 仅表达查询意图、输入契约、字段白名单来源和生成约束，不携带自由 SQL。已静态校验 `BusinessSkill` 与注册表交叉引用，结果为 `tool_count=3`、`query_count=1`、`query_ref=query://sales-opportunity/by-opportunity-id@v1`。
+  - 完成说明（2026-04-12）：已新增 [platform/tools/README.md](/Users/gato-pm/Desktop/API_副本/platform/tools/README.md)、[sales-opportunity-context-helper.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-context-helper.tool.yaml)、[旧 LLM tool 配置](/Users/gato-pm/Desktop/API_副本/platform/tools/旧 LLM tool 配置)、[model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml)、[sales-opportunity-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-by-opportunity-id.query.yaml)，固定了 `ToolDefinition` 与 `QueryProfile` 的 V1 资源格式，并为当前 `sales-opportunity-advisor` 注册了 3 个受控 tool 与 1 个查询 profile。查询 profile 仅表达查询意图、输入契约、字段白名单来源和生成约束，不携带自由 SQL。已静态校验 `BusinessSkill` 与注册表交叉引用，结果为 `tool_count=3`、`query_count=1`、`query_ref=query://sales-opportunity/by-opportunity-id@v1`。
 
 - [x] `P2-T4` 实现配置校验器
   - 目标：在运行前阻止非法配置进入系统
@@ -452,7 +452,7 @@ console/
     3. 保留错误映射和 trace 信息
   - 产出物：兼容节点
   - 完成判定：LangGraph 可以通过单节点复用旧逻辑跑通当前业务
-  - 完成说明（2026-04-12）：已新增 [platform/nodes/legacy-scene-runner.js](/Users/gato-pm/Desktop/API_副本/platform/nodes/legacy-scene-runner.js)，并在 [services/runtime.js](/Users/gato-pm/Desktop/API_副本/services/runtime.js) 中抽出 `runLegacySceneExecution`、`runLegacyAgentRuntimeScene`、`runLegacyDirectModelScene` 作为旧执行链的共享入口；[routes/agent.js](/Users/gato-pm/Desktop/API_副本/routes/agent.js) 已复用该入口，避免节点侧复制旧 runtime/build/parse 逻辑。兼容节点当前会把旧执行器结果映射到统一 state 的 `result / error / artifacts.compat / artifacts.node_runs`。已通过 mock 注入验证成功路径与业务错误路径的 state 适配，并验证原有 route 参数校验仍返回 `400 INVALID_REQUEST`。另已尝试对 `sales-opportunity-advisor` baseline 请求做 live smoke，兼容节点已成功打到旧 Gateway 链路，但当前本机 legacy 执行环境存在额外阻塞：`sales_opportunity_advisor` skill 路径读取失败和 Moonshot `429 token quota exceeded`，导致旧执行器返回非 wrapped 结果并触发 `INVALID_RUNTIME_RESULT`；该问题已在 `~/.openclaw/logs/gateway.err.log` 中确认，属于既有旧链路环境问题，不是兼容节点接线错误。
+  - 完成说明（2026-04-12）：已新增 [platform/nodes/legacy-scene-runner.js](/Users/gato-pm/Desktop/API_副本/platform/nodes/legacy-scene-runner.js)，并在 [services/runtime.js](/Users/gato-pm/Desktop/API_副本/services/runtime.js) 中抽出 `runLegacySceneExecution`、`runLegacyAgentRuntimeScene`、`runLegacyDirectModelScene` 作为旧执行链的共享入口；[routes/agent.js](/Users/gato-pm/Desktop/API_副本/routes/agent.js) 已复用该入口，避免节点侧复制旧 runtime/build/parse 逻辑。兼容节点当前会把旧执行器结果映射到统一 state 的 `result / error / artifacts.compat / artifacts.node_runs`。已通过 mock 注入验证成功路径与业务错误路径的 state 适配，并验证原有 route 参数校验仍返回 `400 INVALID_REQUEST`。另已尝试对 `sales-opportunity-advisor` baseline 请求做 live smoke，兼容节点已成功打到旧 Gateway 链路，但当前本机 legacy 执行环境存在额外阻塞：`sales_opportunity_advisor` skill 路径读取失败和 Moonshot `429 token quota exceeded`，导致旧执行器返回非 wrapped 结果并触发 `INVALID_RUNTIME_RESULT`；该问题已在 `旧共享运行时目录/logs/gateway.err.log` 中确认，属于既有旧链路环境问题，不是兼容节点接线错误。
 
 - [x] `P3-T3` 接入 shadow 执行但不影响正式返回
   - 目标：让同一请求可同时跑 `legacy` 和 `shadow`
@@ -694,7 +694,7 @@ console/
     3. 根据差异新增 prompt/schema/query profile
   - 产出物：第二业务配置
   - 完成判定：第二业务能编译通过并完成端到端运行
-  - 完成说明（2026-04-12）：已新增 [platform/skills/sales-opportunity-advisor-directdb.v1.yaml](/Users/gato-pm/Desktop/API_副本/platform/skills/sales-opportunity-advisor-directdb.v1.yaml)、[platform/tools/sales-opportunity-directdb-runner.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-directdb-runner.tool.yaml)、[platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml)，并补齐 [platform/tools/openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml) 与 [platform/tools/model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml) 的 `allowedScenes`。第二业务复用了 `grounded-structured-advisory@v1` 模板、既有 prompt/schema/rules/dictionary 与已注册 LLM/validator tool，只将 data tool 与 query profile 切换为 directdb 配置。已完成两类验证：1）平台配置全量校验通过，统计为 `templates=1 / tools=4 / queries=2 / skills=2 / issueCount=0`；2）对 `sales-opportunity-advisor-directdb` 进行编译与 stub 端到端运行，确认 graph 绑定 `query://sales-opportunity-directdb/by-opportunity-id@v1` 与 `tool://data/sales-opportunity-directdb-runner@v1`，最终以 `langgraph-stategraph` 引擎成功产出结构化结果。
+  - 完成说明（2026-04-12）：已新增 [platform/skills/sales-opportunity-advisor-directdb.v1.yaml](/Users/gato-pm/Desktop/API_副本/platform/skills/sales-opportunity-advisor-directdb.v1.yaml)、[platform/tools/sales-opportunity-directdb-runner.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-directdb-runner.tool.yaml)、[platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml)，并补齐 [platform/tools/旧 LLM tool 配置](/Users/gato-pm/Desktop/API_副本/platform/tools/旧 LLM tool 配置) 与 [platform/tools/model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml) 的 `allowedScenes`。第二业务复用了 `grounded-structured-advisory@v1` 模板、既有 prompt/schema/rules/dictionary 与已注册 LLM/validator tool，只将 data tool 与 query profile 切换为 directdb 配置。已完成两类验证：1）平台配置全量校验通过，统计为 `templates=1 / tools=4 / queries=2 / skills=2 / issueCount=0`；2）对 `sales-opportunity-advisor-directdb` 进行编译与 stub 端到端运行，确认 graph 绑定 `query://sales-opportunity-directdb/by-opportunity-id@v1` 与 `tool://data/sales-opportunity-directdb-runner@v1`，最终以 `langgraph-stategraph` 引擎成功产出结构化结果。
 
 - [x] `P6-T3` 总结模板需要补强的地方
   - 目标：根据第二业务反馈微调模板，而不是继续堆专用逻辑

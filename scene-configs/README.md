@@ -27,7 +27,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 - scene 配置变更只解决 API 路由问题
 - `agent-runtime` scene 通过 Platform Gateway 路由到项目内 LangGraph/runtime，BusinessSkill、references 和 tool binding 必须真实存在
-- `direct-model` scene 只需要 prompt/schema 等本地 reference 和 provider 配置
+- `direct-model` 是历史直连模型执行边界；当前主场景已统一迁入 `agent-runtime`
 
 ## 2. 当前配置结构
 
@@ -49,7 +49,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 - `tools`
 - `orchestration`
 
-如果 `execution.mode = direct-model`，还会包含：
+历史 `direct-model` 配置会包含：
 
 - `directModel`
 
@@ -70,7 +70,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 当前支持：
 
 - `agent-runtime`
-- `direct-model`
+- `direct-model`（历史兼容）
 
 ### `agent`
 
@@ -124,7 +124,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 ### `directModel`
 
-定义 `direct-model` scene 的模型调用方式。
+定义历史 `direct-model` scene 的模型调用方式。当前主路径优先使用 `agent-runtime` + BusinessSkill + ToolDefinition。
 
 当前常用字段：
 
@@ -187,8 +187,8 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 `routing` 用于描述当前 scene 的运行入口。当前代码口径：
 
 - `agent-runtime` scene 主路径必须走项目内 `langgraph`
-- 退役的 `legacy` / `shadow` 只作为历史迁移口径保留，gateway 不再允许 agent-runtime scene 走 OpenClaw legacy 主链路
-- `direct-model` scene 在 V1 仍使用 `routing.mode = legacy`，这里的 legacy 表示直连模型的既有执行边界，不表示 OpenClaw Gateway
+- 退役的 `legacy` / `shadow` 只作为历史迁移口径保留，gateway 不再允许 agent-runtime scene 走 退役 Agent 运行时 legacy 主链路
+- 历史 `direct-model` scene 使用 `routing.mode = legacy`，这里的 legacy 表示直连模型的既有执行边界，不表示 旧 Gateway
 
 当前 agent-runtime scene 的目标形态：
 
@@ -196,7 +196,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 {
   "routing": {
     "mode": "langgraph",
-    "allowedModes": ["legacy", "shadow", "langgraph"],
+    "allowedModes": ["langgraph"],
     "langgraphCutover": {
       "requestPercentage": 100
     }
@@ -213,7 +213,7 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
     - `shadow`
     - `langgraph`
   - agent-runtime scene 当前必须配置为 `langgraph`
-  - direct-model scene 当前保持 `legacy`
+  - 历史 direct-model scene 才保持 `legacy`
 - `routing.allowedModes`
   - scene 允许被配置成的运行模式白名单，用于迁移历史和控制台展示
   - 即使白名单保留 `legacy` / `shadow`，agent-runtime gateway 仍会拒绝退役主链路
@@ -223,9 +223,9 @@ API 会通过 [scene-config.js](/Users/gato-pm/Desktop/API_副本/services/scene
 
 当前说明：
 
-1. `sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry` 已经是 `langgraph` 100%。
-2. 项目内 fallback 默认关闭，不会自动回到 OpenClaw agent-runtime。
-3. `payment-info-split`、`special-custom-product-solution` 是 direct-model scene，不经过 OpenClaw Gateway。
+1. `payment-info-split`、`sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry`、`special-custom-product-solution` 已经是 `langgraph` 100%。
+2. 项目内 fallback 默认关闭，不会自动回到 退役 Agent 运行时 agent-runtime。
+3. `payment-info-split`、`special-custom-product-solution` 已统一进入 LangGraph agent-runtime，不再走 direct-model 主路径。
 
 更完整的定义见：
 

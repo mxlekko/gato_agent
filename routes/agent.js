@@ -145,6 +145,28 @@ function logSuppressedFallback(traceContext, fallbackSuppressedAudit) {
   });
 }
 
+function pickDraftExecution(finalState) {
+  const artifacts = finalState?.artifacts || {};
+  const draft = artifacts.draft || {};
+  const draftOutput = artifacts.outputs?.draft_output || {};
+  const errorDetails = finalState?.error?.details || {};
+  const nodeRuns = Array.isArray(artifacts.node_runs) ? artifacts.node_runs : [];
+  const draftNodeRun = nodeRuns
+    .slice()
+    .reverse()
+    .find((run) => run?.node_id === "draft-output");
+  const outputSummary = draftNodeRun?.output_summary || {};
+  const modeFromError = finalState?.error?.stage === "project-llm" ? "project-llm" : null;
+  const draftExecution = {
+    mode: draft.mode || draftOutput.mode || outputSummary.mode || modeFromError,
+    provider: draft.provider || draftOutput.provider || outputSummary.provider || errorDetails.provider || null,
+    model: draft.model || draftOutput.model || outputSummary.model || errorDetails.model || null,
+    apiKeySource: draft.api_key_source || draftOutput.api_key_source || outputSummary.apiKeySource || null
+  };
+
+  return Object.values(draftExecution).some(Boolean) ? draftExecution : null;
+}
+
 async function runLangGraphAgentRuntimeRoute({
   requestId,
   traceId,
@@ -246,12 +268,14 @@ async function runLangGraphAgentRuntimeRoute({
   }
 
   const response = buildHttpResponseFromState(finalState);
+  const draftExecution = pickDraftExecution(finalState);
 
   if (finalState?.result?.success === true) {
     info("agent.run.success", {
       ...completionTraceContext,
       durationMs: Date.now() - startedAt,
       sceneExecutionType: "langgraph-stategraph",
+      draftExecution,
       responseEnvelope: response.payload
     });
   } else {
@@ -262,6 +286,7 @@ async function runLangGraphAgentRuntimeRoute({
       code: finalState?.error?.code || null,
       httpStatus: finalState?.error?.httpStatus || response.statusCode,
       stage: finalState?.error?.stage || null,
+      draftExecution,
       responseEnvelope: response.payload
     });
   }

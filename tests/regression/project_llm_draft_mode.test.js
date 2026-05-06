@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 const assert = require("assert");
-const { invokeProjectAdvisoryLlm } = require("../../platform/runtime/llm-client");
+const {
+  buildProjectAdvisoryMessages,
+  invokeProjectAdvisoryLlm
+} = require("../../platform/runtime/llm-client");
 const { runDraftOutputNode } = require("../../platform/nodes/draft-output");
 
 function withEnv(patch, fn) {
@@ -331,6 +334,7 @@ async function testDraftOutputProjectLlmModeCanBeInjected() {
           mode: "project-llm",
           provider: "mock-provider",
           model: "mock-model",
+          apiKeySource: "MOCK_API_KEY",
           payload: {
             opportunityId: "2041340312877535232",
             summary: "测试机会处于招标与投标阶段。",
@@ -345,10 +349,14 @@ async function testDraftOutputProjectLlmModeCanBeInjected() {
     assert.strictEqual(nextState.error, null);
     assert.strictEqual(nextState.artifacts.draft.mode, "project-llm");
     assert.strictEqual(nextState.artifacts.draft.tool_ref, "tool://llm/project-advisory@v1");
+    assert.strictEqual(nextState.artifacts.draft.provider, "mock-provider");
+    assert.strictEqual(nextState.artifacts.draft.model, "mock-model");
+    assert.strictEqual(nextState.artifacts.draft.api_key_source, "MOCK_API_KEY");
     assert.strictEqual(nextState.artifacts.draft.payload.summary, "测试机会处于招标与投标阶段。");
     const nodeRun = nextState.artifacts.node_runs[nextState.artifacts.node_runs.length - 1];
     assert.strictEqual(nodeRun.output_summary.provider, "mock-provider");
     assert.strictEqual(nodeRun.output_summary.model, "mock-model");
+    assert.strictEqual(nodeRun.output_summary.apiKeySource, "MOCK_API_KEY");
   });
 }
 
@@ -403,6 +411,63 @@ async function testSmartEntryCompatModeUsesRawTextAndSchemaShape() {
   });
 }
 
+async function testSmartEntryProjectLlmUsesCompactContextAndMergesPayload() {
+  await withEnv({
+    LANGGRAPH_DRAFT_MODE: "project-llm"
+  }, async () => {
+    const state = createSmartEntryDraftState();
+    state.request.normalized.biz_params.rawText = "客户确认这单属于招标已设计场景，推荐品牌可以替换，核心参数满足，投标时间改为2026-04-30，采购时间预计2026-05-20。";
+    state.request.biz_params.rawText = state.request.normalized.biz_params.rawText;
+
+    const nextState = await runDraftOutputNode({
+      state,
+      invokeProjectLlm: async ({ requestPayload, promptRef, scene }) => {
+        assert.strictEqual(scene, "sales-opportunity-smart-entry");
+        assert.strictEqual(promptRef, "prompt://sales-opportunity-smart-entry/draft-business-output@v1");
+        assert.strictEqual(requestPayload.compact.kind, "sales-opportunity-smart-entry");
+        assert.strictEqual(requestPayload.compact.currentPayload.salesScene, "noTender");
+
+        const messages = buildProjectAdvisoryMessages({
+          requestPayload,
+          promptRef,
+          scene
+        });
+        const totalMessageLength = messages.reduce((sum, message) => sum + message.content.length, 0);
+        assert(totalMessageLength < 5000);
+        assert(!messages[1].content.includes("outputSchema:"));
+
+        return {
+          mode: "project-llm",
+          provider: "mock-provider",
+          model: "mock-model",
+          apiKeySource: "MOCK_API_KEY",
+          payload: {
+            opportunityId: "2041377071732625408",
+            salesScene: "招标已设计",
+            data: {
+              canControlBid: "是",
+              productShare: "是",
+              tenderTime: "2026-04-30",
+              purchaseTime: "2026-05-20"
+            }
+          }
+        };
+      }
+    });
+
+    const payload = nextState.artifacts.draft.payload;
+    assert.strictEqual(nextState.error, null);
+    assert.strictEqual(nextState.artifacts.draft.mode, "project-llm");
+    assert.strictEqual(payload.salesScene, "tenderDesigned");
+    assert.strictEqual(payload.data.opportunityName, "测试机会");
+    assert.strictEqual(payload.data.canControlBid, "是");
+    assert.strictEqual(payload.data.productShare, "是");
+    assert.strictEqual(payload.data.tenderTime, "2026-04-30");
+    assert.strictEqual(payload.data.purchaseTime, "2026-05-20");
+    assert.strictEqual(payload.data.projectBudgetAndSchedule, undefined);
+  });
+}
+
 async function main() {
   await testProjectLlmClientParsesJsonPayload();
   await testProjectLlmMissingKeyReturnsClearError();
@@ -411,6 +476,7 @@ async function main() {
   await testDraftOutputDefaultCompatModeUsesCompatPayload();
   await testDraftOutputMockModeUsesCompatPayload();
   await testSmartEntryCompatModeUsesRawTextAndSchemaShape();
+  await testSmartEntryProjectLlmUsesCompactContextAndMergesPayload();
   process.stdout.write("project llm draft mode tests passed\n");
 }
 

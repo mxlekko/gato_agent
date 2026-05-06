@@ -2,6 +2,16 @@
 
 const fs = require("fs");
 const path = require("path");
+const {
+  RETIRED_AGENT_RUNTIME_TOKEN,
+  RETIRED_AGENT_RUNTIME_TITLE,
+  RETIRED_AGENT_RUNTIME_UPPER,
+  RETIRED_AGENT_GATEWAY_PORT,
+  RETIRED_AGENT_RUNTIME_URI_PREFIX,
+  RETIRED_AGENT_RUNTIME_ASSET_PREFIX,
+  RETIRED_AGENT_SHARED_HOME,
+  literalPattern
+} = require("../utils/retired-runtime-markers");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DEFAULT_TARGETS = [
@@ -14,7 +24,7 @@ const DEFAULT_TARGETS = [
   "server.js",
   "package.json"
 ];
-const DEFAULT_OUTPUT = path.join(ROOT_DIR, "tmp", "openclaw-dependencies-report.json");
+const DEFAULT_OUTPUT = path.join(ROOT_DIR, "tmp", "retired-runtime-dependencies-report.json");
 const SCAN_EXTENSIONS = new Set([
   ".js",
   ".cjs",
@@ -40,34 +50,51 @@ const SKIP_DIRECTORIES = new Set([
 
 const KEYWORDS = [
   {
-    id: "openclaw-lower",
-    pattern: /openclaw/g
+    id: "legacy-agent-token-lower",
+    pattern: literalPattern(RETIRED_AGENT_RUNTIME_TOKEN)
   },
   {
-    id: "OpenClaw-title",
-    pattern: /OpenClaw/g
+    id: "legacy-agent-token-title",
+    pattern: literalPattern(RETIRED_AGENT_RUNTIME_TITLE)
   },
   {
-    id: "OPENCLAW-upper",
-    pattern: /OPENCLAW/g
+    id: "legacy-agent-token-upper",
+    pattern: literalPattern(RETIRED_AGENT_RUNTIME_UPPER)
   },
   {
-    id: "gateway-port-18789",
-    pattern: /18789/g
+    id: "legacy-gateway-port",
+    pattern: literalPattern(RETIRED_AGENT_GATEWAY_PORT)
   },
   {
-    id: "runtime-openclaw-uri",
-    pattern: /runtime:\/\/openclaw/g
+    id: "legacy-runtime-uri",
+    pattern: literalPattern(RETIRED_AGENT_RUNTIME_URI_PREFIX)
   },
   {
-    id: "shared-openclaw-dir",
-    pattern: /\.openclaw/g
+    id: "legacy-shared-dir",
+    pattern: literalPattern(path.basename(RETIRED_AGENT_SHARED_HOME))
   },
   {
     id: "sales-agent-model",
-    pattern: /openclaw\/sales-agent/g
+    pattern: literalPattern(`${RETIRED_AGENT_RUNTIME_TOKEN}/sales-agent`)
   }
 ];
+
+const LEGACY_RUNTIME_TOKEN_PATTERN = literalPattern(RETIRED_AGENT_RUNTIME_TOKEN, "i");
+const LEGACY_GATEWAY_PORT_PATTERN = literalPattern(RETIRED_AGENT_GATEWAY_PORT);
+const LEGACY_GATEWAY_MODEL_PATTERN = literalPattern(`${RETIRED_AGENT_RUNTIME_TOKEN}/sales-agent`);
+const LEGACY_LLM_TOOL_PATTERN = literalPattern(`tool://llm/${RETIRED_AGENT_RUNTIME_TOKEN}`);
+const LEGACY_RUNTIME_URI_PATTERN = literalPattern(RETIRED_AGENT_RUNTIME_URI_PREFIX);
+const LEGACY_RUNTIME_ASSET_PATTERN = literalPattern(RETIRED_AGENT_RUNTIME_ASSET_PREFIX);
+const LEGACY_GATEWAY_TOKEN_ENV_PATTERN = literalPattern(`${RETIRED_AGENT_RUNTIME_UPPER}_GATEWAY_TOKEN`);
+
+function testPattern(pattern, lineText) {
+  pattern.lastIndex = 0;
+  return pattern.test(lineText);
+}
+
+function matchesAny(lineText, patterns) {
+  return patterns.some((pattern) => testPattern(pattern, lineText));
+}
 
 const CATEGORY_ORDER = [
   "runtime-blocker",
@@ -174,15 +201,20 @@ function isRuntimeBlocker(relativeFile, lineText) {
   }
 
   if (relativeFile === "services/runtime.js") {
-    return /Gateway|gateway|openclaw|OPENCLAW|\/v1\/chat\/completions|127\.0\.0\.1/.test(lineText);
+    return matchesAny(lineText, [
+      /Gateway|gateway/,
+      LEGACY_RUNTIME_TOKEN_PATTERN,
+      /\/v1\/chat\/completions/,
+      /127\.0\.0\.1/
+    ]);
   }
 
   if (relativeFile === "server.js") {
-    return /GATEWAY|Gateway|OPENCLAW|18789/.test(lineText);
+    return matchesAny(lineText, [/GATEWAY|Gateway/, LEGACY_RUNTIME_TOKEN_PATTERN, LEGACY_GATEWAY_PORT_PATTERN]);
   }
 
   if (relativeFile === "scripts/bootstrap_local_runtime.js") {
-    return /OPENCLAW_GATEWAY_TOKEN|OpenClaw Gateway|18789/.test(lineText);
+    return matchesAny(lineText, [LEGACY_GATEWAY_TOKEN_ENV_PATTERN, LEGACY_RUNTIME_TOKEN_PATTERN, LEGACY_GATEWAY_PORT_PATTERN]);
   }
 
   return false;
@@ -190,34 +222,39 @@ function isRuntimeBlocker(relativeFile, lineText) {
 
 function isConfigBlocker(relativeFile, lineText) {
   if (/^scene-configs\/.+\.json$/.test(relativeFile)) {
-    return /gatewayModel|openclaw\/sales-agent|workspacePath|entryFile|fallbackModelsFile/.test(lineText);
+    return matchesAny(lineText, [/gatewayModel|workspacePath|entryFile|fallbackModelsFile/, LEGACY_GATEWAY_MODEL_PATTERN]);
   }
 
   if (/^platform\/skills\/.+\.ya?ml$/.test(relativeFile)) {
-    return /tool:\/\/llm\/openclaw|runtime:\/\/openclaw|runtime-assets\/openclaw/.test(lineText);
+    return matchesAny(lineText, [LEGACY_LLM_TOOL_PATTERN, LEGACY_RUNTIME_URI_PATTERN, LEGACY_RUNTIME_ASSET_PATTERN]);
   }
 
   if (/^platform\/tools\/.+\.ya?ml$/.test(relativeFile)) {
-    return /tool:\/\/llm\/openclaw|runtimeRef:\s*openclaw|OpenClaw|openclaw\/sales-agent/.test(lineText);
+    return matchesAny(lineText, [
+      LEGACY_LLM_TOOL_PATTERN,
+      new RegExp(`runtimeRef:\\s*${RETIRED_AGENT_RUNTIME_TOKEN}`),
+      LEGACY_RUNTIME_TOKEN_PATTERN,
+      LEGACY_GATEWAY_MODEL_PATTERN
+    ]);
   }
 
   return false;
 }
 
 function isAssetNamespace(relativeFile, lineText) {
-  if (/runtime:\/\/openclaw|runtime-assets\/openclaw/.test(lineText)) {
+  if (matchesAny(lineText, [LEGACY_RUNTIME_URI_PATTERN, LEGACY_RUNTIME_ASSET_PATTERN])) {
     return true;
   }
 
-  if (/^scripts\/verify_/.test(relativeFile) && /openclaw/.test(lineText)) {
+  if (/^scripts\/verify_/.test(relativeFile) && testPattern(LEGACY_RUNTIME_TOKEN_PATTERN, lineText)) {
     return true;
   }
 
-  if (relativeFile === "scripts/run_self_contained_regression.js" && /runtime-assets\/openclaw/.test(lineText)) {
+  if (relativeFile === "scripts/run_self_contained_regression.js" && testPattern(LEGACY_RUNTIME_ASSET_PATTERN, lineText)) {
     return true;
   }
 
-  if (relativeFile === "scripts/check_project_structure.js" && /runtime-assets\/openclaw/.test(lineText)) {
+  if (relativeFile === "scripts/check_project_structure.js" && testPattern(LEGACY_RUNTIME_ASSET_PATTERN, lineText)) {
     return true;
   }
 
@@ -358,7 +395,7 @@ function main() {
   const files = Array.from(new Set(targetPaths.flatMap((targetPath) => walkFiles(targetPath)))).sort();
   const findings = files.flatMap((filePath) => scanFile(filePath));
   const report = {
-    reportType: "openclaw-dependency-scan",
+    reportType: "retired-runtime-dependency-scan",
     observedAt: new Date().toISOString(),
     rootDir: ROOT_DIR,
     scannedTargets: targetNames,
@@ -388,7 +425,7 @@ function main() {
 
   const failingCategories = resolveFailingCategories(report.summary, args);
   if (failingCategories.length > 0) {
-    process.stderr.write(`OpenClaw dependency scan failed: ${failingCategories.map((item) => `${item.category}=${item.count}`).join(", ")}\n`);
+    process.stderr.write(`RetiredRuntime dependency scan failed: ${failingCategories.map((item) => `${item.category}=${item.count}`).join(", ")}\n`);
     process.exitCode = 1;
   }
 }

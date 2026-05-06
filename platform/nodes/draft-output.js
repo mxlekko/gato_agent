@@ -80,6 +80,28 @@ const SMART_ENTRY_SCENE_ALIASES = Object.freeze({
   小项目: "smallProject",
   设计院: "designInstitute"
 });
+const SMART_ENTRY_FIELD_MAPPINGS = Object.freeze({
+  推荐品牌可以替换: {
+    field: "canControlBid",
+    value: "是"
+  },
+  推荐品牌不可替换: {
+    field: "canControlBid",
+    value: "否"
+  },
+  核心参数满足: {
+    field: "productShare",
+    value: "是"
+  },
+  核心参数不满足: {
+    field: "productShare",
+    value: "否"
+  },
+  投标时间: "tenderTime",
+  采购时间: "purchaseTime",
+  招标时间: "bidTime",
+  开标时间: "bidTime"
+});
 const SMART_ENTRY_STRING_ONLY_FIELDS = new Set([
   "opportunityName",
   "ownerName",
@@ -230,6 +252,38 @@ function mergeRawTextIntoSmartEntryField(data, fieldName, rawText) {
   const note = `本次智能录入：${rawText}`;
   const current = isPresentValue(data[fieldName]) ? String(data[fieldName]).trim() : "";
   data[fieldName] = clampText(current ? `${current}；${note}` : note);
+}
+
+function extractPaymentField(rawText, patterns) {
+  const text = String(rawText || "");
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1]
+        .replace(/[；;，,。.\s]+$/u, "")
+        .trim();
+    }
+  }
+  return "";
+}
+
+function createPaymentInfoCompatDraftPayload(state) {
+  const bizParams = state?.request?.normalized?.biz_params || state?.request?.biz_params || {};
+  const rawText = String(bizParams.rawText || "");
+  const payeeAccount = extractPaymentField(rawText, [
+    /(?:收款账号|银行账号|账号|卡号)[:：\s]*([A-Za-z0-9][A-Za-z0-9\s-]{2,80})/u,
+    /([0-9][0-9\s-]{8,80})/u
+  ]).replace(/[\s-]+/g, "");
+
+  return {
+    payeeName: extractPaymentField(rawText, [
+      /(?:收款方|收款人|户名|公司名称|单位名称)[:：\s]*([^；;，,。.\n]+)/u
+    ]),
+    payeeAccount,
+    bankName: extractPaymentField(rawText, [
+      /(?:开户行|开户银行|银行名称)[:：\s]*([^；;，,。.\n]+)/u
+    ])
+  };
 }
 
 function applySmartEntryRawTextUpdates(data, salesScene, rawText) {
@@ -470,6 +524,10 @@ function createCompatDraftPayload({
     };
   }
 
+  if (state?.request?.scene === "payment-info-split") {
+    return createPaymentInfoCompatDraftPayload(state);
+  }
+
   const factItems = Array.isArray(state?.artifacts?.facts?.items)
     ? state.artifacts.facts.items
     : [];
@@ -537,17 +595,69 @@ function resolveDraftMode(env = process.env) {
 
 function buildEnrichedRequestPayload({
   requestPayload,
-  promptRef
+  promptRef,
+  compatPayload = null,
+  scene = null
 } = {}) {
   const promptText = requestPayload?.prompt
     || requestPayload?.promptText
     || requestPayload?.promptRef
     || "";
-
-  return {
+  const enrichedPayload = {
     ...requestPayload,
     prompt: promptText,
     promptRef: promptRef || requestPayload?.promptRef || null
+  };
+
+  const requestScene = scene || requestPayload?.request?.scene || null;
+  if (requestScene === "sales-opportunity-smart-entry" && isObject(compatPayload)) {
+    const bizParams = requestPayload?.request?.biz_params || requestPayload?.request?.bizParams || {};
+    enrichedPayload.compact = {
+      kind: "sales-opportunity-smart-entry",
+      currentPayload: compatPayload,
+      rawText: typeof bizParams.rawText === "string" ? bizParams.rawText : "",
+      allowedFields: {
+        base: Array.from(SMART_ENTRY_BASE_FIELDS),
+        ...Object.fromEntries(
+          Object.entries(SMART_ENTRY_SCENE_FIELDS).map(([sceneName, fieldNames]) => [
+            sceneName,
+            Array.from(fieldNames)
+          ])
+        )
+      },
+      sceneAliases: SMART_ENTRY_SCENE_ALIASES,
+      fieldMappings: SMART_ENTRY_FIELD_MAPPINGS
+    };
+  }
+
+  return enrichedPayload;
+}
+
+function mergeSmartEntryProjectLlmPayload(payload, compatPayload) {
+  if (!isObject(payload) || !isObject(compatPayload)) {
+    return payload;
+  }
+
+  const salesScene = normalizeSmartEntryScene(payload.salesScene || compatPayload.salesScene);
+  const allowedFields = getSmartEntryAllowedFields(salesScene);
+  const llmData = isObject(payload.data) ? payload.data : {};
+  const compatData = isObject(compatPayload.data) ? compatPayload.data : {};
+  const data = {};
+
+  for (const fieldName of allowedFields) {
+    const llmValue = normalizeDraftScalar(fieldName, llmData[fieldName]);
+    const compatValue = normalizeDraftScalar(fieldName, compatData[fieldName]);
+    if (isPresentValue(llmValue)) {
+      data[fieldName] = llmValue;
+    } else if (isPresentValue(compatValue)) {
+      data[fieldName] = compatValue;
+    }
+  }
+
+  return {
+    opportunityId: payload.opportunityId || compatPayload.opportunityId || null,
+    salesScene,
+    data
   };
 }
 
@@ -562,7 +672,9 @@ async function executeDraftTool({
 } = {}) {
   const enrichedRequestPayload = buildEnrichedRequestPayload({
     requestPayload,
-    promptRef
+    promptRef,
+    compatPayload,
+    scene: state?.request?.scene || null
   });
 
   if (invokeTool) {
@@ -602,6 +714,7 @@ function summarizeOutput(payload, toolRef, mode, execution = null) {
     mode,
     provider: execution?.provider || null,
     model: execution?.model || null,
+    apiKeySource: execution?.apiKeySource || null,
     summaryLength: typeof payload?.summary === "string" ? payload.summary.length : 0,
     adviceLength: typeof payload?.adviceText === "string" ? payload.adviceText.length : 0,
     nextActionCount: Array.isArray(payload?.nextActions) ? payload.nextActions.length : 0,
@@ -650,8 +763,11 @@ async function runDraftOutputNode({
       invokeTool,
       invokeProjectLlm
     });
-    const payload = isObject(execution?.payload) ? execution.payload : compatPayload;
+    let payload = isObject(execution?.payload) ? execution.payload : compatPayload;
     const mode = execution?.mode || "compat";
+    if (state?.request?.scene === "sales-opportunity-smart-entry" && mode === "project-llm") {
+      payload = mergeSmartEntryProjectLlmPayload(payload, compatPayload);
+    }
     const existingRepairAttempts = Array.isArray(state?.artifacts?.draft?.repair_attempts)
       ? state.artifacts.draft.repair_attempts
       : [];
@@ -673,6 +789,9 @@ async function runDraftOutputNode({
           tool_ref: toolRef,
           tool_role: toolRole,
           mode,
+          provider: execution?.provider || null,
+          model: execution?.model || null,
+          api_key_source: execution?.apiKeySource || null,
           prompt_ref: promptRef,
           repair_attempts: existingRepairAttempts
         },
@@ -682,6 +801,9 @@ async function runDraftOutputNode({
             tool_ref: toolRef,
             tool_role: toolRole,
             mode,
+            provider: execution?.provider || null,
+            model: execution?.model || null,
+            api_key_source: execution?.apiKeySource || null,
             prompt_ref: promptRef
           }
         }
@@ -703,7 +825,8 @@ async function runDraftOutputNode({
         code: normalized.code,
         message: normalized.message,
         httpStatus: normalized.httpStatus,
-        stage: normalized.stage
+        stage: normalized.stage,
+        details: normalized.details || null
       }
     });
 
@@ -712,7 +835,10 @@ async function runDraftOutputNode({
         outputs: {
           draft_output: {
             drafted: false,
-            error_code: normalized.code
+            error_code: normalized.code,
+            mode: normalized.stage === "project-llm" ? "project-llm" : null,
+            provider: normalized.details?.provider || null,
+            model: normalized.details?.model || null
           }
         }
       },
@@ -729,6 +855,7 @@ module.exports = {
   buildEnrichedRequestPayload,
   createCompatDraftPayload,
   executeDraftTool,
+  mergeSmartEntryProjectLlmPayload,
   resolveDraftMode,
   runDraftOutputNode
 };

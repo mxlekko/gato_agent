@@ -263,11 +263,11 @@ P0 -> P1 -> P2 的 health/search -> P3 -> P5 的 Overview/Search -> P7 -> P8
   - 当前明确依赖 RAG 的业务场景为 `special-custom-product-solution`；`scene-configs/special-custom-product-solution.json` 中 `directModel.ragSearch.endpoint` 为 `http://127.0.0.1:19104/internal/rag/search`，`topK` 为 3，`timeoutMs` 为 12000。
   - `platform/tools/local-rag-search.tool.yaml` 定义 loopback-only HTTP 工具，endpoint 为 `http://127.0.0.1:19104/internal/rag/search`，请求必填 `requestId`、`query`，响应成功字段为 `success`，结果路径为 `data.matches`，错误路径为 `error`。
   - `services/direct-model.js` 仅在 `special-custom-product-solution` 且配置了 `directModel.ragSearch.endpoint` 时调用 RAG，POST JSON 为 `{ requestId, query: bizParams.customRequirement, topK }`，成功时返回 `payload.data.matches` 数组；RAG 返回非法 JSON 或失败 envelope 时抛出 `RAG_SEARCH_FAILED`，超时抛出 `RUNTIME_TIMEOUT`。
-  - `runtime-assets/openclaw/workspace/skills/special-custom-product-solution/SKILL.md` 也固化了同一 RAG endpoint，作为运行时 skill 的本地知识检索入口。
+  - `runtime-assets/project-runtime/workspace/skills/special-custom-product-solution/SKILL.md` 也固化了同一 RAG endpoint，作为运行时 skill 的本地知识检索入口。
 - 验证方式：
   - `git status --short`
   - `rg "internal/rag/search|19104|local-rag|RAG_SEARCH" .`
-  - 只读检查 `scene-configs/special-custom-product-solution.json`、`platform/tools/local-rag-search.tool.yaml`、`services/direct-model.js`、`runtime-assets/openclaw/workspace/skills/special-custom-product-solution/SKILL.md`
+  - 只读检查 `scene-configs/special-custom-product-solution.json`、`platform/tools/local-rag-search.tool.yaml`、`services/direct-model.js`、`runtime-assets/project-runtime/workspace/skills/special-custom-product-solution/SKILL.md`
 - 验证结果：
   - 已明确当前 RAG 调用链路和错误处理；本包未修改业务代码。
 

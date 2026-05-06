@@ -11,7 +11,7 @@
 - `platform/skills/*.yaml`
 - `platform/tools/*.yaml`
 - `platform/assets/prompts/*.md`
-- `runtime-assets/openclaw/workspace/skills/**/references/*.md|*.json`
+- `runtime-assets/project-runtime/workspace/skills/**/references/*.md|*.json`
 - `metadata/*.tsv`
 - `ContextHelper/generated-queries/*.generated.js`
 

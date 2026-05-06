@@ -13,11 +13,15 @@ spec:
     type: project-llm
     providerRef: env
     networkPolicy: provider-only
+    provider: deepseek
+    model: deepseek-v4-flash
+    temperature: 1
+    maxTokens: 2048
   requestContract:
     requiredFields:
       - prompt
       - request
-      - knowledge
+      - knowledgeMatches
       - schema
     inputSources:
       prompt: references.prompt
@@ -29,7 +33,7 @@ spec:
     errorPath: error
   limits:
     timeoutMsDefault: 30000
-    timeoutMsMax: 35000
+    timeoutMsMax: 90000
     retryMaxAttempts: 1
   policy:
     allowedScenes:

@@ -4,25 +4,37 @@
   "title": "收款信息拆分",
   "description": "将一整段收款文本拆分为收款方、收款账号、开户行名称三个字段。",
   "execution": {
-    "mode": "direct-model"
+    "mode": "agent-runtime"
   },
   "routing": {
-    "mode": "legacy",
+    "mode": "langgraph",
     "allowedModes": [
-      "legacy"
-    ]
+      "langgraph"
+    ],
+    "langgraphCutover": {
+      "requestPercentage": 100
+    }
   },
-  "directModel": {
-    "provider": "moonshot",
-    "model": "kimi-k2-turbo-preview",
-    "baseUrl": "https://api.moonshot.cn/v1",
-    "apiKeyEnv": "MOONSHOT_API_KEY",
-    "fallbackModelsFile": "project://runtime-assets/model-profiles/payment-fast-agent/models.json",
-    "promptFile": "project://references/payment-info-split/prompt.md",
-    "schemaReferenceId": "payment-info-output-schema",
-    "temperature": 0,
-    "maxTokens": 128,
-    "timeoutMs": 30000
+  "agent": {
+    "id": "project-payment-info-split",
+    "gatewayModel": "project/payment-info-split",
+    "sessionKeyPrefix": "agent:project-payment-info-split:api"
+  },
+  "runtime": {
+    "requestKind": "payment_info_split_request",
+    "messageVersion": "1.0",
+    "requestMarkers": {
+      "begin": "<<<PAYMENT_INFO_SPLIT_REQUEST_JSON_BEGIN>>>",
+      "end": "<<<PAYMENT_INFO_SPLIT_REQUEST_JSON_END>>>"
+    },
+    "resultMarkers": {
+      "begin": "<<<PAYMENT_INFO_SPLIT_RESULT_JSON_BEGIN>>>",
+      "end": "<<<PAYMENT_INFO_SPLIT_RESULT_JSON_END>>>"
+    },
+    "responseFormat": {
+      "type": "json",
+      "schemaVersion": "1.0"
+    }
   },
   "request": {
     "bizParams": {
@@ -34,15 +46,49 @@
       }
     }
   },
+  "skill": {
+    "id": "payment-info-split",
+    "type": "project-structured-extraction",
+    "workspacePath": "project://references/payment-info-split",
+    "entryFile": "project://references/payment-info-split/skill_contract.md",
+    "responsibility": "提供收款信息拆分输入输出契约；业务编排由 platform BusinessSkill 与项目内 LangGraph 执行。"
+  },
+  "tools": [
+    {
+      "id": "project-payment-info-llm",
+      "type": "model-tool",
+      "binding": "project-llm",
+      "responseContract": "draftPayload",
+      "params": [
+        "requestId",
+        "rawText",
+        "prompt",
+        "schema"
+      ]
+    },
+    {
+      "id": "sales-opportunity-model-tool",
+      "type": "model-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:19103/internal/model/validate-structured-output",
+      "responseContract": "validatedPayload",
+      "params": [
+        "requestId",
+        "scene",
+        "payload",
+        "schema"
+      ]
+    }
+  ],
   "references": [
     {
-      "id": "payment-info-output-schema",
+      "id": "schema://payment-info-split/output@v1",
       "type": "local-file",
       "path": "project://references/payment-info-split/output_schema.json",
       "purpose": "收款信息拆分结构化输出 schema"
     },
     {
-      "id": "payment-info-prompt",
+      "id": "prompt://payment-info-split/draft-business-output@v1",
       "type": "local-file",
       "path": "project://references/payment-info-split/prompt.md",
       "purpose": "收款信息拆分单轮模型提示词"

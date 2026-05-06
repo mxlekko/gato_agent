@@ -13,10 +13,7 @@ const {
   bundleReferenceToRelativePath,
   normalizeBundlePathReference
 } = require("../../services/bundle-renderer");
-
-function retiredNamespace() {
-  return ["open", "claw"].join("");
-}
+const { RETIRED_AGENT_RUNTIME_TOKEN } = require("../../utils/retired-runtime-markers");
 
 function runtimeRef(namespace, assetPath) {
   return `${RUNTIME_PREFIX}${namespace}/${assetPath}`;
@@ -38,7 +35,7 @@ function testCanonicalRuntimeNamespaceResolves() {
 }
 
 function testRetiredRuntimeNamespaceIsRejected() {
-  const ref = runtimeRef(retiredNamespace(), "agents/sales-agent/agent/models.json");
+  const ref = runtimeRef(RETIRED_AGENT_RUNTIME_TOKEN, "agents/sales-agent/agent/models.json");
 
   assert.throws(
     () => resolvePathReference(ref),

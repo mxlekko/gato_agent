@@ -1,0 +1,91 @@
+apiVersion: agent.platform/v1alpha1
+kind: BusinessSkill
+metadata:
+  name: payment-info-split
+  version: v1
+  title: 收款信息拆分
+  status: draft
+spec:
+  scene: payment-info-split
+  templateRef:
+    name: prompt-structured-extraction
+    version: v1
+  runtimeContract:
+    requestKind: payment_info_split_request
+    messageVersion: "1.0"
+    requestMarkers:
+      begin: "<<<PAYMENT_INFO_SPLIT_REQUEST_JSON_BEGIN>>>"
+      end: "<<<PAYMENT_INFO_SPLIT_REQUEST_JSON_END>>>"
+    resultMarkers:
+      begin: "<<<PAYMENT_INFO_SPLIT_RESULT_JSON_BEGIN>>>"
+      end: "<<<PAYMENT_INFO_SPLIT_RESULT_JSON_END>>>"
+    responseFormat:
+      type: json
+      schemaVersion: "1.0"
+  inputContract:
+    bizParams:
+      rawText:
+        type: string
+        required: true
+        trim: true
+        maxLength: 4000
+        sourcePath: request.bizParams.rawText
+  outputContract:
+    envelope:
+      successField: success
+      sceneField: scene
+      requestIdField: requestId
+      payloadField: payload
+      errorField: error
+    schemaRef: schema://payment-info-split/output@v1
+  assetRefs:
+    prompts:
+      draftBusinessOutput:
+        promptRef: prompt://payment-info-split/draft-business-output@v1
+        source:
+          type: local-file
+          path: project://references/payment-info-split/prompt.md
+    schemas:
+      output:
+        schemaRef: schema://payment-info-split/output@v1
+        source:
+          type: local-file
+          path: project://references/payment-info-split/output_schema.json
+  toolBindings:
+    advisory_llm:
+      toolRef: tool://llm/project-payment-info-split@v1
+      purpose: extract payment fields from raw text as JSON
+    output_validator:
+      toolRef: tool://validation/model-tool-structured-output@v1
+      purpose: validate payment split JSON structure
+  nodeOverrides:
+    load_reference_bundle:
+      enabled: true
+      timeoutMs: 1000
+      assetRefs:
+        prompts:
+          - prompt://payment-info-split/draft-business-output@v1
+        schemas:
+          - schema://payment-info-split/output@v1
+    draft_business_output:
+      toolRole: advisory_llm
+      promptRef: prompt://payment-info-split/draft-business-output@v1
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 1
+    validate_output:
+      toolRole: output_validator
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 2
+  security:
+    mode: controlled
+    deny:
+      inlineSql: true
+      inlineScript: true
+      inlinePromptText: true
+      inlineSchemaText: true
+      unregisteredToolRef: true
+      externalNetworkEndpoint: true
+      crossPhaseReorder: true
+      arbitraryNodeInsertion: true

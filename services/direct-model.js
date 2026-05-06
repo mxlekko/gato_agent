@@ -7,7 +7,7 @@ const { resolvePathReference } = require("../utils/path-resolver");
 const { getSceneConfigSourceState } = require("./scene-config");
 
 const DEFAULT_TIMEOUT_MS = 30000;
-const BLOCKED_PATH_WARNING_CODES = new Set(["legacy-project-path", "shared-openclaw-path"]);
+const BLOCKED_PATH_WARNING_CODES = new Set(["legacy-project-path", "shared-legacy-agent-path"]);
 
 function getExecutionMode(sceneConfig) {
   return sceneConfig?.execution?.mode || "agent-runtime";

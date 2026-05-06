@@ -43,11 +43,19 @@ PDF_OCR_LANG=zh-Hans,en-US
 
 ## 3. 启动与检查
 
-启动 RAG 服务：
+开发时单独启动 RAG 服务：
 
 ```bash
 npm run start:rag
 ```
+
+常驻服务启动时使用：
+
+```bash
+npm run service:start
+```
+
+macOS LaunchAgent 后台启动会把 RAG 运行时代码、精简环境变量和运行数据同步到 `~/Library/Application Support/GatoPM/sales-opportunity-rag/app/`，并优先使用 `~/Library/Application Support/GatoPM/sales-opportunity-rag/.venv/`。这是为了避开后台进程读取 Desktop 项目目录时可能触发的系统权限限制。
 
 健康检查：
 
@@ -129,14 +137,14 @@ npm run console:dev
 
 ## 6. 数据目录与备份
 
-RAG 运行数据在 `rag-service/data/`：
+手工开发模式下，RAG 运行数据在 `rag-service/data/`；通过 `npm run service:start` 启动的 LaunchAgent 常驻模式下，运行数据在 `~/Library/Application Support/GatoPM/sales-opportunity-rag/app/data/`：
 
 - `chroma/`：向量库。
 - `library/`：文档 manifest 和可编辑内容。
 - `uploads/`：上传原始文件。
 - `jobs.sqlite3`：任务队列状态。
 
-日志在 `rag-service/logs/`。这些目录只跟踪 `.gitkeep`，备份时复制 `rag-service/data/` 即可；清理本地数据前先确认是否需要保留知识库。
+日志在 `rag-service/logs/`。这些目录只跟踪 `.gitkeep`；备份时按实际启动模式复制对应的 `data/` 目录即可，清理本地数据前先确认是否需要保留知识库。
 
 ## 7. 常见问题
 

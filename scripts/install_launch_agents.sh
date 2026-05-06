@@ -15,6 +15,9 @@ HELPER_LABEL="com.gatopm.sales-opportunity-context-helper"
 DIRECTDB_RUNNER_LABEL="com.gatopm.sales-opportunity-directdb-runner"
 MODEL_TOOL_LABEL="com.gatopm.sales-opportunity-model-tool"
 RAG_LABEL="com.gatopm.sales-opportunity-rag"
+RAG_EXTERNAL_ROOT="$HOME/Library/Application Support/GatoPM/sales-opportunity-rag"
+RAG_EXTERNAL_APP_DIR="$RAG_EXTERNAL_ROOT/app"
+RAG_EXTERNAL_VENV_DIR="$RAG_EXTERNAL_ROOT/.venv"
 
 API_SOURCE_PLIST="$LAUNCHD_SOURCE_DIR/$API_LABEL.plist"
 HELPER_SOURCE_PLIST="$LAUNCHD_SOURCE_DIR/$HELPER_LABEL.plist"
@@ -26,30 +29,46 @@ DIRECTDB_RUNNER_TARGET_PLIST="$LAUNCHD_TARGET_DIR/$DIRECTDB_RUNNER_LABEL.plist"
 MODEL_TOOL_TARGET_PLIST="$LAUNCHD_TARGET_DIR/$MODEL_TOOL_LABEL.plist"
 RAG_TARGET_PLIST="$LAUNCHD_TARGET_DIR/$RAG_LABEL.plist"
 
-read_env_value() {
-  local key="$1"
-  local default_value="$2"
-  local env_file="$ROOT_DIR/.env"
+read_env_file_value() {
+  local env_file="$1"
+  local key="$2"
   local value=""
 
   if [[ -f "$env_file" ]]; then
     value="$(awk -F= -v key="$key" '
       /^[[:space:]]*#/ { next }
-      $1 == key {
-        sub(/^[[:space:]]+/, "", $2)
-        sub(/[[:space:]]+$/, "", $2)
-        print $2
+      {
+        lhs = $1
+        sub(/^[[:space:]]+/, "", lhs)
+        sub(/[[:space:]]+$/, "", lhs)
+      }
+      lhs == key {
+        line = $0
+        sub(/^[^=]*=/, "", line)
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]]+$/, "", line)
+        print line
         exit
       }
     ' "$env_file")"
   fi
 
+  echo "$value"
+}
+
+read_env_value() {
+  local key="$1"
+  local default_value="$2"
+  local env_file="$ROOT_DIR/.env"
+  local value
+
+  value="$(read_env_file_value "$env_file" "$key")"
+
   if [[ -n "$value" ]]; then
     echo "$value"
-    return
+  else
+    echo "$default_value"
   fi
-
-  echo "$default_value"
 }
 
 rewrite_plist_paths() {
@@ -69,6 +88,7 @@ assert_plist_binding() {
   local entry_script="$2"
   local stdout_log="$3"
   local stderr_log="$4"
+  local expected_workdir="${5:-$ROOT_DIR}"
   local actual_workdir
   local actual_entry
   local actual_stdout
@@ -79,7 +99,7 @@ assert_plist_binding() {
   actual_stdout="$(/usr/libexec/PlistBuddy -c 'Print :StandardOutPath' "$plist")"
   actual_stderr="$(/usr/libexec/PlistBuddy -c 'Print :StandardErrorPath' "$plist")"
 
-  [[ "$actual_workdir" == "$ROOT_DIR" ]] || {
+  [[ "$actual_workdir" == "$expected_workdir" ]] || {
     echo "WorkingDirectory mismatch for $plist: $actual_workdir" >&2
     exit 1
   }
@@ -97,9 +117,159 @@ assert_plist_binding() {
   }
 }
 
+emit_external_rag_env_value() {
+  local source_env="$1"
+  local key="$2"
+  local value
+
+  value="$(read_env_file_value "$source_env" "$key")"
+  if [[ -n "$value" ]]; then
+    printf '%s=%s\n' "$key" "$value"
+  fi
+}
+
+write_external_rag_env() {
+  local target_env="$RAG_EXTERNAL_APP_DIR/.env"
+  local source_env=""
+  local key
+
+  if [[ -f "$ROOT_DIR/rag-service/.env" ]]; then
+    source_env="$ROOT_DIR/rag-service/.env"
+  elif [[ -f "$ROOT_DIR/.env" ]]; then
+    source_env="$ROOT_DIR/.env"
+  fi
+
+  {
+    printf 'RAG_DATA_DIR="%s/data"\n' "$RAG_EXTERNAL_APP_DIR"
+    for key in \
+      DASHSCOPE_API_KEY \
+      EMBEDDING_MODEL \
+      RAG_COLLECTION_NAME \
+      RAG_SEARCH_HOST \
+      RAG_SEARCH_PORT \
+      SQLSERVER_HOST \
+      SQLSERVER_PORT \
+      SQLSERVER_DATABASE \
+      SQLSERVER_USER \
+      SQLSERVER_PASSWORD \
+      SQLSERVER_ENCRYPT \
+      SQLSERVER_TRUST_CERT \
+      SQLSERVER_POOL_MAX \
+      SQLSERVER_IDLE_TIMEOUT_MS \
+      SQLSERVER_REQUEST_TIMEOUT_MS \
+      SQLSERVER_CONNECTION_TIMEOUT_MS; do
+      emit_external_rag_env_value "$source_env" "$key"
+    done
+  } > "$target_env"
+
+  chmod 600 "$target_env" 2>/dev/null || true
+}
+
+resolve_initial_rag_data_dir() {
+  local configured_data_dir
+
+  configured_data_dir="$(read_env_value RAG_DATA_DIR "")"
+  if [[ -n "$configured_data_dir" && -d "$configured_data_dir" ]]; then
+    echo "$configured_data_dir"
+    return
+  fi
+
+  if [[ -d "$ROOT_DIR/rag-service/data" ]]; then
+    echo "$ROOT_DIR/rag-service/data"
+  fi
+}
+
+rewrite_external_rag_manifests() {
+  local python_bin
+
+  python_bin="$(command -v python3 || true)"
+  if [[ -z "$python_bin" ]]; then
+    return 0
+  fi
+
+  RAG_EXTERNAL_APP_DIR="$RAG_EXTERNAL_APP_DIR" "$python_bin" <<'PY'
+import json
+import os
+from pathlib import Path
+
+app_dir = Path(os.environ["RAG_EXTERNAL_APP_DIR"]).expanduser().resolve()
+data_dir = app_dir / "data"
+library_dir = data_dir / "library"
+upload_dir = data_dir / "uploads"
+
+if not library_dir.exists():
+    raise SystemExit(0)
+
+for manifest_path in library_dir.glob("*/manifest.json"):
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    doc_id = str(manifest.get("doc_id") or manifest_path.parent.name)
+    file_name = str(manifest.get("file_name") or "")
+    original_name = Path(str(manifest.get("original_upload_path") or "")).name or file_name
+
+    if original_name:
+        original_candidate = upload_dir / original_name
+        if original_candidate.is_file():
+            manifest["original_upload_path"] = str(original_candidate.resolve())
+
+    content_candidate = library_dir / doc_id / "content.md"
+    if content_candidate.is_file():
+        manifest["content_path"] = str(content_candidate.resolve())
+
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+PY
+}
+
+prepare_external_rag_venv() {
+  local project_venv_dir="$ROOT_DIR/rag-service/.venv"
+
+  if [[ -x "$RAG_EXTERNAL_VENV_DIR/bin/python" ]]; then
+    return 0
+  fi
+
+  if [[ ! -x "$project_venv_dir/bin/python" ]]; then
+    return 0
+  fi
+
+  mkdir -p "$RAG_EXTERNAL_ROOT"
+  rm -rf "$RAG_EXTERNAL_VENV_DIR"
+  ditto --noextattr --noqtn "$project_venv_dir" "$RAG_EXTERNAL_VENV_DIR"
+}
+
+prepare_external_rag_runtime() {
+  local source_data_dir
+
+  mkdir -p "$RAG_EXTERNAL_APP_DIR" "$RAG_EXTERNAL_APP_DIR/data"
+
+  cp "$ROOT_DIR/rag-service/rag_search_server.py" "$RAG_EXTERNAL_APP_DIR/rag_search_server.py"
+  if [[ -f "$ROOT_DIR/rag-service/requirements.txt" ]]; then
+    cp "$ROOT_DIR/rag-service/requirements.txt" "$RAG_EXTERNAL_APP_DIR/requirements.txt"
+  fi
+  ditto --noextattr --noqtn "$ROOT_DIR/rag-service/rag_mvp" "$RAG_EXTERNAL_APP_DIR/rag_mvp"
+
+  source_data_dir="$(resolve_initial_rag_data_dir)"
+  if [[ -n "$source_data_dir" && ! -e "$RAG_EXTERNAL_APP_DIR/data/.runtime-data-initialized" ]]; then
+    ditto --noextattr --noqtn "$source_data_dir" "$RAG_EXTERNAL_APP_DIR/data"
+    touch "$RAG_EXTERNAL_APP_DIR/data/.runtime-data-initialized"
+  fi
+
+  rewrite_external_rag_manifests
+  write_external_rag_env
+  xattr -dr com.apple.provenance "$RAG_EXTERNAL_ROOT" 2>/dev/null || true
+  xattr -dr com.apple.quarantine "$RAG_EXTERNAL_ROOT" 2>/dev/null || true
+}
+
 resolve_rag_python() {
+  local external_venv_python="$RAG_EXTERNAL_VENV_DIR/bin/python"
   local venv_python="$ROOT_DIR/rag-service/.venv/bin/python"
   local python_bin=""
+
+  if [[ -x "$external_venv_python" ]]; then
+    echo "$external_venv_python"
+    return
+  fi
 
   if [[ -x "$venv_python" ]]; then
     echo "$venv_python"
@@ -115,10 +285,24 @@ resolve_rag_python() {
   echo "$python_bin"
 }
 
+resolve_rag_entry_script() {
+  local external_script="$RAG_EXTERNAL_APP_DIR/rag_search_server.py"
+
+  if [[ -f "$external_script" ]]; then
+    echo "$external_script"
+    return
+  fi
+
+  echo "$ROOT_DIR/rag-service/rag_search_server.py"
+}
+
 write_rag_plist() {
   local plist="$1"
   local python_bin
+  local rag_entry_script
+
   python_bin="$(resolve_rag_python)"
+  rag_entry_script="$(resolve_rag_entry_script)"
 
   cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -131,11 +315,11 @@ write_rag_plist() {
     <key>ProgramArguments</key>
     <array>
       <string>$python_bin</string>
-      <string>$ROOT_DIR/rag-service/rag_search_server.py</string>
+      <string>$rag_entry_script</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>$ROOT_DIR</string>
+    <string>$RAG_EXTERNAL_APP_DIR</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -165,7 +349,12 @@ PLIST
 }
 
 copy_plists() {
+  local rag_entry_script
+
   mkdir -p "$LAUNCHD_TARGET_DIR" "$LOG_DIR" "$RAG_LOG_DIR"
+  prepare_external_rag_venv
+  prepare_external_rag_runtime
+  rag_entry_script="$(resolve_rag_entry_script)"
   cp "$API_SOURCE_PLIST" "$API_TARGET_PLIST"
   cp "$HELPER_SOURCE_PLIST" "$HELPER_TARGET_PLIST"
   cp "$DIRECTDB_RUNNER_SOURCE_PLIST" "$DIRECTDB_RUNNER_TARGET_PLIST"
@@ -179,7 +368,7 @@ copy_plists() {
   assert_plist_binding "$HELPER_TARGET_PLIST" "$ROOT_DIR/ContextHelper/server.js" "$LOG_DIR/helper.stdout.log" "$LOG_DIR/helper.stderr.log"
   assert_plist_binding "$DIRECTDB_RUNNER_TARGET_PLIST" "$ROOT_DIR/DirectDbRunner/server.js" "$LOG_DIR/directdb-runner.stdout.log" "$LOG_DIR/directdb-runner.stderr.log"
   assert_plist_binding "$MODEL_TOOL_TARGET_PLIST" "$ROOT_DIR/ModelTool/server.js" "$LOG_DIR/model-tool.stdout.log" "$LOG_DIR/model-tool.stderr.log"
-  assert_plist_binding "$RAG_TARGET_PLIST" "$ROOT_DIR/rag-service/rag_search_server.py" "$RAG_LOG_DIR/rag-search.stdout.log" "$RAG_LOG_DIR/rag-search.stderr.log"
+  assert_plist_binding "$RAG_TARGET_PLIST" "$rag_entry_script" "$RAG_LOG_DIR/rag-search.stdout.log" "$RAG_LOG_DIR/rag-search.stderr.log" "$RAG_EXTERNAL_APP_DIR"
   chmod 644 "$API_TARGET_PLIST" "$HELPER_TARGET_PLIST" "$DIRECTDB_RUNNER_TARGET_PLIST" "$MODEL_TOOL_TARGET_PLIST" "$RAG_TARGET_PLIST"
 }
 
@@ -194,7 +383,6 @@ bootstrap_label() {
   local plist="$2"
   launchctl enable "gui/$UID_VALUE/$label" >/dev/null 2>&1 || true
   launchctl bootstrap "gui/$UID_VALUE" "$plist"
-  launchctl kickstart -k "gui/$UID_VALUE/$label"
 }
 
 start_services() {

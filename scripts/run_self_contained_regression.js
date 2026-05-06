@@ -7,7 +7,7 @@ const { execFileSync, spawnSync } = require("child_process");
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DEFAULT_MANIFEST = path.join(ROOT_DIR, "tests", "fixtures", "self-contained", "manifest.json");
 const DEFAULT_SCAN_SCRIPT = path.join(ROOT_DIR, "scripts", "scan_shared_runtime_paths.js");
-const DEFAULT_OPENCLAW_SCAN_SCRIPT = path.join(ROOT_DIR, "scripts", "scan_openclaw_dependencies.js");
+const DEFAULT_RETIRED_RUNTIME_SCAN_SCRIPT = path.join(ROOT_DIR, "scripts", "scan_retired_runtime_dependencies.js");
 const DEFAULT_SCAN_TARGETS = [
   "scene-configs",
   "platform",
@@ -15,7 +15,7 @@ const DEFAULT_SCAN_TARGETS = [
   "deploy",
   "runtime-assets"
 ];
-const DEFAULT_NO_OPENCLAW_SCAN_TARGETS = [
+const DEFAULT_NO_RETIRED_RUNTIME_SCAN_TARGETS = [
   "services",
   "platform",
   "scene-configs",
@@ -24,13 +24,13 @@ const DEFAULT_NO_OPENCLAW_SCAN_TARGETS = [
   "scripts/bootstrap_local_runtime.js",
   "package.json"
 ];
-const DEFAULT_NO_OPENCLAW_LOG_FILES = [
+const DEFAULT_NO_RETIRED_RUNTIME_LOG_FILES = [
   path.join(ROOT_DIR, "logs", "api.stdout.log"),
   path.join(ROOT_DIR, "logs", "api.stderr.log")
 ];
-const NO_OPENCLAW_FORBIDDEN_LOG_PATTERNS = [
+const NO_RETIRED_RUNTIME_FORBIDDEN_LOG_PATTERNS = [
   /gateway-http/i,
-  /OpenClaw Gateway request timed out/i,
+  /RetiredRuntime Gateway request timed out/i,
   /agent\.langgraph\.fallback\.triggered/i
 ];
 const API_BASE_URL = process.env.SELF_CONTAINED_API_BASE_URL || "http://127.0.0.1:3100";
@@ -263,8 +263,8 @@ function getCategoryCount(report, category) {
   return report?.summary?.byCategory?.find((item) => item.category === category)?.count || 0;
 }
 
-function runNoOpenClawDependencyScan({ scanScriptPath, scanTargets, outputDir }) {
-  const outputPath = path.join(outputDir, "openclaw-scan-report.json");
+function runNoRetiredRuntimeDependencyScan({ scanScriptPath, scanTargets, outputDir }) {
+  const outputPath = path.join(outputDir, "retired-runtime-scan-report.json");
   const args = [
     scanScriptPath,
     "--targets",
@@ -349,7 +349,7 @@ function readLogDeltas(snapshots) {
   });
 }
 
-function buildNoOpenClawLogCheck({ snapshots, requestIds }) {
+function buildNoRetiredRuntimeLogCheck({ snapshots, requestIds }) {
   const requestIdSet = new Set(requestIds.filter(Boolean));
   const deltas = readLogDeltas(snapshots);
   const checkedFiles = deltas.filter((item) => item.exists).map((item) => path.relative(ROOT_DIR, item.filePath));
@@ -362,7 +362,7 @@ function buildNoOpenClawLogCheck({ snapshots, requestIds }) {
         continue;
       }
 
-      const matchedPattern = NO_OPENCLAW_FORBIDDEN_LOG_PATTERNS.find((pattern) => pattern.test(line));
+      const matchedPattern = NO_RETIRED_RUNTIME_FORBIDDEN_LOG_PATTERNS.find((pattern) => pattern.test(line));
       if (!matchedPattern) {
         continue;
       }
@@ -379,17 +379,17 @@ function buildNoOpenClawLogCheck({ snapshots, requestIds }) {
     checked: checkedFiles.length > 0,
     checkedFiles,
     requestIds: Array.from(requestIdSet),
-    forbiddenPatterns: NO_OPENCLAW_FORBIDDEN_LOG_PATTERNS.map((pattern) => pattern.source),
+    forbiddenPatterns: NO_RETIRED_RUNTIME_FORBIDDEN_LOG_PATTERNS.map((pattern) => pattern.source),
     findings,
     failed: findings.length > 0
   };
 }
 
-function buildNoOpenClawEnvironmentCheck() {
-  const openClawGatewayTokenSet = Boolean(String(process.env.OPENCLAW_GATEWAY_TOKEN || "").trim());
+function buildNoRetiredRuntimeEnvironmentCheck() {
+  const legacyFallbackEnabled = parseBooleanValue(process.env.LANGGRAPH_LEGACY_FALLBACK_ENABLED, false);
   return {
-    openClawGatewayTokenSet,
-    failed: openClawGatewayTokenSet
+    legacyFallbackEnabled,
+    failed: legacyFallbackEnabled
   };
 }
 
@@ -443,26 +443,26 @@ async function main() {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-  const noOpenClawRequired = Boolean(args["no-openclaw"]) || parseBooleanValue(process.env.NO_OPENCLAW_REQUIRED, false);
-  const noOpenClawScanScriptPath = path.resolve(args["openclaw-scan-script"] || DEFAULT_OPENCLAW_SCAN_SCRIPT);
-  const noOpenClawScanTargets = String(args["openclaw-scan-targets"] || DEFAULT_NO_OPENCLAW_SCAN_TARGETS.join(","))
+  const noRetiredRuntimeRequired = Boolean(args["no-retired-runtime"]) || parseBooleanValue(process.env.NO_RETIRED_RUNTIME_REQUIRED, false);
+  const noRetiredRuntimeScanScriptPath = path.resolve(args["retired-runtime-scan-script"] || DEFAULT_RETIRED_RUNTIME_SCAN_SCRIPT);
+  const noRetiredRuntimeScanTargets = String(args["retired-runtime-scan-targets"] || DEFAULT_NO_RETIRED_RUNTIME_SCAN_TARGETS.join(","))
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-  const noOpenClawLogFiles = resolvePathList(args["no-openclaw-log-files"] || process.env.NO_OPENCLAW_LOG_FILES, DEFAULT_NO_OPENCLAW_LOG_FILES);
+  const noRetiredRuntimeLogFiles = resolvePathList(args["no-retired-runtime-log-files"] || process.env.NO_RETIRED_RUNTIME_LOG_FILES, DEFAULT_NO_RETIRED_RUNTIME_LOG_FILES);
 
   fs.mkdirSync(outputDir, { recursive: true });
 
   const scanReport = runScan({ scanScriptPath, scanTargets, outputDir });
   const scanFailed = Number(scanReport?.summary?.totalFindings || 0) > 0;
-  const noOpenClawScan = noOpenClawRequired
-    ? runNoOpenClawDependencyScan({
-        scanScriptPath: noOpenClawScanScriptPath,
-        scanTargets: noOpenClawScanTargets,
+  const noRetiredRuntimeScan = noRetiredRuntimeRequired
+    ? runNoRetiredRuntimeDependencyScan({
+        scanScriptPath: noRetiredRuntimeScanScriptPath,
+        scanTargets: noRetiredRuntimeScanTargets,
         outputDir
       })
     : null;
-  const noOpenClawEnvironmentCheck = noOpenClawRequired ? buildNoOpenClawEnvironmentCheck() : null;
+  const noRetiredRuntimeEnvironmentCheck = noRetiredRuntimeRequired ? buildNoRetiredRuntimeEnvironmentCheck() : null;
 
   const cases = Array.isArray(manifest.cases)
     ? manifest.cases.filter((item) => !selectedCaseId || item.id === selectedCaseId)
@@ -472,14 +472,14 @@ async function main() {
     throw new Error(selectedCaseId ? `No self-contained case found for id: ${selectedCaseId}` : "No self-contained cases found.");
   }
 
-  const noOpenClawLogSnapshots = noOpenClawRequired ? snapshotLogFiles(noOpenClawLogFiles) : null;
+  const noRetiredRuntimeLogSnapshots = noRetiredRuntimeRequired ? snapshotLogFiles(noRetiredRuntimeLogFiles) : null;
   const caseResults = [];
   for (const item of cases) {
     caseResults.push(await runCase(item, manifestDir, outputDir));
   }
-  const noOpenClawLogCheck = noOpenClawRequired
-    ? buildNoOpenClawLogCheck({
-        snapshots: noOpenClawLogSnapshots,
+  const noRetiredRuntimeLogCheck = noRetiredRuntimeRequired
+    ? buildNoRetiredRuntimeLogCheck({
+        snapshots: noRetiredRuntimeLogSnapshots,
         requestIds: caseResults.map((item) => item.requestId)
       })
     : null;
@@ -503,17 +503,16 @@ async function main() {
       failed: caseResults.filter((item) => item.classification === "fail").length
     },
     cases: caseResults,
-    noOpenClaw: noOpenClawRequired
+    noRetiredRuntime: noRetiredRuntimeRequired
       ? {
           required: true,
           env: {
             LANGGRAPH_LEGACY_FALLBACK_ENABLED: process.env.LANGGRAPH_LEGACY_FALLBACK_ENABLED || null,
-            LANGGRAPH_DRAFT_MODE: process.env.LANGGRAPH_DRAFT_MODE || null,
-            OPENCLAW_GATEWAY_TOKEN_SET: noOpenClawEnvironmentCheck.openClawGatewayTokenSet
+            LANGGRAPH_DRAFT_MODE: process.env.LANGGRAPH_DRAFT_MODE || null
           },
-          environmentCheck: noOpenClawEnvironmentCheck,
-          dependencyScan: noOpenClawScan,
-          logCheck: noOpenClawLogCheck
+          environmentCheck: noRetiredRuntimeEnvironmentCheck,
+          dependencyScan: noRetiredRuntimeScan,
+          logCheck: noRetiredRuntimeLogCheck
         }
       : {
           required: false
@@ -526,9 +525,9 @@ async function main() {
   if (
     scanFailed
     || summary.totals.failed > 0
-    || noOpenClawEnvironmentCheck?.failed
-    || noOpenClawScan?.failed
-    || noOpenClawLogCheck?.failed
+    || noRetiredRuntimeEnvironmentCheck?.failed
+    || noRetiredRuntimeScan?.failed
+    || noRetiredRuntimeLogCheck?.failed
   ) {
     process.exitCode = 1;
   }

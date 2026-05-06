@@ -73,9 +73,11 @@ const API_HOST = process.env.API_HOST || "0.0.0.0";
 const API_PORT = Number(process.env.API_PORT || 3000);
 const HEALTH_PROBE_TIMEOUT_MS = Number(process.env.HEALTH_PROBE_TIMEOUT_MS || 1500);
 const LANGGRAPH_HEALTH_SCENES = [
+  "payment-info-split",
   "sales-opportunity-advisor",
   "sales-opportunity-advisor-directdb",
-  "sales-opportunity-smart-entry"
+  "sales-opportunity-smart-entry",
+  "special-custom-product-solution"
 ];
 
 function sendJson(res, statusCode, payload) {

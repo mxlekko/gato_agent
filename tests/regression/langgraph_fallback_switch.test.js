@@ -5,6 +5,7 @@ const { runSceneThroughGateway, resolveSceneRoutePlan } = require("../../platfor
 const { runLangGraphAgentRuntimeRoute } = require("../../routes/agent");
 const { validateSceneConfig } = require("../../services/scene-config");
 const { createAppError } = require("../../utils/errors");
+const { RETIRED_AGENT_GATEWAY_MODEL_PREFIX } = require("../../utils/retired-runtime-markers");
 
 function withEnv(name, value, fn) {
   const previous = process.env[name];
@@ -294,14 +295,14 @@ async function testSceneConfigRejectsRetiredAgentRuntimeLegacyRouting() {
   );
 }
 
-async function testSceneConfigRejectsOpenClawGatewayModel() {
-  const retiredGatewayModel = ["open", "claw"].join("") + "/sales-agent";
+async function testSceneConfigRejectsRetiredRuntimeGatewayModel() {
+  const retiredGatewayModel = `${RETIRED_AGENT_GATEWAY_MODEL_PREFIX}sales-agent`;
 
   assert.throws(
     () => validateSceneConfig(
       createSyntheticAgentRuntimeSceneConfig({
         agent: {
-          id: "synthetic-openclaw-agent-runtime",
+          id: "synthetic-retired-runtime-agent-runtime",
           gatewayModel: retiredGatewayModel
         }
       }),
@@ -320,7 +321,7 @@ async function main() {
   await testDirectModelRouteUnaffected();
   await testRoutePlanExposesFallbackSwitch();
   await testSceneConfigRejectsRetiredAgentRuntimeLegacyRouting();
-  await testSceneConfigRejectsOpenClawGatewayModel();
+  await testSceneConfigRejectsRetiredRuntimeGatewayModel();
   process.stdout.write("langgraph fallback switch tests passed\n");
 }
 

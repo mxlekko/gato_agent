@@ -182,6 +182,9 @@ class RAGSearchService:
         self.store: Any | None = None
         self.job_store: Any | None = None
         self.db_sync_service: Any | None = None
+        self._store_lock = threading.Lock()
+        self._job_store_lock = threading.Lock()
+        self._db_sync_service_lock = threading.Lock()
 
     def _default_collection_name(self) -> str:
         suffix = self.embedding_model.replace("-", "_").replace(".", "_")
@@ -195,21 +198,23 @@ class RAGSearchService:
             )
 
         if self.store is None:
-            try:
-                from rag_mvp.store import LocalRAGStore
-            except ModuleNotFoundError as error:
-                missing_name = getattr(error, "name", "") or str(error)
-                raise RAGServiceError(
-                    "RAG_DEPENDENCY_MISSING",
-                    f"Python dependency is missing: {missing_name}. Run `python -m pip install -r rag-service/requirements.txt`.",
-                ) from error
+            with self._store_lock:
+                if self.store is None:
+                    try:
+                        from rag_mvp.store import LocalRAGStore
+                    except ModuleNotFoundError as error:
+                        missing_name = getattr(error, "name", "") or str(error)
+                        raise RAGServiceError(
+                            "RAG_DEPENDENCY_MISSING",
+                            f"Python dependency is missing: {missing_name}. Run `python -m pip install -r rag-service/requirements.txt`.",
+                        ) from error
 
-            self.store = LocalRAGStore(
-                persist_directory=str(_chroma_dir()),
-                api_key=self.api_key,
-                collection_name=self.collection_name,
-                embedding_model=self.embedding_model,
-            )
+                    self.store = LocalRAGStore(
+                        persist_directory=str(_chroma_dir()),
+                        api_key=self.api_key,
+                        collection_name=self.collection_name,
+                        embedding_model=self.embedding_model,
+                    )
         return self.store
 
     def get_library(self) -> Any:
@@ -226,30 +231,34 @@ class RAGSearchService:
 
     def get_job_store(self) -> Any:
         if self.job_store is None:
-            try:
-                from rag_mvp.jobs import JobStore
-            except ModuleNotFoundError as error:
-                missing_name = getattr(error, "name", "") or str(error)
-                raise RAGServiceError(
-                    "RAG_DEPENDENCY_MISSING",
-                    f"Python dependency is missing: {missing_name}. Run `python -m pip install -r rag-service/requirements.txt`.",
-                ) from error
+            with self._job_store_lock:
+                if self.job_store is None:
+                    try:
+                        from rag_mvp.jobs import JobStore
+                    except ModuleNotFoundError as error:
+                        missing_name = getattr(error, "name", "") or str(error)
+                        raise RAGServiceError(
+                            "RAG_DEPENDENCY_MISSING",
+                            f"Python dependency is missing: {missing_name}. Run `python -m pip install -r rag-service/requirements.txt`.",
+                        ) from error
 
-            self.job_store = JobStore(str(_jobs_db_path()))
+                    self.job_store = JobStore(str(_jobs_db_path()))
         return self.job_store
 
     def get_db_sync_service(self) -> Any:
         if self.db_sync_service is None:
-            try:
-                from rag_mvp.db_sync import DBSyncService
-            except ModuleNotFoundError as error:
-                missing_name = getattr(error, "name", "") or str(error)
-                raise RAGServiceError(
-                    "RAG_DEPENDENCY_MISSING",
-                    f"Python dependency is missing: {missing_name}. Run `python -m pip install -r rag-service/requirements.txt`.",
-                ) from error
+            with self._db_sync_service_lock:
+                if self.db_sync_service is None:
+                    try:
+                        from rag_mvp.db_sync import DBSyncService
+                    except ModuleNotFoundError as error:
+                        missing_name = getattr(error, "name", "") or str(error)
+                        raise RAGServiceError(
+                            "RAG_DEPENDENCY_MISSING",
+                            f"Python dependency is missing: {missing_name}. Run `python -m pip install -r rag-service/requirements.txt`.",
+                        ) from error
 
-            self.db_sync_service = DBSyncService(str(_db_sync_dir()))
+                    self.db_sync_service = DBSyncService(str(_db_sync_dir()))
         return self.db_sync_service
 
     def try_get_index_summary(self, doc_id: str) -> dict[str, Any] | None:

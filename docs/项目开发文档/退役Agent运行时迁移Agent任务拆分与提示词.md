@@ -1,10 +1,10 @@
-# OpenClaw 退场迁移 Agent 任务拆分与执行提示词
+# 退役 Agent 运行时 退场迁移 Agent 任务拆分与执行提示词
 
 ## 1. 文档用途
 
-本文档把 [OpenClaw退场与项目内LangGraph迁移任务清单.md](/Users/gato-pm/Desktop/API_副本/docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md) 拆成可以交给多个 AI agent 开发的工单。
+本文档把 [退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md](/Users/gato-pm/Desktop/API_副本/docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md) 拆成可以交给多个 AI agent 开发的工单。
 
-目标不是做 OpenClaw 兼容，也不是迁移到 NullClaw，而是按“全部迁移到项目中去跑”的策略，把主链路收口到项目内 `platform/runtime/graphs`。
+目标不是做 退役 Agent 运行时 兼容，也不是迁移到空壳兼容层，而是按“全部迁移到项目中去跑”的策略，把主链路收口到项目内 `platform/runtime/graphs`。
 
 每个工单都包含：
 
@@ -28,12 +28,12 @@
 
 ### 2.2 必须变化
 
-1. 业务主链路不再调用 OpenClaw Gateway `127.0.0.1:18789`。
-2. 运行时不再依赖 `OPENCLAW_GATEWAY_TOKEN`。
-3. 运行时不再依赖 `~/.openclaw`。
+1. 业务主链路不再调用 旧 Gateway `旧本机 Gateway 端点`。
+2. 运行时不再依赖 `旧 gateway token`。
+3. 运行时不再依赖 `旧共享运行时目录`。
 4. `sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry` 最终全部走项目内 `langgraph`。
-5. `platform/tools/openclaw-sales-agent-default.tool.yaml` 这类 OpenClaw agent tool 不再作为主链路 tool。
-6. `runtime://openclaw/...` 资产命名逐步迁移到项目通用 namespace。
+5. `platform/tools/旧 LLM tool 配置` 这类 退役 Agent 运行时 agent tool 不再作为主链路 tool。
+6. `runtime://project-runtime/...` 资产命名逐步迁移到项目通用 namespace。
 
 ### 2.3 Agent 开发统一约束
 
@@ -60,8 +60,8 @@ AG-00 基线与依赖扫描
 -> AG-03 sales-opportunity-advisor 迁移
 -> AG-04 sales-opportunity-advisor-directdb 纯项目化
 -> AG-05 sales-opportunity-smart-entry 迁移
--> AG-08 启动、health、bootstrap 去 OpenClaw
--> AG-09 删除 legacy OpenClaw 主链路
+-> AG-08 启动、health、bootstrap 去 退役 Agent 运行时
+-> AG-09 删除 legacy 退役 Agent 运行时 主链路
 -> AG-10 runtime namespace 清理
 -> AG-11 最终回归与上线门槛
 ```
@@ -70,8 +70,8 @@ AG-00 基线与依赖扫描
 
 在 `AG-00` 完成后，可以并行：
 
-1. `AG-06` 直接模型场景 OpenClaw 残留清理。
-2. `AG-07` 文档、图示、控制台文案去 OpenClaw。
+1. `AG-06` 直接模型场景 退役 Agent 运行时 残留清理。
+2. `AG-07` 文档、图示、控制台文案去 退役 Agent 运行时。
 3. `AG-02` 项目内 LLM tool/client 的底层实现。
 
 在 `AG-02` 完成后，可以并行：
@@ -82,24 +82,24 @@ AG-00 基线与依赖扫描
 
 在 `AG-03`、`AG-04`、`AG-05` 都完成后，才能做：
 
-1. `AG-09` 删除 legacy OpenClaw 主链路。
+1. `AG-09` 删除 legacy 退役 Agent 运行时 主链路。
 2. `AG-10` runtime namespace 清理。
-3. `AG-11` 最终无 OpenClaw 回归。
+3. `AG-11` 最终无 退役 Agent 运行时 回归。
 
 ## 4. 工单总览
 
 | 工单 | 主题 | 优先级 | 是否可并行 | 主要写入范围 |
 |---|---:|---:|---:|---|
-| AG-00 | 基线与 OpenClaw 依赖扫描 | P0 | 否 | `docs/`、`scripts/`、`tests/fixtures/` |
+| AG-00 | 基线与 退役 Agent 运行时 依赖扫描 | P0 | 否 | `docs/`、`scripts/`、`tests/fixtures/` |
 | AG-01 | 路由与 fallback 策略收口 | P0 | 否 | `platform/gateway/`、`platform/runtime/fallback.js`、测试 |
 | AG-02 | 项目内 LLM tool/client | P0 | 部分可并行 | `platform/tools/`、`platform/runtime/`、`platform/nodes/draft-output.js` |
 | AG-03 | `sales-opportunity-advisor` 迁移 | P1 | 是 | `scene-configs/`、`platform/skills/`、fixtures/tests |
 | AG-04 | `sales-opportunity-advisor-directdb` 纯项目化 | P1 | 是 | directdb scene/skill/query/tests |
 | AG-05 | `sales-opportunity-smart-entry` 迁移 | P1 | 是 | smart-entry scene/skill/query/tests |
-| AG-06 | direct-model OpenClaw 残留清理 | P2 | 是 | `payment-info-split`、`special-custom-product-solution` 相关配置 |
+| AG-06 | direct-model 退役 Agent 运行时 残留清理 | P2 | 是 | `payment-info-split`、`special-custom-product-solution` 相关配置 |
 | AG-07 | 文档、控制台、图示清理 | P2 | 是 | `docs/`、`services/console-*`、`scripts/generate_*` |
-| AG-08 | health/bootstrap/startup 去 OpenClaw | P1 | 否 | `server.js`、`scripts/bootstrap_local_runtime.js`、启动脚本 |
-| AG-09 | 删除 legacy OpenClaw 主链路 | P1 | 否 | `services/runtime*.js`、response parser、gateway handlers |
+| AG-08 | health/bootstrap/startup 去 退役 Agent 运行时 | P1 | 否 | `server.js`、`scripts/bootstrap_local_runtime.js`、启动脚本 |
+| AG-09 | 删除 legacy 退役 Agent 运行时 主链路 | P1 | 否 | `services/runtime*.js`、response parser、gateway handlers |
 | AG-10 | runtime namespace 清理 | P2 | 否 | `runtime-assets/`、path resolver、bundle renderer、configs |
 | AG-11 | 最终回归与上线门槛 | P0 | 否 | `scripts/`、`tests/`、rollout report |
 
@@ -110,9 +110,9 @@ AG-00 基线与依赖扫描
 ```text
 你是本项目的开发 agent，工作目录是 /Users/gato-pm/Desktop/API_副本。
 
-请先阅读 docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md 和本工单描述，再进行代码修改。
+请先阅读 docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md 和本工单描述，再进行代码修改。
 
-本次目标是把 OpenClaw Gateway 主链路迁移为项目内 LangGraph/workflow graph 运行。不要做 NullClaw 兼容，不要依赖 ~/.openclaw，不要新增对 127.0.0.1:18789 的调用。
+本次目标是把 旧 Gateway 主链路迁移为项目内 LangGraph/workflow graph 运行。不要做空壳兼容，不要依赖旧共享运行时目录，不要新增对旧本机 Gateway 端点的调用。
 
 约束：
 - 先用 rg/sed 阅读相关文件，确认现状。
@@ -125,11 +125,11 @@ AG-00 基线与依赖扫描
 
 ---
 
-## AG-00. 基线与 OpenClaw 依赖扫描
+## AG-00. 基线与 退役 Agent 运行时 依赖扫描
 
 ### 目标
 
-建立迁移前基线，明确项目中所有 OpenClaw 依赖点，补齐后续任务可用的扫描和回归入口。
+建立迁移前基线，明确项目中所有 退役 Agent 运行时 依赖点，补齐后续任务可用的扫描和回归入口。
 
 ### 前置依赖
 
@@ -146,40 +146,40 @@ AG-00 基线与依赖扫描
 
 1. [services/runtime-message.js](/Users/gato-pm/Desktop/API_副本/services/runtime-message.js)
 2. [server.js](/Users/gato-pm/Desktop/API_副本/server.js)
-3. [platform/tools/openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml)
+3. [platform/tools/旧 LLM tool 配置](/Users/gato-pm/Desktop/API_副本/platform/tools/旧 LLM tool 配置)
 4. [scene-configs/sales-opportunity-advisor.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-advisor.json)
 5. [scene-configs/sales-opportunity-advisor-directdb.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-advisor-directdb.json)
 6. [scene-configs/sales-opportunity-smart-entry.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-smart-entry.json)
 
 ### 实施要点
 
-1. 新增或完善一个 OpenClaw 依赖扫描脚本，建议命名为 `scripts/scan_openclaw_dependencies.js`。
+1. 新增或完善一个 退役 Agent 运行时 依赖扫描脚本，建议命名为 `scripts/scan_retired_runtime_dependencies.js`。
 2. 扫描关键词至少包含：
-   - `openclaw`
-   - `OPENCLAW`
-   - `18789`
-   - `runtime://openclaw`
-   - `.openclaw`
-   - `openclaw/sales-agent`
+   - `retired-runtime`
+   - `RETIRED_RUNTIME`
+   - `旧 Gateway 端口`
+   - `runtime://project-runtime`
+   - `旧共享运行时目录`
+   - `旧 agent gateway model`
 3. 扫描结果要分级：
-   - `runtime-blocker`：运行时主链路仍依赖 OpenClaw。
-   - `config-blocker`：scene/skill/tool 配置仍指向 OpenClaw。
-   - `asset-namespace`：资产路径还叫 `runtime://openclaw`，但不一定影响运行。
+   - `runtime-blocker`：运行时主链路仍依赖 退役 Agent 运行时。
+   - `config-blocker`：scene/skill/tool 配置仍指向 退役 Agent 运行时。
+   - `asset-namespace`：资产路径还叫 `runtime://project-runtime`，但不一定影响运行。
    - `documentation`：文档、图片脚本、历史说明。
 4. 为 `sales-opportunity-advisor`、`sales-opportunity-advisor-directdb`、`sales-opportunity-smart-entry` 固化最小请求 fixture。
 5. 输出一份迁移基线报告，建议路径：
-   - `docs/项目开发文档/OpenClaw退场依赖扫描基线.md`
+   - `docs/项目开发文档/退役 Agent 运行时退场依赖扫描基线.md`
 
 ### 验收标准
 
-1. 可以通过一个命令列出所有 OpenClaw 残留。
+1. 可以通过一个命令列出所有 退役 Agent 运行时 残留。
 2. 报告能区分“必须改”和“后置清理”。
 3. 后续 agent 可以基于该报告认领任务。
 
 ### 建议验证命令
 
 ```bash
-node scripts/scan_openclaw_dependencies.js
+node scripts/scan_retired_runtime_dependencies.js
 npm run lint:platform-configs
 npm run regression:self-contained
 ```
@@ -187,34 +187,34 @@ npm run regression:self-contained
 ### Agent 执行提示词
 
 ```text
-你负责 AG-00：OpenClaw 退场迁移的基线与依赖扫描。
+你负责 AG-00：退役 Agent 运行时 退场迁移的基线与依赖扫描。
 
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
 任务目标：
-1. 建立 OpenClaw 依赖扫描能力。
+1. 建立 退役 Agent 运行时 依赖扫描能力。
 2. 输出迁移前基线报告。
 3. 固化 sales-opportunity-advisor、sales-opportunity-advisor-directdb、sales-opportunity-smart-entry 的最小回归请求样本，供后续迁移验证使用。
 
 请重点阅读：
-- docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md
+- docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md
 - services/runtime-message.js
 - server.js
 - platform/gateway/index.js
 - platform/runtime/fallback.js
-- platform/tools/openclaw-sales-agent-default.tool.yaml
+- platform/tools/旧 LLM tool 配置
 - scene-configs/*.json
 - platform/skills/*.yaml
 
 实现要求：
-1. 新增或完善 scripts/scan_openclaw_dependencies.js。
-2. 扫描关键词至少包括 openclaw、OPENCLAW、18789、runtime://openclaw、.openclaw、openclaw/sales-agent。
+1. 新增或完善 scripts/scan_retired_runtime_dependencies.js。
+2. 扫描关键词至少包括 retired-runtime、RETIRED_RUNTIME、旧 Gateway 端口、runtime://project-runtime、旧共享运行时目录、旧 agent gateway model。
 3. 扫描结果按 runtime-blocker、config-blocker、asset-namespace、documentation 分类。
-4. 新增 docs/项目开发文档/OpenClaw退场依赖扫描基线.md，写清楚当前残留点和建议归属工单。
+4. 新增 docs/项目开发文档/退役 Agent 运行时退场依赖扫描基线.md，写清楚当前残留点和建议归属工单。
 5. 不修改业务路由逻辑。
 
 验收命令：
-- node scripts/scan_openclaw_dependencies.js
+- node scripts/scan_retired_runtime_dependencies.js
 - npm run lint:platform-configs
 - npm run regression:self-contained
 
@@ -231,7 +231,7 @@ npm run regression:self-contained
 
 ### 目标
 
-让 `langgraph` 成为可控主路径，并提供环境变量开关控制是否允许回退到 legacy OpenClaw 主链路。
+让 `langgraph` 成为可控主路径，并提供环境变量开关控制是否允许回退到 legacy 退役 Agent 运行时 主链路。
 
 ### 前置依赖
 
@@ -292,7 +292,7 @@ LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 npm run regression:self-contained
 
 任务目标：
 1. 为 langgraph -> legacy 的自动回退增加环境变量开关。
-2. 确保关闭 fallback 后不会再调用 OpenClaw legacy agent runtime。
+2. 确保关闭 fallback 后不会再调用 退役 Agent 运行时 legacy agent runtime。
 3. 不改变 direct-model、legacy、shadow 的既有语义。
 
 请重点阅读：
@@ -328,7 +328,7 @@ LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 npm run regression:self-contained
 
 ### 目标
 
-新增项目内 LLM 调用能力，替代 `tool://llm/openclaw-sales-agent-default@v1`，让 `draft-output` 节点可以直接调用项目内模型 client 生成结构化 payload。
+新增项目内 LLM 调用能力，替代 `旧 LLM toolRef`，让 `draft-output` 节点可以直接调用项目内模型 client 生成结构化 payload。
 
 ### 前置依赖
 
@@ -348,7 +348,7 @@ LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 npm run regression:self-contained
 
 1. [platform/nodes/draft-output.js](/Users/gato-pm/Desktop/API_副本/platform/nodes/draft-output.js)
 2. [platform/nodes/tool-runtime.js](/Users/gato-pm/Desktop/API_副本/platform/nodes/tool-runtime.js)
-3. [platform/tools/openclaw-sales-agent-default.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/openclaw-sales-agent-default.tool.yaml)
+3. [platform/tools/旧 LLM tool 配置](/Users/gato-pm/Desktop/API_副本/platform/tools/旧 LLM tool 配置)
 4. [platform/tools/model-tool-structured-output.tool.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/model-tool-structured-output.tool.yaml)
 5. [ModelTool/server.js](/Users/gato-pm/Desktop/API_副本/ModelTool/server.js)
 
@@ -361,8 +361,8 @@ LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 npm run regression:self-contained
 2. 新增项目内 LLM client：
    - `platform/runtime/llm-client.js`
    - 支持读取现有模型配置和环境变量。
-   - 不读取 `~/.openclaw`。
-   - 不依赖 `OPENCLAW_GATEWAY_TOKEN`。
+   - 不读取 `旧共享运行时目录`。
+   - 不依赖 `旧 gateway token`。
 3. `draft-output` 支持至少三种模式：
    - `compat`：当前本地确定性兼容 payload。
    - `project-llm`：调用项目内 LLM client。
@@ -372,14 +372,14 @@ LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 npm run regression:self-contained
    - 本地默认可保持 `compat`，迁移验证时切到 `project-llm`。
 5. LLM 输出必须经过已有 `validate-output` / `repair-output` 流程。
 6. 不要在 tool yaml 中写死外部 provider endpoint。
-7. 不要引入 OpenClaw Gateway 兼容层。
+7. 不要引入 旧 Gateway 兼容层。
 
 ### 验收标准
 
-1. `draft-output` 可在不启动 OpenClaw Gateway 的情况下成功生成 payload。
+1. `draft-output` 可在不启动 旧 Gateway 的情况下成功生成 payload。
 2. `tool://llm/project-advisory@v1` 能被 BusinessSkill 绑定使用。
 3. `LANGGRAPH_DRAFT_MODE=compat` 保持原测试稳定。
-4. `LANGGRAPH_DRAFT_MODE=project-llm` 不访问 `127.0.0.1:18789`。
+4. `LANGGRAPH_DRAFT_MODE=project-llm` 不访问 `旧本机 Gateway 端点`。
 
 ### 建议验证命令
 
@@ -387,7 +387,7 @@ LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 npm run regression:self-contained
 npm run lint:platform-configs
 npm run regression:self-contained
 LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scene-configs
+rg -n "旧 Gateway 端口|旧 gateway token|旧 agent gateway model" platform services scene-configs
 ```
 
 ### Agent 执行提示词
@@ -398,14 +398,14 @@ rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scen
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
 任务目标：
-1. 新增 project 内部 LLM tool，替代 openclaw-sales-agent-default。
+1. 新增 project 内部 LLM tool，替代 旧 LLM tool。
 2. 新增 platform/runtime/llm-client.js。
 3. 改造 platform/nodes/draft-output.js，让 draft_business_output 节点可以走 project-llm driver。
 
 请重点阅读：
 - platform/nodes/draft-output.js
 - platform/nodes/tool-runtime.js
-- platform/tools/openclaw-sales-agent-default.tool.yaml
+- platform/tools/旧 LLM tool 配置
 - platform/tools/model-tool-structured-output.tool.yaml
 - platform/skills/sales-opportunity-advisor.v1.yaml
 - platform/skills/sales-opportunity-advisor-directdb.v1.yaml
@@ -415,7 +415,7 @@ rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scen
 
 实现要求：
 1. 新增 platform/tools/project-advisory-llm.tool.yaml，ref 使用 tool://llm/project-advisory@v1，driver.type 使用 project-llm。
-2. 新增 platform/runtime/llm-client.js，读取项目 .env 中的模型 provider key，不读取 ~/.openclaw，不调用 127.0.0.1:18789。
+2. 新增 platform/runtime/llm-client.js，读取项目 .env 中的模型 provider key，不读取 旧共享运行时目录，不调用 旧本机 Gateway 端点。
 3. draft-output 根据 toolDocument.spec.driver.type 或 LANGGRAPH_DRAFT_MODE 决定执行 compat/mock/project-llm。
 4. project-llm 模式下，把 prompt、rules、facts、request、knowledgeMatches 组合成模型输入，并要求返回 JSON payload。
 5. 如果模型返回非 JSON 或 schema 不完整，交给 validate-output/repair-output，不要在 draft-output 里吞掉错误。
@@ -424,7 +424,7 @@ rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scen
 验收命令：
 - npm run lint:platform-configs
 - LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-- rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scene-configs
+- rg -n "旧 Gateway 端口|旧 gateway token|旧 agent gateway model" platform services scene-configs
 
 最终回复请列出：
 1. 新增/修改文件。
@@ -467,8 +467,8 @@ rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scen
    - `mode: langgraph`
    - `allowedModes` 至少保留迁移期需要的模式。
    - `langgraphCutover.requestPercentage: 100`
-2. 将 BusinessSkill 中 `toolBindings.advisory_llm.toolRef` 从 OpenClaw tool 切到 `tool://llm/project-advisory@v1`。
-3. 保留 `runtimeContract` 只用于 API 兼容，不再作为 OpenClaw message 依据。
+2. 将 BusinessSkill 中 `toolBindings.advisory_llm.toolRef` 从 退役 Agent 运行时 tool 切到 `tool://llm/project-advisory@v1`。
+3. 保留 `runtimeContract` 只用于 API 兼容，不再作为 退役 Agent 运行时 message 依据。
 4. 确认数据链路为：
    - `generic-query-runner`
    - `query://sales-opportunity/by-opportunity-id@v1`
@@ -484,7 +484,7 @@ rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scen
 
 1. `sales-opportunity-advisor` 走 `langgraph`。
 2. 关闭 legacy fallback 后仍能成功处理正常请求。
-3. 请求过程中不访问 OpenClaw Gateway。
+3. 请求过程中不访问 旧 Gateway。
 4. 返回 payload 字段与旧链路兼容。
 
 ### 建议验证命令
@@ -492,7 +492,7 @@ rg -n "18789|OPENCLAW_GATEWAY_TOKEN|openclaw/sales-agent" platform services scen
 ```bash
 npm run lint:platform-configs
 LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18789" scene-configs/sales-opportunity-advisor.json platform/skills/sales-opportunity-advisor.v1.yaml
+rg -n "旧 agent gateway model|tool://llm/旧 LLM tool|旧本机 Gateway 端点" scene-configs/sales-opportunity-advisor.json platform/skills/sales-opportunity-advisor.v1.yaml
 ```
 
 ### Agent 执行提示词
@@ -508,7 +508,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 任务目标：
 1. 将 sales-opportunity-advisor 从 legacy 主链路切到 langgraph。
-2. 不再使用 openclaw/sales-agent 作为该场景主链路。
+2. 不再使用 旧 agent gateway model 作为该场景主链路。
 3. 保持 API response envelope 和业务 payload 兼容。
 
 请重点阅读：
@@ -534,7 +534,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 验收命令：
 - npm run lint:platform-configs
 - LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-- rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18789" scene-configs/sales-opportunity-advisor.json platform/skills/sales-opportunity-advisor.v1.yaml
+- rg -n "旧 agent gateway model|tool://llm/旧 LLM tool|旧本机 Gateway 端点" scene-configs/sales-opportunity-advisor.json platform/skills/sales-opportunity-advisor.v1.yaml
 
 最终回复请列出：
 1. 修改文件。
@@ -549,7 +549,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 ### 目标
 
-`sales-opportunity-advisor-directdb` 已经是 `langgraph`，本工单负责清理它对 OpenClaw agent/tool 命名和 legacy fallback 的残留依赖。
+`sales-opportunity-advisor-directdb` 已经是 `langgraph`，本工单负责清理它对 退役 Agent 运行时 agent/tool 命名和 legacy fallback 的残留依赖。
 
 ### 前置依赖
 
@@ -574,24 +574,24 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 ### 实施要点
 
 1. 保持 `routing.mode=langgraph` 和 `requestPercentage=100`。
-2. 移除或弱化 scene config 中对 `agent.gatewayModel=openclaw/sales-agent` 的运行时依赖。
+2. 移除或弱化 scene config 中对 `agent.gatewayModel=旧 agent gateway model` 的运行时依赖。
 3. BusinessSkill 的 advisory LLM 切到 `tool://llm/project-advisory@v1`。
-4. 清理 `skill.entryFile`、query metadata 中不必要的 OpenClaw path。
+4. 清理 `skill.entryFile`、query metadata 中不必要的 退役 Agent 运行时 path。
 5. 如果 validator 当前要求 agent 字段存在，需要先由更通用的 scene schema 支持 `execution.mode=langgraph` 或 `agentRuntime=false`。
 6. 确认 DirectDbRunner 仍能取数，不改变 SQL 缓存语义。
 
 ### 验收标准
 
 1. `directdb` 场景关闭 fallback 后仍可走通。
-2. 运行时不依赖 OpenClaw Gateway。
-3. OpenClaw 残留只允许存在于历史文档或待 `AG-10` 统一清理的 asset namespace。
+2. 运行时不依赖 旧 Gateway。
+3. 退役 Agent 运行时 残留只允许存在于历史文档或待 `AG-10` 统一清理的 asset namespace。
 
 ### 建议验证命令
 
 ```bash
 npm run lint:platform-configs
 LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18789" scene-configs/sales-opportunity-advisor-directdb.json platform/skills/sales-opportunity-advisor-directdb.v1.yaml platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml
+rg -n "旧 agent gateway model|tool://llm/旧 LLM tool|旧本机 Gateway 端点" scene-configs/sales-opportunity-advisor-directdb.json platform/skills/sales-opportunity-advisor-directdb.v1.yaml platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml
 ```
 
 ### Agent 执行提示词
@@ -607,7 +607,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 任务目标：
 1. 保持 sales-opportunity-advisor-directdb 走 langgraph 100%。
-2. 清理 directdb 配置里的 OpenClaw agent/tool 主链路残留。
+2. 清理 directdb 配置里的 退役 Agent 运行时 agent/tool 主链路残留。
 3. 不改变 DirectDbRunner 的 SQL 缓存和业务取数语义。
 
 请重点阅读：
@@ -621,15 +621,15 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 实现要求：
 1. advisory_llm toolRef 改为 tool://llm/project-advisory@v1。
-2. 不再让 directdb 场景需要 openclaw/sales-agent 才能通过配置校验。
+2. 不再让 directdb 场景需要 旧 agent gateway model 才能通过配置校验。
 3. 如果 services/scene-config.js 的校验强制 agent.gatewayModel，请改造成仅 legacy agent-runtime 需要该字段；langgraph 场景可以使用 platform BusinessSkill。
-4. 清理 skillPath 中非必要 OpenClaw 引用，但不要做大规模 runtime-assets 目录重命名；目录命名由 AG-10 处理。
+4. 清理 skillPath 中非必要 退役 Agent 运行时 引用，但不要做大规模 runtime-assets 目录重命名；目录命名由 AG-10 处理。
 5. 补充或更新 directdb 回归。
 
 验收命令：
 - npm run lint:platform-configs
 - LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-- rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18789" scene-configs/sales-opportunity-advisor-directdb.json platform/skills/sales-opportunity-advisor-directdb.v1.yaml platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml
+- rg -n "旧 agent gateway model|tool://llm/旧 LLM tool|旧本机 Gateway 端点" scene-configs/sales-opportunity-advisor-directdb.json platform/skills/sales-opportunity-advisor-directdb.v1.yaml platform/tools/sales-opportunity-directdb-by-opportunity-id.query.yaml
 
 最终回复请列出：
 1. 修改文件。
@@ -644,7 +644,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 ### 目标
 
-把 `sales-opportunity-smart-entry` 从 OpenClaw legacy 主链路迁移到项目内 `langgraph`。
+把 `sales-opportunity-smart-entry` 从 退役 Agent 运行时 legacy 主链路迁移到项目内 `langgraph`。
 
 ### 前置依赖
 
@@ -665,7 +665,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 1. [scene-configs/sales-opportunity-smart-entry.json](/Users/gato-pm/Desktop/API_副本/scene-configs/sales-opportunity-smart-entry.json)
 2. [platform/skills/sales-opportunity-smart-entry.v1.yaml](/Users/gato-pm/Desktop/API_副本/platform/skills/sales-opportunity-smart-entry.v1.yaml)
 3. [platform/tools/sales-opportunity-smart-entry-by-opportunity-id.query.yaml](/Users/gato-pm/Desktop/API_副本/platform/tools/sales-opportunity-smart-entry-by-opportunity-id.query.yaml)
-4. [runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md)
+4. [runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/SKILL.md](/Users/gato-pm/Desktop/API_副本/runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/SKILL.md)
 
 ### 实施要点
 
@@ -684,7 +684,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 ### 验收标准
 
-1. smart-entry 不再依赖 OpenClaw Gateway。
+1. smart-entry 不再依赖 旧 Gateway。
 2. smart-entry 的 `rawText` 在项目内 graph 中被使用。
 3. 输出 schema 与历史 scene 保持一致。
 
@@ -693,7 +693,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 ```bash
 npm run lint:platform-configs
 LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18789" scene-configs/sales-opportunity-smart-entry.json platform/skills/sales-opportunity-smart-entry.v1.yaml
+rg -n "旧 agent gateway model|tool://llm/旧 LLM tool|旧本机 Gateway 端点" scene-configs/sales-opportunity-smart-entry.json platform/skills/sales-opportunity-smart-entry.v1.yaml
 ```
 
 ### Agent 执行提示词
@@ -718,8 +718,8 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 - platform/skills/sales-opportunity-smart-entry.v1.yaml
 - platform/assets/prompts/sales-opportunity-smart-entry.draft-business-output.v1.md
 - platform/tools/sales-opportunity-smart-entry-by-opportunity-id.query.yaml
-- runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/SKILL.md
-- runtime-assets/openclaw/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json
+- runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/SKILL.md
+- runtime-assets/project-runtime/workspace/skills/sales-opportunity-smart-entry/references/output_schema.json
 - platform/nodes/draft-output.js
 - platform/nodes/validate-input.js
 - platform/nodes/validate-output.js
@@ -735,7 +735,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 验收命令：
 - npm run lint:platform-configs
 - LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat npm run regression:self-contained
-- rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18789" scene-configs/sales-opportunity-smart-entry.json platform/skills/sales-opportunity-smart-entry.v1.yaml
+- rg -n "旧 agent gateway model|tool://llm/旧 LLM tool|旧本机 Gateway 端点" scene-configs/sales-opportunity-smart-entry.json platform/skills/sales-opportunity-smart-entry.v1.yaml
 
 最终回复请列出：
 1. 修改文件。
@@ -746,11 +746,11 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 ---
 
-## AG-06. Direct-Model 场景 OpenClaw 残留清理
+## AG-06. Direct-Model 场景 退役 Agent 运行时 残留清理
 
 ### 目标
 
-清理 `payment-info-split` 和 `special-custom-product-solution` 中与 OpenClaw 命名相关但非主链路的残留。
+清理 `payment-info-split` 和 `special-custom-product-solution` 中与 退役 Agent 运行时 命名相关但非主链路的残留。
 
 ### 前置依赖
 
@@ -762,7 +762,7 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 1. `scene-configs/payment-info-split.json`
 2. `scene-configs/special-custom-product-solution.json`
 3. `platform/skills/special-custom-product-solution.v1.yaml`
-4. `platform/tools/openclaw-product-solution-agent.tool.yaml` 或其替代文件
+4. `platform/tools/旧 product-solution tool.tool.yaml` 或其替代文件
 5. `runtime-assets/model-profiles/`
 6. direct-model 相关测试和 bundle renderer 测试
 
@@ -776,18 +776,18 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 
 ### 实施要点
 
-1. 将 `runtime://openclaw/agents/payment-fast-agent/agent/models.json` 迁移到项目通用模型目录，例如：
+1. 将 `runtime://project-runtime/agents/payment-fast-agent/agent/models.json` 迁移到项目通用模型目录，例如：
    - `runtime-assets/model-profiles/payment-fast-agent/models.json`
    - 或 `runtime-assets/project-runtime/model-profiles/payment-fast-agent/models.json`
 2. 调整引用该文件的 scene config 和 bundle renderer 测试。
 3. `special-custom-product-solution` 如果是 direct-model，不应保留无用 `agent.gatewayModel`。
-4. 若 `openclaw-product-solution-agent.tool.yaml` 只是命名残留，新增 project 版 tool 并迁移引用。
+4. 若 `旧 product-solution tool.tool.yaml` 只是命名残留，新增 project 版 tool 并迁移引用。
 5. 保持 direct-model 请求行为不变。
 
 ### 验收标准
 
-1. direct-model 场景不再引用 `runtime://openclaw/agents/...`。
-2. direct-model 场景不要求 OpenClaw agent 配置。
+1. direct-model 场景不再引用 `runtime://project-runtime/agents/...`。
+2. direct-model 场景不要求 退役 Agent 运行时 agent 配置。
 3. direct-model 回归不受影响。
 
 ### 建议验证命令
@@ -795,20 +795,20 @@ rg -n "openclaw/sales-agent|tool://llm/openclaw-sales-agent-default|127.0.0.1:18
 ```bash
 npm run lint:platform-configs
 npm run regression:self-contained
-rg -n "runtime://openclaw/agents|openclaw-product-solution-agent|openclaw/sales-agent" scene-configs platform/skills platform/tools services tests scripts
+rg -n "runtime://project-runtime/agents|旧 product-solution tool|旧 agent gateway model" scene-configs platform/skills platform/tools services tests scripts
 ```
 
 ### Agent 执行提示词
 
 ```text
-你负责 AG-06：direct-model 场景 OpenClaw 残留清理。
+你负责 AG-06：direct-model 场景 退役 Agent 运行时 残留清理。
 
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
 任务目标：
-1. 清理 payment-info-split 和 special-custom-product-solution 中非必要的 OpenClaw 命名和路径。
+1. 清理 payment-info-split 和 special-custom-product-solution 中非必要的 退役 Agent 运行时 命名和路径。
 2. 不改变 direct-model 场景的运行行为。
-3. 将模型元数据从 runtime://openclaw/agents/... 迁移到项目通用目录。
+3. 将模型元数据从 runtime://project-runtime/agents/... 迁移到项目通用目录。
 
 请重点阅读：
 - scene-configs/payment-info-split.json
@@ -816,7 +816,7 @@ rg -n "runtime://openclaw/agents|openclaw-product-solution-agent|openclaw/sales-
 - services/direct-model.js
 - services/bundle-renderer.js
 - platform/skills/special-custom-product-solution.v1.yaml
-- platform/tools/openclaw-product-solution-agent.tool.yaml
+- platform/tools/旧 product-solution tool.tool.yaml
 - scripts/verify_bundle_renderer.js
 - scripts/verify_active_bundle_direct_model.js
 
@@ -824,13 +824,13 @@ rg -n "runtime://openclaw/agents|openclaw-product-solution-agent|openclaw/sales-
 1. 新增项目通用模型元数据目录，例如 runtime-assets/model-profiles/payment-fast-agent/models.json。
 2. 更新 payment-info-split 的 fallbackModelsFile 或等价引用。
 3. 清理 special-custom-product-solution 中无用的 agent.gatewayModel/skill.entryFile，如果校验器要求这些字段，需要调整校验器区分 direct-model 和 langgraph。
-4. 如果需要保留 product solution LLM tool，请新增 project 命名版本，不再使用 openclaw-product-solution-agent 作为主引用。
+4. 如果需要保留 product solution LLM tool，请新增 project 命名版本，不再使用 旧 product-solution tool 作为主引用。
 5. 更新 bundle renderer 和 direct-model 相关测试。
 
 验收命令：
 - npm run lint:platform-configs
 - npm run regression:self-contained
-- rg -n "runtime://openclaw/agents|openclaw-product-solution-agent|openclaw/sales-agent" scene-configs platform/skills platform/tools services tests scripts
+- rg -n "runtime://project-runtime/agents|旧 product-solution tool|旧 agent gateway model" scene-configs platform/skills platform/tools services tests scripts
 
 最终回复请列出：
 1. 修改文件。
@@ -841,11 +841,11 @@ rg -n "runtime://openclaw/agents|openclaw-product-solution-agent|openclaw/sales-
 
 ---
 
-## AG-07. 文档、控制台与图示去 OpenClaw
+## AG-07. 文档、控制台与图示去 退役 Agent 运行时
 
 ### 目标
 
-把用户可见的控制台、文档、图示中的 OpenClaw 主链路描述改为项目内 LangGraph 描述，避免上线后误导运维和开发。
+把用户可见的控制台、文档、图示中的 退役 Agent 运行时 主链路描述改为项目内 LangGraph 描述，避免上线后误导运维和开发。
 
 ### 前置依赖
 
@@ -870,38 +870,38 @@ rg -n "runtime://openclaw/agents|openclaw-product-solution-agent|openclaw/sales-
 
 ### 实施要点
 
-1. 控制台中如果展示 `openclaw.console/v1` 等历史标识，要判断是否只是配置中心版本名；不要盲目改破兼容字段。
-2. 控制台不再把 `~/.openclaw/workspace-sales-agent` 当作镜像目标。
+1. 控制台中如果展示 `retired-runtime.console/v1` 等历史标识，要判断是否只是配置中心版本名；不要盲目改破兼容字段。
+2. 控制台不再把 `旧共享运行时目录/workspace-sales-agent` 当作镜像目标。
 3. 架构图改为：
    - API Gateway
    - Platform Gateway
    - LangGraph Runtime
    - ContextHelper / DirectDbRunner / ModelTool
    - Project LLM Client
-4. 文档中保留历史迁移说明可以，但运行指引不得要求启动 OpenClaw。
+4. 文档中保留历史迁移说明可以，但运行指引不得要求启动 退役 Agent 运行时。
 
 ### 验收标准
 
-1. 用户可见运行文档不再要求 OpenClaw Gateway。
-2. 架构图不再把 OpenClaw 画成主链路。
-3. 控制台不会再尝试写入 `~/.openclaw`。
+1. 用户可见运行文档不再要求 旧 Gateway。
+2. 架构图不再把 退役 Agent 运行时 画成主链路。
+3. 控制台不会再尝试写入 `旧共享运行时目录`。
 
 ### 建议验证命令
 
 ```bash
-rg -n "OpenClaw|openclaw|18789|~/.openclaw|workspace-sales-agent" docs services scripts platform | head -n 200
+rg -n "退役 Agent 运行时|retired-runtime|旧 Gateway 端口|旧共享运行时目录|workspace-sales-agent" docs services scripts platform | head -n 200
 npm run check
 ```
 
 ### Agent 执行提示词
 
 ```text
-你负责 AG-07：文档、控制台与图示去 OpenClaw。
+你负责 AG-07：文档、控制台与图示去 退役 Agent 运行时。
 
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
 任务目标：
-1. 清理用户可见文档、控制台、架构图中的 OpenClaw 主链路描述。
+1. 清理用户可见文档、控制台、架构图中的 退役 Agent 运行时 主链路描述。
 2. 不破坏配置中心已有数据结构兼容。
 3. 让部署和运维指引指向项目内 LangGraph/runtime。
 
@@ -914,33 +914,33 @@ npm run check
 - scripts/generate_sales_architecture_pdf.py
 - platform/tools/README.md
 - platform/templates/README.md
-- docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md
+- docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md
 
 实现要求：
-1. 控制台不再把 ~/.openclaw/workspace-sales-agent 作为必须镜像目录。
-2. 运行文档和启动说明不再要求 OpenClaw Gateway。
-3. 架构图脚本中的主链路从 OpenClaw Gateway 改为 Platform Gateway + LangGraph Runtime。
+1. 控制台不再把 旧共享运行时目录/workspace-sales-agent 作为必须镜像目录。
+2. 运行文档和启动说明不再要求 旧 Gateway。
+3. 架构图脚本中的主链路从 旧 Gateway 改为 Platform Gateway + LangGraph Runtime。
 4. 历史说明可以保留，但必须标注为历史链路。
 5. 不修改 runtime 业务逻辑。
 
 验收命令：
-- rg -n "OpenClaw|openclaw|18789|~/.openclaw|workspace-sales-agent" docs services scripts platform | head -n 200
+- rg -n "退役 Agent 运行时|retired-runtime|旧 Gateway 端口|旧共享运行时目录|workspace-sales-agent" docs services scripts platform | head -n 200
 - npm run check
 
 最终回复请列出：
 1. 修改文件。
-2. 哪些 OpenClaw 文案被保留为历史说明。
+2. 哪些 退役 Agent 运行时 文案被保留为历史说明。
 3. 哪些运行说明已切到项目内 runtime。
 4. 验证结果。
 ```
 
 ---
 
-## AG-08. Health、Bootstrap 与启动脚本去 OpenClaw
+## AG-08. Health、Bootstrap 与启动脚本去 退役 Agent 运行时
 
 ### 目标
 
-项目启动和健康检查不再要求 OpenClaw Gateway。
+项目启动和健康检查不再要求 旧 Gateway。
 
 ### 前置依赖
 
@@ -963,10 +963,10 @@ npm run check
 
 ### 实施要点
 
-1. `/health` 不再检查 OpenClaw Gateway。
-2. `bootstrap_local_runtime.js` 的 `REQUIRED_ENV_KEYS` 移除 `OPENCLAW_GATEWAY_TOKEN`。
-3. `OPTIONAL_EXTERNAL_ENDPOINTS` 移除 OpenClaw Gateway probe。
-4. 启动脚本不再启动 OpenClaw LaunchAgent。
+1. `/health` 不再检查 旧 Gateway。
+2. `bootstrap_local_runtime.js` 的 `REQUIRED_ENV_KEYS` 移除 `旧 gateway token`。
+3. `OPTIONAL_EXTERNAL_ENDPOINTS` 移除 旧 Gateway probe。
+4. 启动脚本不再启动 退役 Agent 运行时 LaunchAgent。
 5. 如有需要，新增 LangGraph runtime 自检：
    - platform configs 可加载。
    - graph 可 compile。
@@ -975,22 +975,22 @@ npm run check
 
 ### 验收标准
 
-1. 没有 OpenClaw Gateway 时 `/health` 不失败。
-2. bootstrap 不要求 `OPENCLAW_GATEWAY_TOKEN`。
-3. `npm run bootstrap:local:dry-run` 不探测 `127.0.0.1:18789`。
+1. 没有 旧 Gateway 时 `/health` 不失败。
+2. bootstrap 不要求 `旧 gateway token`。
+3. `npm run bootstrap:local:dry-run` 不探测 `旧本机 Gateway 端点`。
 
 ### 建议验证命令
 
 ```bash
 npm run bootstrap:local:dry-run
 npm run check
-rg -n "OPENCLAW_GATEWAY_TOKEN|18789|OpenClaw Gateway" server.js scripts package.json
+rg -n "旧 gateway token|旧 Gateway 端口|旧 Gateway" server.js scripts package.json
 ```
 
 ### Agent 执行提示词
 
 ```text
-你负责 AG-08：Health、Bootstrap 与启动脚本去 OpenClaw。
+你负责 AG-08：Health、Bootstrap 与启动脚本去 退役 Agent 运行时。
 
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
@@ -998,9 +998,9 @@ rg -n "OPENCLAW_GATEWAY_TOKEN|18789|OpenClaw Gateway" server.js scripts package.
 - 三个主要 agent-runtime 场景已迁移到项目内 langgraph。
 
 任务目标：
-1. /health 不再要求 OpenClaw Gateway。
-2. bootstrap 不再要求 OPENCLAW_GATEWAY_TOKEN。
-3. 本地和服务器启动脚本不再启动或检查 OpenClaw。
+1. /health 不再要求 旧 Gateway。
+2. bootstrap 不再要求 旧 gateway token。
+3. 本地和服务器启动脚本不再启动或检查 退役 Agent 运行时。
 
 请重点阅读：
 - server.js
@@ -1008,35 +1008,35 @@ rg -n "OPENCLAW_GATEWAY_TOKEN|18789|OpenClaw Gateway" server.js scripts package.
 - scripts/install_launch_agents.sh
 - package.json
 - utils/load-env.js
-- docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md
+- docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md
 
 实现要求：
-1. 从 health check 中移除 OpenClaw Gateway 检查。
-2. 从 REQUIRED_ENV_KEYS 中移除 OPENCLAW_GATEWAY_TOKEN。
-3. 从 OPTIONAL_EXTERNAL_ENDPOINTS 中移除 http://127.0.0.1:18789/v1/models。
-4. 启动脚本不再启动 OpenClaw 相关服务。
+1. 从 health check 中移除 旧 Gateway 检查。
+2. 从 REQUIRED_ENV_KEYS 中移除 旧 gateway token。
+3. 从 OPTIONAL_EXTERNAL_ENDPOINTS 中移除 旧本机 Gateway 模型探测端点。
+4. 启动脚本不再启动 退役 Agent 运行时 相关服务。
 5. 如需要替代检查，增加 project runtime/langgraph compile/config check。
 6. 更新部署或 env 示例文档。
 
 验收命令：
 - npm run bootstrap:local:dry-run
 - npm run check
-- rg -n "OPENCLAW_GATEWAY_TOKEN|18789|OpenClaw Gateway" server.js scripts package.json
+- rg -n "旧 gateway token|旧 Gateway 端口|旧 Gateway" server.js scripts package.json
 
 最终回复请列出：
 1. 修改文件。
 2. health/bootstrap 新检查项。
-3. 被移除的 OpenClaw 检查项。
+3. 被移除的 退役 Agent 运行时 检查项。
 4. 验证结果。
 ```
 
 ---
 
-## AG-09. 删除 Legacy OpenClaw 主链路
+## AG-09. 删除 Legacy 退役 Agent 运行时 主链路
 
 ### 目标
 
-在主场景全部迁移后，删除或隔离 OpenClaw legacy runtime request builder 和 Gateway 调用路径。
+在主场景全部迁移后，删除或隔离 退役 Agent 运行时 legacy runtime request builder 和 Gateway 调用路径。
 
 ### 前置依赖
 
@@ -1067,16 +1067,16 @@ rg -n "OPENCLAW_GATEWAY_TOKEN|18789|OpenClaw Gateway" server.js scripts package.
 1. 禁止新增 `legacy` agent-runtime scene。
 2. 对仍配置为 `legacy` 的 agent-runtime scene：
    - 启动/配置校验时报错。
-   - 或仅在明确 `ALLOW_LEGACY_OPENCLAW_RUNTIME=1` 的开发模式中启用。
-3. 删除 `buildRuntimeRequest` 对 OpenClaw Gateway 的主路径使用。
-4. `response-parser` 不再以 OpenClaw wrapped markers 为唯一解析方式。
+   - 或仅在明确 `ALLOW_LEGACY_RETIRED_RUNTIME_RUNTIME=1` 的开发模式中启用。
+3. 删除 `buildRuntimeRequest` 对 旧 Gateway 的主路径使用。
+4. `response-parser` 不再以 退役 Agent 运行时 wrapped markers 为唯一解析方式。
 5. 如果保留历史文件，必须标注 deprecated，且默认路径不引用。
-6. 删除测试中对 legacy OpenClaw 成功路径的依赖，改成验证“禁止 legacy”。
+6. 删除测试中对 legacy 退役 Agent 运行时 成功路径的依赖，改成验证“禁止 legacy”。
 
 ### 验收标准
 
-1. 主路径代码中没有对 `127.0.0.1:18789` 的调用。
-2. agent-runtime scene 不再能默认走 OpenClaw legacy。
+1. 主路径代码中没有对 `旧本机 Gateway 端点` 的调用。
+2. agent-runtime scene 不再能默认走 退役 Agent 运行时 legacy。
 3. `npm run regression:self-contained` 通过。
 
 ### 建议验证命令
@@ -1084,24 +1084,24 @@ rg -n "OPENCLAW_GATEWAY_TOKEN|18789|OpenClaw Gateway" server.js scripts package.
 ```bash
 npm run check
 npm run regression:self-contained
-rg -n "127.0.0.1:18789|OPENCLAW_GATEWAY_TOKEN|buildRuntimeRequest|GATEWAY_CHAT_COMPLETIONS_URL|openclaw/sales-agent" services platform scene-configs tests
+rg -n "旧本机 Gateway 端点|旧 gateway token|buildRuntimeRequest|GATEWAY_CHAT_COMPLETIONS_URL|旧 agent gateway model" services platform scene-configs tests
 ```
 
 ### Agent 执行提示词
 
 ```text
-你负责 AG-09：删除 legacy OpenClaw 主链路。
+你负责 AG-09：删除 legacy 退役 Agent 运行时 主链路。
 
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
 前置假设：
 - sales-opportunity-advisor、sales-opportunity-advisor-directdb、sales-opportunity-smart-entry 均已走 langgraph。
-- health/bootstrap 已不依赖 OpenClaw。
+- health/bootstrap 已不依赖 退役 Agent 运行时。
 - fallback 默认已关闭。
 
 任务目标：
-1. 删除或隔离 OpenClaw legacy runtime request builder 和 Gateway 调用路径。
-2. 禁止 agent-runtime scene 默认走 legacy OpenClaw。
+1. 删除或隔离 退役 Agent 运行时 legacy runtime request builder 和 Gateway 调用路径。
+2. 禁止 agent-runtime scene 默认走 legacy 退役 Agent 运行时。
 3. 保持 direct-model 场景不受影响。
 
 请重点阅读：
@@ -1114,20 +1114,20 @@ rg -n "127.0.0.1:18789|OPENCLAW_GATEWAY_TOKEN|buildRuntimeRequest|GATEWAY_CHAT_C
 - tests/fixtures/baseline/manifest.json
 
 实现要求：
-1. 移除主路径对 GATEWAY_CHAT_COMPLETIONS_URL / 127.0.0.1:18789 的调用。
+1. 移除主路径对 GATEWAY_CHAT_COMPLETIONS_URL / 旧本机 Gateway 端点 的调用。
 2. 如果保留 services/runtime-message.js 作为历史兼容文件，默认代码不得引用它；文件和导出要标记 deprecated。
-3. 新增校验：agent-runtime scene 不允许 routing.mode=legacy，除非显式开发开关 ALLOW_LEGACY_OPENCLAW_RUNTIME=1。
-4. 更新测试：不再期待 OpenClaw legacy 成功，而是期待 legacy 禁止或 langgraph 成功。
+3. 新增校验：agent-runtime scene 不允许 routing.mode=legacy，除非显式开发开关 ALLOW_LEGACY_RETIRED_RUNTIME_RUNTIME=1。
+4. 更新测试：不再期待 退役 Agent 运行时 legacy 成功，而是期待 legacy 禁止或 langgraph 成功。
 5. 不删除 direct-model 运行代码。
 
 验收命令：
 - npm run check
 - npm run regression:self-contained
-- rg -n "127.0.0.1:18789|OPENCLAW_GATEWAY_TOKEN|buildRuntimeRequest|GATEWAY_CHAT_COMPLETIONS_URL|openclaw/sales-agent" services platform scene-configs tests
+- rg -n "旧本机 Gateway 端点|旧 gateway token|buildRuntimeRequest|GATEWAY_CHAT_COMPLETIONS_URL|旧 agent gateway model" services platform scene-configs tests
 
 最终回复请列出：
 1. 修改文件。
-2. legacy OpenClaw 如何被禁用。
+2. legacy 退役 Agent 运行时 如何被禁用。
 3. 是否保留 deprecated 文件及原因。
 4. 验证结果。
 ```
@@ -1138,7 +1138,7 @@ rg -n "127.0.0.1:18789|OPENCLAW_GATEWAY_TOKEN|buildRuntimeRequest|GATEWAY_CHAT_C
 
 ### 目标
 
-把 `runtime://openclaw/...` 这种历史命名迁移为项目通用 runtime namespace，降低后续部署和理解成本。
+把 `runtime://project-runtime/...` 这种历史命名迁移为项目通用 runtime namespace，降低后续部署和理解成本。
 
 ### 前置依赖
 
@@ -1173,7 +1173,7 @@ rg -n "127.0.0.1:18789|OPENCLAW_GATEWAY_TOKEN|buildRuntimeRequest|GATEWAY_CHAT_C
    - 推荐 `runtime://project-runtime/...`
    - 或 `runtime://agent-platform/...`
 2. 迁移目录，例如：
-   - `runtime-assets/openclaw/workspace/skills/...`
+   - `runtime-assets/project-runtime/workspace/skills/...`
    - 到 `runtime-assets/project-runtime/workspace/skills/...`
 3. 更新 path resolver 支持新 namespace。
 4. 如果短期保留旧 namespace 兼容，必须只作为迁移兼容，不得在新配置中继续使用。
@@ -1182,7 +1182,7 @@ rg -n "127.0.0.1:18789|OPENCLAW_GATEWAY_TOKEN|buildRuntimeRequest|GATEWAY_CHAT_C
 
 ### 验收标准
 
-1. 运行配置中不再出现 `runtime://openclaw`。
+1. 运行配置中不再出现 `runtime://project-runtime`。
 2. `load-assets` 能读取新 namespace 下的 prompt/rules/schema。
 3. bundle renderer 和 active bundle 验证通过。
 
@@ -1193,7 +1193,7 @@ npm run check
 npm run regression:self-contained
 node scripts/verify_bundle_renderer.js
 node scripts/verify_active_bundle_load_assets.js
-rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform services scripts tests runtime-assets
+rg -n "runtime://project-runtime|runtime-assets/project-runtime" scene-configs platform services scripts tests runtime-assets
 ```
 
 ### Agent 执行提示词
@@ -1204,11 +1204,11 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
 前置假设：
-- 主场景已不依赖 OpenClaw。
-- legacy OpenClaw 主链路已删除或禁用。
+- 主场景已不依赖 退役 Agent 运行时。
+- legacy 退役 Agent 运行时 主链路已删除或禁用。
 
 任务目标：
-1. 将 runtime://openclaw/... 迁移到项目通用 namespace。
+1. 将 runtime://project-runtime/... 迁移到项目通用 namespace。
 2. 更新 runtime-assets 目录和所有配置引用。
 3. 保证 bundle renderer、load-assets、active bundle 验证通过。
 
@@ -1224,7 +1224,7 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
 
 实现要求：
 1. 选定新 namespace，推荐 runtime://project-runtime。
-2. 迁移 runtime-assets/openclaw/workspace/skills 到新目录。
+2. 迁移 runtime-assets/project-runtime/workspace/skills 到新目录。
 3. 更新 path resolver 和 bundle renderer，让新 namespace 能被正确解析和打包。
 4. 更新 scene-configs、platform/skills、platform/tools、tests 中所有运行配置引用。
 5. 如保留旧 namespace 兼容，必须有注释或测试证明新配置不再使用旧 namespace。
@@ -1235,7 +1235,7 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
 - npm run regression:self-contained
 - node scripts/verify_bundle_renderer.js
 - node scripts/verify_active_bundle_load_assets.js
-- rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform services scripts tests runtime-assets
+- rg -n "runtime://project-runtime|runtime-assets/project-runtime" scene-configs platform services scripts tests runtime-assets
 
 最终回复请列出：
 1. 新 namespace。
@@ -1246,11 +1246,11 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
 
 ---
 
-## AG-11. 最终回归、无 OpenClaw 模式与上线门槛
+## AG-11. 最终回归、无 退役 Agent 运行时 模式与上线门槛
 
 ### 目标
 
-建立最终上线前验证命令，确保在没有 OpenClaw 的服务器上项目能启动、回归通过、主场景可用。
+建立最终上线前验证命令，确保在没有 退役 Agent 运行时 的服务器上项目能启动、回归通过、主场景可用。
 
 ### 前置依赖
 
@@ -1273,12 +1273,12 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
 
 ### 实施要点
 
-1. 新增无 OpenClaw 回归命令，建议：
-   - `npm run regression:no-openclaw`
+1. 新增无 退役 Agent 运行时 回归命令，建议：
+   - `npm run regression:no-retired-runtime`
 2. 该命令应设置：
    - `LANGGRAPH_LEGACY_FALLBACK_ENABLED=0`
    - `LANGGRAPH_DRAFT_MODE=compat` 或测试 mock
-   - 不设置 `OPENCLAW_GATEWAY_TOKEN`
+   - 不设置 `旧 gateway token`
 3. 回归过程应覆盖：
    - `sales-opportunity-advisor`
    - `sales-opportunity-advisor-directdb`
@@ -1286,68 +1286,68 @@ rg -n "runtime://openclaw|runtime-assets/openclaw" scene-configs platform servic
    - `payment-info-split`
    - `special-custom-product-solution`
 4. 新增最终验收脚本，检查：
-   - 没有运行时 OpenClaw blocker。
-   - 没有 `127.0.0.1:18789` 主路径引用。
+   - 没有运行时 退役 Agent 运行时 blocker。
+   - 没有 `旧本机 Gateway 端点` 主路径引用。
    - scene config 全部可校验。
    - platform graph 可 compile。
 5. 生成上线报告文档，建议：
-   - `docs/项目开发文档/OpenClaw退场最终验收报告.md`
+   - `docs/项目开发文档/退役 Agent 运行时退场最终验收报告.md`
 
 ### 验收标准
 
-1. 一条命令可以证明“无 OpenClaw 环境可运行”。
-2. 最终扫描只允许历史文档或迁移报告中出现 OpenClaw。
+1. 一条命令可以证明“无 退役 Agent 运行时 环境可运行”。
+2. 最终扫描只允许历史文档或迁移报告中出现 退役 Agent 运行时。
 3. 所有主场景回归通过。
 
 ### 建议验证命令
 
 ```bash
-npm run regression:no-openclaw
+npm run regression:no-retired-runtime
 npm run check
-node scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker
+node scripts/scan_retired_runtime_dependencies.js --fail-on-runtime-blocker
 ```
 
 ### Agent 执行提示词
 
 ```text
-你负责 AG-11：最终回归、无 OpenClaw 模式与上线门槛。
+你负责 AG-11：最终回归、无 退役 Agent 运行时 模式与上线门槛。
 
 工作目录：/Users/gato-pm/Desktop/API_副本。
 
 前置假设：
 - AG-01 到 AG-10 已完成。
 - 主链路已迁移到项目内 langgraph。
-- OpenClaw legacy 主链路已删除或默认禁用。
+- 退役 Agent 运行时 legacy 主链路已删除或默认禁用。
 
 任务目标：
-1. 新增 npm run regression:no-openclaw。
+1. 新增 npm run regression:no-retired-runtime。
 2. 新增最终验收脚本或完善现有扫描脚本。
-3. 输出 OpenClaw 退场最终验收报告。
+3. 输出 退役 Agent 运行时 退场最终验收报告。
 
 请重点阅读：
 - package.json
 - scripts/run_self_contained_regression.js
-- scripts/scan_openclaw_dependencies.js
+- scripts/scan_retired_runtime_dependencies.js
 - tests/fixtures/self-contained/manifest.json
 - tests/regression/README.md
 - platform/trace/rollout-report.js
-- docs/项目开发文档/OpenClaw退场与项目内LangGraph迁移任务清单.md
+- docs/项目开发文档/退役 Agent 运行时退场与项目内LangGraph迁移任务清单.md
 
 实现要求：
-1. regression:no-openclaw 必须在不设置 OPENCLAW_GATEWAY_TOKEN 的情况下运行。
-2. regression:no-openclaw 必须设置 LANGGRAPH_LEGACY_FALLBACK_ENABLED=0。
+1. regression:no-retired-runtime 必须在不设置 旧 gateway token 的情况下运行。
+2. regression:no-retired-runtime 必须设置 LANGGRAPH_LEGACY_FALLBACK_ENABLED=0。
 3. 回归覆盖 sales-opportunity-advisor、sales-opportunity-advisor-directdb、sales-opportunity-smart-entry、payment-info-split、special-custom-product-solution。
-4. scan_openclaw_dependencies.js 支持 --fail-on-runtime-blocker，发现 runtime blocker 时非零退出。
-5. 新增 docs/项目开发文档/OpenClaw退场最终验收报告.md，包含验证命令、结果、剩余历史引用说明、上线建议。
+4. scan_retired_runtime_dependencies.js 支持 --fail-on-runtime-blocker，发现 runtime blocker 时非零退出。
+5. 新增 docs/项目开发文档/退役 Agent 运行时退场最终验收报告.md，包含验证命令、结果、剩余历史引用说明、上线建议。
 
 验收命令：
-- npm run regression:no-openclaw
+- npm run regression:no-retired-runtime
 - npm run check
-- node scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker
+- node scripts/scan_retired_runtime_dependencies.js --fail-on-runtime-blocker
 
 最终回复请列出：
 1. 修改文件。
-2. regression:no-openclaw 的执行内容。
+2. regression:no-retired-runtime 的执行内容。
 3. 最终扫描结论。
 4. 是否达到上线门槛。
 ```
@@ -1404,9 +1404,9 @@ node scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker
 
 1. 是否只改了该工单允许的文件范围。
 2. 是否误删了其他 scene 的配置。
-3. 是否新增了对 `127.0.0.1:18789` 的依赖。
-4. 是否新增了对 `~/.openclaw` 的依赖。
-5. 是否新增了 `OPENCLAW_GATEWAY_TOKEN` 必填项。
+3. 是否新增了对 `旧本机 Gateway 端点` 的依赖。
+4. 是否新增了对 `旧共享运行时目录` 的依赖。
+5. 是否新增了 `旧 gateway token` 必填项。
 6. 是否更新或补充测试。
 7. 是否运行了验收命令。
 8. 如果验收命令失败，失败原因是否明确且可复现。
@@ -1418,10 +1418,9 @@ node scripts/scan_openclaw_dependencies.js --fail-on-runtime-blocker
 1. `sales-opportunity-advisor` 走项目内 `langgraph`。
 2. `sales-opportunity-advisor-directdb` 走项目内 `langgraph`。
 3. `sales-opportunity-smart-entry` 走项目内 `langgraph`。
-4. `payment-info-split` 和 `special-custom-product-solution` 不再有 OpenClaw 主链路或 agent 命名依赖。
-5. `/health` 不检查 OpenClaw Gateway。
-6. `bootstrap` 不要求 `OPENCLAW_GATEWAY_TOKEN`。
-7. 无 OpenClaw 环境下 `npm run regression:no-openclaw` 通过。
+4. `payment-info-split` 和 `special-custom-product-solution` 不再有 退役 Agent 运行时 主链路或 agent 命名依赖。
+5. `/health` 不检查 旧 Gateway。
+6. `bootstrap` 不要求 `旧 gateway token`。
+7. 无 退役 Agent 运行时 环境下 `npm run regression:no-retired-runtime` 通过。
 8. 运行时扫描无 `runtime-blocker`。
-9. 文档明确说明 OpenClaw 只是历史链路，不再是部署依赖。
-
+9. 文档明确说明 退役 Agent 运行时 只是历史链路，不再是部署依赖。

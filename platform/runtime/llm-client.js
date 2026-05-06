@@ -199,6 +199,14 @@ function buildProjectAdvisoryMessages({
   promptRef = null,
   scene = null
 } = {}) {
+  if (requestPayload?.compact?.kind === "sales-opportunity-smart-entry") {
+    return buildSmartEntryCompactMessages({
+      compact: requestPayload.compact,
+      promptRef,
+      scene
+    });
+  }
+
   const schema = requestPayload?.schema || {};
   const prompt = trimString(requestPayload?.prompt);
   const systemPrompt = [
@@ -228,6 +236,51 @@ function buildProjectAdvisoryMessages({
     "",
     "outputSchema:",
     safeJsonStringify(schema)
+  ].join("\n");
+
+  return [
+    {
+      role: "system",
+      content: systemPrompt
+    },
+    {
+      role: "user",
+      content: userPrompt
+    }
+  ];
+}
+
+function buildSmartEntryCompactMessages({
+  compact,
+  promptRef = null,
+  scene = null
+} = {}) {
+  const systemPrompt = [
+    "你是销售机会智能录入 JSON 生成器。只返回 JSON 对象，不要 Markdown，不要解释。",
+    "输出结构必须是 {\"opportunityId\":\"...\",\"salesScene\":\"...\",\"data\":{...}}。",
+    "salesScene 只能是 tenderNoDesign, tenderDesigned, noTender, smallProject, designInstitute。",
+    "rawText 可以纠正 currentPayload.salesScene；字段必须使用英文表字段名。"
+  ].join("\n");
+  const userPrompt = [
+    `scene: ${scene || "sales-opportunity-smart-entry"}`,
+    `promptRef: ${promptRef || "unknown"}`,
+    "",
+    "currentPayload:",
+    safeJsonStringify(compact?.currentPayload || {}),
+    "",
+    "rawText:",
+    trimString(compact?.rawText),
+    "",
+    "allowedFields:",
+    safeJsonStringify(compact?.allowedFields || {}),
+    "",
+    "sceneAliases:",
+    safeJsonStringify(compact?.sceneAliases || {}),
+    "",
+    "fieldMappings:",
+    safeJsonStringify(compact?.fieldMappings || {}),
+    "",
+    "规则：以 currentPayload 为底稿；rawText 明确修改的字段必须覆盖底稿；rawText 未涉及且仍属于最终 salesScene 的已有字段可以保留；不要臆造字段值。"
   ].join("\n");
 
   return [
@@ -286,6 +339,23 @@ function extractJsonObject(content) {
       });
     }
   }
+}
+
+function buildChoiceDiagnostics(parsed, config) {
+  const choice = parsed?.choices?.[0] || null;
+  const message = choice?.message || null;
+
+  return {
+    provider: config?.provider || null,
+    model: config?.model || null,
+    finishReason: choice?.finish_reason || null,
+    contentLength: typeof message?.content === "string" ? message.content.length : null,
+    reasoningContentLength: typeof message?.reasoning_content === "string" ? message.reasoning_content.length : null,
+    usage: isObject(parsed?.usage) ? parsed.usage : null,
+    responseShape: parsed && typeof parsed === "object" ? Object.keys(parsed) : null,
+    choiceShape: choice && typeof choice === "object" ? Object.keys(choice) : null,
+    messageShape: message && typeof message === "object" ? Object.keys(message) : null
+  };
 }
 
 async function callProjectLlmApi({
@@ -366,10 +436,16 @@ async function callProjectLlmApi({
       throw createAppError("INVALID_MODEL_OUTPUT", "Project LLM response is missing choices[0].message.content.", {
         stage: "project-llm",
         retryable: false,
-        details: {
-          provider: config.provider,
-          responseShape: Object.keys(parsed || {})
-        }
+        details: buildChoiceDiagnostics(parsed, config)
+      });
+    }
+
+    if (!trimString(content)) {
+      throw createAppError("MODEL_INVALID_JSON", "Project LLM response content is empty.", {
+        httpStatus: 502,
+        stage: "project-llm",
+        retryable: false,
+        details: buildChoiceDiagnostics(parsed, config)
       });
     }
 
@@ -382,7 +458,24 @@ async function callProjectLlmApi({
         retryable: true,
         details: {
           provider: config.provider,
+          model: config.model,
           timeoutMs: config.timeoutMs
+        }
+      });
+    }
+
+    if (!error?.code) {
+      throw createAppError("MODEL_INVOCATION_FAILED", "Project LLM request failed.", {
+        stage: "project-llm",
+        retryable: true,
+        details: {
+          provider: config.provider,
+          model: config.model,
+          baseUrl: config.baseUrl,
+          cause: error?.message || "network_failed",
+          causeName: error?.name || null,
+          socketCode: error?.cause?.code || null,
+          socketMessage: error?.cause?.message || null
         }
       });
     }

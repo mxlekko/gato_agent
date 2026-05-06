@@ -27,7 +27,7 @@
     "mysql:import-config": "node scripts/import_config_to_mysql.js import",
     "mysql:import-config:verify": "node scripts/import_config_to_mysql.js verify",
     "regression:self-contained": "node scripts/run_self_contained_regression.js",
-    "regression:no-openclaw": "OPENCLAW_GATEWAY_TOKEN= NO_OPENCLAW_REQUIRED=1 LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat node scripts/run_self_contained_regression.js --no-openclaw",
+    "regression:no-retired-runtime": "NO_RETIRED_RUNTIME_REQUIRED=1 LANGGRAPH_LEGACY_FALLBACK_ENABLED=0 LANGGRAPH_DRAFT_MODE=compat node scripts/run_self_contained_regression.js --no-retired-runtime",
     "service:install": "zsh scripts/install_launch_agents.sh install",
     "service:start": "zsh scripts/install_launch_agents.sh start",
     "service:stop": "zsh scripts/install_launch_agents.sh stop",

@@ -4,7 +4,7 @@ These fixtures are used by `npm run regression:self-contained`.
 
 Goals:
 
-- scan runtime-bearing directories for legacy project paths and shared `.openclaw` paths
+- scan runtime-bearing directories for legacy project paths and shared `旧共享运行时目录` paths
 - replay the canonical scenes through the `_副本` service chain
 - separate internal self-contained regressions from explicit external dependency instability
 

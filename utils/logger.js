@@ -3,8 +3,7 @@ const SENSITIVE_KEYS = new Set([
   "password",
   "token",
   "secret",
-  "sqlserver_password",
-  "openclaw_gateway_token"
+  "sqlserver_password"
 ]);
 
 const LARGE_PAYLOAD_KEYS = new Set([

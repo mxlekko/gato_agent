@@ -6,6 +6,7 @@ const { compileWorkflowGraphForScene } = require("../platform/compiler/compile-w
 const { loadPlatformResources, validatePlatformConfigs } = require("../platform/compiler/validate");
 const { createAppError } = require("../utils/errors");
 const { PROJECT_ROOT, resolvePathReference } = require("../utils/path-resolver");
+const { RETIRED_AGENT_GATEWAY_MODEL_PREFIX } = require("../utils/retired-runtime-markers");
 
 const JSON_SCAN_ROOTS = [
   "scene-configs",
@@ -424,12 +425,12 @@ async function validateSceneConfigDocument({
     }
 
     const gatewayModel = toTrimmedString(document?.agent?.gatewayModel);
-    if (gatewayModel.startsWith("openclaw/")) {
+    if (gatewayModel.startsWith(RETIRED_AGENT_GATEWAY_MODEL_PREFIX)) {
       pushIssue(issues, {
-        code: "RETIRED_OPENCLAW_GATEWAY_MODEL",
+        code: "RETIRED_AGENT_GATEWAY_MODEL",
         file: relativeFilePath,
         field: "agent.gatewayModel",
-        message: "Agent-runtime scene must not use an OpenClaw gatewayModel.",
+        message: "Agent-runtime scene must not use a retired agent gatewayModel.",
         value: gatewayModel
       });
     }

@@ -30,6 +30,31 @@ const BASIS_FIELD_ORDER = Object.freeze([
   "customerName",
   "opportunityName"
 ]);
+const PROFILE_MISSING_VALUE = "未提供";
+const PROFILE_COMPAT_FIELD_OVERRIDES = Object.freeze({
+  budgetConfirmed: {
+    label: "预算是否确认",
+    type: "enum",
+    priority: 94,
+    enumMappings: {
+      "0": "否",
+      "1": "是",
+      false: "否",
+      true: "是",
+      no: "否",
+      yes: "是",
+      "否": "否",
+      "是": "是"
+    }
+  }
+});
+const PROFILE_DERIVED_FIELDS = Object.freeze({
+  businessType: {
+    sourceField: "salesScene",
+    label: "业务类型",
+    priority: 96
+  }
+});
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -241,6 +266,81 @@ function buildFactItem(fieldName, rawValue, dictionaryEntry = null) {
   };
 }
 
+function normalizeDictionaryEntryForField(fieldName, dictionaryEntry = null) {
+  const override = PROFILE_COMPAT_FIELD_OVERRIDES[fieldName];
+  if (!override) {
+    return dictionaryEntry;
+  }
+
+  return {
+    ...(dictionaryEntry || {}),
+    field: fieldName,
+    label: override.label || dictionaryEntry?.label || fieldName,
+    description: dictionaryEntry?.description || "",
+    ignore: false,
+    type: override.type || dictionaryEntry?.type || "text",
+    enumMappings: {
+      ...(dictionaryEntry?.enumMappings || {}),
+      ...(override.enumMappings || {})
+    },
+    priority: Number(override.priority ?? dictionaryEntry?.priority ?? 0)
+  };
+}
+
+function hasFactItem(items, fieldName) {
+  return items.some((item) => item.field === fieldName);
+}
+
+function addDerivedProfileFacts({
+  items,
+  rawRow,
+  dictionaryEntries,
+  allowedFields,
+  ignoredFields
+}) {
+  for (const [targetField, definition] of Object.entries(PROFILE_DERIVED_FIELDS)) {
+    if (hasFactItem(items, targetField)) {
+      continue;
+    }
+
+    const sourceField = definition.sourceField;
+    const sourceRawValue = rawRow[sourceField];
+    if (sourceRawValue === null || sourceRawValue === undefined || isBlankString(sourceRawValue)) {
+      ignoredFields.push({
+        field: targetField,
+        reason: "derived_source_empty",
+        sourceField
+      });
+      continue;
+    }
+
+    if (!isFieldAllowed(targetField, allowedFields) && !isFieldAllowed(sourceField, allowedFields)) {
+      ignoredFields.push({
+        field: targetField,
+        reason: "derived_not_allowed",
+        sourceField
+      });
+      continue;
+    }
+
+    const sourceEntry = normalizeDictionaryEntryForField(
+      sourceField,
+      dictionaryEntries.get(sourceField) || null
+    );
+    const derivedEntry = {
+      field: targetField,
+      label: definition.label || targetField,
+      description: `Derived from ${sourceField}.`,
+      ignore: false,
+      type: sourceEntry?.type || "text",
+      enumMappings: sourceEntry?.enumMappings || null,
+      priority: Number(definition.priority ?? sourceEntry?.priority ?? 0)
+    };
+
+    items.push(buildFactItem(targetField, sourceRawValue, derivedEntry));
+  }
+}
+
 function resolveMaxBasisFields(state, maxBasisFields = null) {
   const workflowBinding = isObject(state?.scene_contract?.workflow_binding)
     ? state.scene_contract.workflow_binding
@@ -267,6 +367,8 @@ function buildProfile(items, requestOpportunityId) {
     const item = itemsByField.get(fieldName);
     if (item) {
       profile[fieldName] = item.value_text;
+    } else {
+      profile[fieldName] = PROFILE_MISSING_VALUE;
     }
   }
 
@@ -374,7 +476,10 @@ async function runNormalizeFactsNode({
         continue;
       }
 
-      const dictionaryEntry = dictionaryEntries.get(fieldName) || null;
+      const dictionaryEntry = normalizeDictionaryEntryForField(
+        fieldName,
+        dictionaryEntries.get(fieldName) || null
+      );
       if (dictionaryEntry?.ignore) {
         ignoredFields.push({
           field: fieldName,
@@ -385,6 +490,14 @@ async function runNormalizeFactsNode({
 
       items.push(buildFactItem(fieldName, rawValue, dictionaryEntry));
     }
+
+    addDerivedProfileFacts({
+      items,
+      rawRow,
+      dictionaryEntries,
+      allowedFields,
+      ignoredFields
+    });
 
     items.sort((left, right) => {
       if (right.priority !== left.priority) {
