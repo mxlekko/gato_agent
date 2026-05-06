@@ -6,7 +6,7 @@ const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError
 const { info, error } = require("../utils/logger");
 
 const MODEL_TOOL_PORT = Number(process.env.MODEL_TOOL_PORT || 19003);
-const MODEL_TOOL_HOST = "127.0.0.1";
+const MODEL_TOOL_HOST = process.env.MODEL_TOOL_HOST || "127.0.0.1";
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {

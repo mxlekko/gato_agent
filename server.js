@@ -117,6 +117,20 @@ function buildHealthUrl(port, pathname = "/health") {
   return `http://127.0.0.1:${port}${pathname}`;
 }
 
+function buildServiceHealthUrl({ baseUrl, port }) {
+  if (!baseUrl) {
+    return buildHealthUrl(port);
+  }
+
+  try {
+    const parsed = new URL(baseUrl);
+    const basePath = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
+    return new URL(`${basePath}/health`, parsed).toString();
+  } catch {
+    return buildHealthUrl(port);
+  }
+}
+
 function buildRagHealthUrl() {
   const rawBaseUrl = process.env.RAG_SERVICE_BASE_URL
     || `http://${process.env.RAG_SEARCH_HOST || "127.0.0.1"}:${process.env.RAG_SEARCH_PORT || "19104"}`;
@@ -136,19 +150,28 @@ function getProjectServiceHealthTargets() {
       key: "contextHelper",
       name: "ContextHelper",
       required: true,
-      url: buildHealthUrl(Number(process.env.CONTEXT_HELPER_PORT || 19101))
+      url: buildServiceHealthUrl({
+        baseUrl: process.env.CONTEXT_HELPER_BASE_URL,
+        port: Number(process.env.CONTEXT_HELPER_PORT || 19101)
+      })
     },
     {
       key: "directDbRunner",
       name: "DirectDbRunner",
       required: true,
-      url: buildHealthUrl(Number(process.env.DIRECTDB_RUNNER_PORT || 19102))
+      url: buildServiceHealthUrl({
+        baseUrl: process.env.DIRECTDB_RUNNER_BASE_URL,
+        port: Number(process.env.DIRECTDB_RUNNER_PORT || 19102)
+      })
     },
     {
       key: "modelTool",
       name: "ModelTool",
       required: true,
-      url: buildHealthUrl(Number(process.env.MODEL_TOOL_PORT || 19103))
+      url: buildServiceHealthUrl({
+        baseUrl: process.env.MODEL_TOOL_BASE_URL,
+        port: Number(process.env.MODEL_TOOL_PORT || 19103)
+      })
     },
     {
       key: "rag",

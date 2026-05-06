@@ -4,6 +4,7 @@ const {
   buildToolRequestPayload,
   isObject,
   loadRegistrySnapshot,
+  resolveHttpEndpoint,
   resolveNodeOverride,
   resolveSkillSpec,
   resolveToolDocumentByRole
@@ -136,9 +137,9 @@ async function runValidateOutputNode({
           toolDocument,
           requestPayload,
           timeoutMs
-        })
+      })
       : await invokeHttpTool({
-          endpoint: toolDocument.spec.driver.endpoint,
+          endpoint: resolveHttpEndpoint(toolDocument),
           requestPayload,
           timeoutMs
         });

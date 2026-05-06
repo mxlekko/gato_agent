@@ -7,6 +7,7 @@ const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError
 const { info, error } = require("../utils/logger");
 
 const HELPER_PORT = Number(process.env.CONTEXT_HELPER_PORT || 19001);
+const HELPER_HOST = process.env.CONTEXT_HELPER_HOST || "127.0.0.1";
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
@@ -81,11 +82,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(HELPER_PORT, "127.0.0.1", () => {
+server.listen(HELPER_PORT, HELPER_HOST, () => {
   const dbClient = getDbClient();
   info("context-helper.started", {
     port: HELPER_PORT,
-    host: "127.0.0.1",
+    host: HELPER_HOST,
     mode: dbClient.mode,
     database: {
       server: dbClient.server,

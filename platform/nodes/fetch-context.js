@@ -2,6 +2,7 @@ const path = require("path");
 const { loadPlatformResources } = require("../compiler/validate");
 const { createAppError, normalizeError } = require("../../utils/errors");
 const { mergeWorkflowState, recordNodeRun } = require("../runtime/state");
+const { resolveHttpEndpoint } = require("./tool-runtime");
 
 const NODE_ID = "fetch-context";
 const PLATFORM_BASE_DIR = path.resolve(__dirname, "..");
@@ -403,7 +404,7 @@ async function runFetchContextNode({
     const resolvedFetchPlan = resolveFetchPlan(resolvedSkillSpec, fetchPlan);
     const { queryDocument, toolDocument } = resolveToolConfig(registrySnapshot, resolvedFetchPlan);
     const requestPayload = buildRequestPayload(state, toolDocument, queryDocument, resolvedFetchPlan);
-    const endpoint = toolDocument.spec.driver.endpoint;
+    const endpoint = resolveHttpEndpoint(toolDocument);
     const timeoutMs = Number(toolDocument.spec?.limits?.timeoutMsDefault || 30000);
     const execution = invokeTool
       ? await invokeTool({

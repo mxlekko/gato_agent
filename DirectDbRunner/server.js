@@ -7,7 +7,7 @@ const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError
 const { info, error } = require("../utils/logger");
 
 const DIRECTDB_RUNNER_PORT = Number(process.env.DIRECTDB_RUNNER_PORT || 19002);
-const DIRECTDB_RUNNER_HOST = "127.0.0.1";
+const DIRECTDB_RUNNER_HOST = process.env.DIRECTDB_RUNNER_HOST || "127.0.0.1";
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {

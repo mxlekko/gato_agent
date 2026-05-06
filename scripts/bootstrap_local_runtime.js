@@ -245,6 +245,7 @@ function buildRagHealthUrl() {
 }
 
 async function inspectRagRuntime(options = {}) {
+  const externalRuntime = String(process.env.RAG_RUNTIME_MODE || "").trim().toLowerCase() === "external";
   const requirements = {
     path: path.relative(PROJECT_ROOT, RAG_REQUIREMENTS_PATH),
     exists: fs.existsSync(RAG_REQUIREMENTS_PATH)
@@ -268,10 +269,10 @@ async function inspectRagRuntime(options = {}) {
       };
   const blockers = [];
 
-  if (!requirements.exists) {
+  if (!externalRuntime && !requirements.exists) {
     blockers.push("rag-service/requirements.txt missing");
   }
-  if (!venv.exists || !venv.python) {
+  if (!externalRuntime && (!venv.exists || !venv.python)) {
     blockers.push("rag-service/.venv python missing");
   }
   if (!dashscopeApiKey.configured) {
@@ -282,6 +283,7 @@ async function inspectRagRuntime(options = {}) {
   }
 
   return {
+    externalRuntime,
     requirements,
     venv,
     dashscopeApiKey,

@@ -270,12 +270,56 @@ function resolveRetryMaxAttempts(nodeOverride, fallbackValue = 0) {
   return Math.floor(raw);
 }
 
+function appendEndpointPath(baseUrl, endpoint) {
+  const base = String(baseUrl || "").trim().replace(/\/+$/, "");
+  if (!base) {
+    return endpoint;
+  }
+
+  try {
+    const parsedEndpoint = new URL(endpoint);
+    return `${base}${parsedEndpoint.pathname}${parsedEndpoint.search || ""}`;
+  } catch {
+    return endpoint;
+  }
+}
+
+function resolveHttpEndpoint(toolDocument) {
+  const endpoint = toolDocument?.spec?.driver?.endpoint;
+  if (!endpoint) {
+    return endpoint;
+  }
+
+  const ref = String(toolDocument?.spec?.ref || "");
+  const toolRole = String(toolDocument?.spec?.toolRole || "");
+  const category = String(toolDocument?.spec?.category || "");
+
+  if (ref.includes("sales-opportunity-context-helper")) {
+    return appendEndpointPath(process.env.CONTEXT_HELPER_BASE_URL, endpoint);
+  }
+
+  if (ref.includes("sales-opportunity-directdb-runner")) {
+    return appendEndpointPath(process.env.DIRECTDB_RUNNER_BASE_URL, endpoint);
+  }
+
+  if (toolRole === "output_validator") {
+    return appendEndpointPath(process.env.MODEL_TOOL_BASE_URL, endpoint);
+  }
+
+  if (toolRole === "knowledge_retriever" || category === "knowledge") {
+    return appendEndpointPath(process.env.RAG_SERVICE_BASE_URL, endpoint);
+  }
+
+  return endpoint;
+}
+
 module.exports = {
   PLATFORM_BASE_DIR,
   buildToolRequestPayload,
   isObject,
   loadRegistrySnapshot,
   readStatePath,
+  resolveHttpEndpoint,
   resolveNodeOverride,
   resolveRetryMaxAttempts,
   resolveSkillSpec,

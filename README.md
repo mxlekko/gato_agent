@@ -369,6 +369,7 @@ npm run regression:no-retired-runtime
 ## 文档索引
 
 - [docs/engineering/常驻启动说明.md](docs/engineering/常驻启动说明.md)
+- [docs/engineering/Docker部署说明.md](docs/engineering/Docker部署说明.md)
 - [docs/项目开发文档/RAG管理工作台运行说明.md](docs/项目开发文档/RAG管理工作台运行说明.md)
 - [docs/engineering/project-structure.md](docs/engineering/project-structure.md)
 - [docs/场景外部对接文档/payment-info-split外部API对接文档.md](docs/场景外部对接文档/payment-info-split外部API对接文档.md)
