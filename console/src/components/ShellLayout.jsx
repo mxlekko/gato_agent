@@ -1,10 +1,9 @@
-import { Layout, Menu, Typography } from "@arco-design/web-react";
+import { Layout, Menu } from "@arco-design/web-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const { Content, Sider } = Layout;
 const MenuItem = Menu.Item;
 const SubMenu = Menu.SubMenu;
-const { Title } = Typography;
 
 const configCatalogItems = [
   { to: "/configs/skills", label: "业务技能" },
@@ -114,11 +113,13 @@ export function ShellLayout() {
     <Layout className="app-shell">
       <Sider className="app-sidebar" width={264}>
         <div className="sidebar-brand">
-          <div className="brand-mark">A</div>
-          <div>
-            <Title heading={5} className="sidebar-title">
-              业务平台控制台
-            </Title>
+          <div className="brand-mark" aria-hidden="true">
+            <img src="/favicon.svg" alt="" />
+          </div>
+          <div className="sidebar-brand-copy">
+            <div className="sidebar-title">
+              场景编排平台
+            </div>
           </div>
         </div>
 

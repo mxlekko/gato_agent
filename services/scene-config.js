@@ -81,8 +81,19 @@ function validateSceneConfig(config, filePath) {
 
   const executionMode = config.execution?.mode || "agent-runtime";
 
-  if (executionMode === "agent-runtime") {
-    const routingMode = String(config.routing?.mode || "legacy").trim() || "legacy";
+  if (executionMode !== "agent-runtime") {
+    throw createAppError("INVALID_REQUEST", `Unsupported scene execution mode: ${executionMode}.`, {
+      stage: "scene-config",
+      details: {
+        filePath,
+        scene: config.scene,
+        requiredExecutionMode: "agent-runtime"
+      }
+    });
+  }
+
+  {
+    const routingMode = String(config.routing?.mode || "langgraph").trim() || "langgraph";
     if (routingMode !== "langgraph") {
       throw createAppError("INVALID_REQUEST", "Agent-runtime legacy routing has been retired; use routing.mode=langgraph.", {
         stage: "scene-config",
@@ -175,54 +186,6 @@ function validateSceneConfig(config, filePath) {
         }
       });
     }
-  } else if (executionMode === "direct-model") {
-    if (!config.directModel || typeof config.directModel !== "object") {
-      throw createAppError("INVALID_REQUEST", "Direct-model scene must define directModel.", {
-        stage: "scene-config",
-        details: {
-          filePath,
-          scene: config.scene
-        }
-      });
-    }
-
-    if (!config.directModel.provider || !config.directModel.model) {
-      throw createAppError("INVALID_REQUEST", "directModel.provider and directModel.model are required.", {
-        stage: "scene-config",
-        details: {
-          filePath,
-          scene: config.scene
-        }
-      });
-    }
-
-    if (!config.directModel.promptFile) {
-      throw createAppError("INVALID_REQUEST", "directModel.promptFile is required.", {
-        stage: "scene-config",
-        details: {
-          filePath,
-          scene: config.scene
-        }
-      });
-    }
-
-    if (!config.directModel.schemaReferenceId) {
-      throw createAppError("INVALID_REQUEST", "directModel.schemaReferenceId is required.", {
-        stage: "scene-config",
-        details: {
-          filePath,
-          scene: config.scene
-        }
-      });
-    }
-  } else {
-    throw createAppError("INVALID_REQUEST", `Unsupported scene execution mode: ${executionMode}.`, {
-      stage: "scene-config",
-      details: {
-        filePath,
-        scene: config.scene
-      }
-    });
   }
 
   if (
@@ -440,24 +403,6 @@ function resolveSceneConfigPaths(config, filePath) {
   resolveConfigPathField({
     target: resolvedConfig.skill,
     fieldName: "entryFile",
-    expectedType: "file",
-    filePath,
-    scene: resolvedConfig.scene,
-    warnings,
-    pathState
-  });
-  resolveConfigPathField({
-    target: resolvedConfig.directModel,
-    fieldName: "promptFile",
-    expectedType: "file",
-    filePath,
-    scene: resolvedConfig.scene,
-    warnings,
-    pathState
-  });
-  resolveConfigPathField({
-    target: resolvedConfig.directModel,
-    fieldName: "fallbackModelsFile",
     expectedType: "file",
     filePath,
     scene: resolvedConfig.scene,

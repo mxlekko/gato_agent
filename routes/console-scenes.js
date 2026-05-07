@@ -1,4 +1,6 @@
 const {
+  createConsoleSceneDraft,
+  deleteConsoleSceneDraft,
   getConsoleSceneCatalog,
   getConsoleSceneDictionaryAssetContent,
   getConsoleSceneInputMappingContent,
@@ -7,6 +9,7 @@ const {
   getConsoleSceneRulesAssetContent,
   getConsoleSceneSchemaAssetContent,
   getConsoleSceneSkillBinding,
+  getConsoleSceneTemplates,
   getConsoleSceneWorkflow,
   updateConsoleSceneDictionaryAssetContent,
   updateConsoleSceneInputMappingContent,
@@ -22,6 +25,36 @@ const { buildRequestId } = require("../utils/request-id");
 async function listConsoleScenesRoute() {
   const requestId = buildRequestId();
   const data = await getConsoleSceneCatalog();
+
+  return {
+    statusCode: 200,
+    payload: buildSuccessResponse(data, requestId)
+  };
+}
+
+async function listConsoleSceneTemplatesRoute() {
+  const requestId = buildRequestId();
+  const data = await getConsoleSceneTemplates();
+
+  return {
+    statusCode: 200,
+    payload: buildSuccessResponse(data, requestId)
+  };
+}
+
+async function createConsoleSceneRoute(body = {}) {
+  const requestId = buildRequestId();
+  const data = await createConsoleSceneDraft(body);
+
+  return {
+    statusCode: 200,
+    payload: buildSuccessResponse(data, requestId)
+  };
+}
+
+async function deleteConsoleSceneRoute(scene) {
+  const requestId = buildRequestId();
+  const data = await deleteConsoleSceneDraft(scene);
 
   return {
     statusCode: 200,
@@ -180,6 +213,8 @@ async function updateConsoleSceneSkillBindingRoute(scene, body = {}) {
 }
 
 module.exports = {
+  createConsoleSceneRoute,
+  deleteConsoleSceneRoute,
   getConsoleSceneDictionaryAssetRoute,
   getConsoleSceneInputMappingRoute,
   getConsoleScenePromptAssetRoute,
@@ -188,6 +223,7 @@ module.exports = {
   getConsoleSceneSchemaAssetRoute,
   getConsoleSceneSkillBindingRoute,
   getConsoleSceneWorkflowRoute,
+  listConsoleSceneTemplatesRoute,
   listConsoleScenesRoute,
   updateConsoleSceneDictionaryAssetRoute,
   updateConsoleSceneInputMappingRoute,

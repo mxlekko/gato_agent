@@ -14,6 +14,8 @@ spec:
     - sales-opportunity-advisor
     - sales-opportunity-advisor-directdb
     - sales-opportunity-smart-entry
+  sceneCreation:
+    allowNewScenes: true
   engine:
     type: langgraph-stategraph
     runtimeRef: langgraph

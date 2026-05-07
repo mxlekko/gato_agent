@@ -5,7 +5,7 @@
 - API 服务：统一业务入口、控制台接口、配置校验和发布查询
 - 本地工具服务：`ContextHelper`、`DirectDbRunner`、`ModelTool`
 - RAG 服务：本地知识库检索、文档库和索引任务接口
-- 平台运行层：workflow 编译、LangGraph 兼容运行、直连模型运行、运行追踪
+- 平台运行层：workflow 编译、LangGraph 运行、运行追踪
 - React 控制台：场景、配置、运行记录、灰度和发布状态页面
 - Runtime 资产：scene 配置、prompt、schema、项目内 runtime references、模型元数据和业务字典
 
@@ -23,11 +23,11 @@ POST /api/agent/run
 
 | scene | 模式 | 模型/Agent | 主要入参 |
 | --- | --- | --- | --- |
-| `payment-info-split` | `direct-model` | Moonshot `kimi-k2-turbo-preview` | `rawText` |
+| `payment-info-split` | `langgraph` | 项目内 LangGraph + Project Payment LLM + ModelTool | `rawText` |
 | `sales-opportunity-advisor` | `langgraph` | 项目内 LangGraph + ContextHelper + Project Advisory LLM | `opportunityId` |
 | `sales-opportunity-advisor-directdb` | `langgraph` | 项目内 LangGraph + DirectDbRunner + Project Advisory LLM | `opportunityId` |
 | `sales-opportunity-smart-entry` | `langgraph` | 项目内 LangGraph + GenericQueryRunner + Project Advisory LLM | `opportunityId`, `rawText` |
-| `special-custom-product-solution` | `direct-model` | DeepSeek `deepseek-v4-flash` | `specialCustomOrderNo`, `customRequirement` |
+| `special-custom-product-solution` | `langgraph` | 项目内 LangGraph + Local RAG + Project LLM + ModelTool | `specialCustomOrderNo`, `customRequirement` |
 
 对应配置在 [scene-configs](scene-configs) 中。运行时如果存在 active bundle，会优先读取 `.local/runtime-bundles/local/current/scene-configs`，否则回退到仓库内的 `scene-configs`。
 
@@ -36,7 +36,7 @@ POST /api/agent/run
 `payment-info-split`:
 
 ```text
-调用方 -> API -> 直连 Moonshot -> 本地 schema 校验 -> 返回收款信息
+调用方 -> API -> Platform Gateway -> LangGraph Runtime -> Project Payment LLM -> ModelTool -> 返回收款信息
 ```
 
 `sales-opportunity-advisor`:
@@ -60,7 +60,7 @@ POST /api/agent/run
 `special-custom-product-solution`:
 
 ```text
-调用方 -> API -> 本地 RAG(19104) -> 直连 DeepSeek -> 本地 schema 校验 -> 返回产品部方案
+调用方 -> API -> Platform Gateway -> LangGraph Runtime -> 本地 RAG(19104) -> Project LLM -> ModelTool -> 返回产品部方案
 ```
 
 ## 端口
@@ -117,7 +117,7 @@ POST /api/agent/run
 - `/Users/gato-pm/Desktop/API/...`
 - `旧共享运行时目录/...`
 
-命中旧路径时，scene 配置和 direct-model 资产解析会直接报错。
+命中旧路径时，scene 配置和运行时资产解析会直接报错。
 
 ## 目录入口
 
@@ -127,7 +127,7 @@ POST /api/agent/run
 - [platform](platform): workflow 模板、技能、工具、编译器和运行时
 - [scene-configs](scene-configs): scene 配置
 - [runtime-assets/project-runtime](runtime-assets/project-runtime): 项目内 runtime 参考资产
-- [runtime-assets/model-profiles](runtime-assets/model-profiles): direct-model 和项目内 LLM 使用的模型元数据
+- [runtime-assets/model-profiles](runtime-assets/model-profiles): 项目内 LLM 使用的模型元数据
 - [metadata](metadata): 本地业务字段字典
 - [ContextHelper](ContextHelper): helper 型数据工具
 - [DirectDbRunner](DirectDbRunner): directdb 型数据工具
@@ -202,9 +202,7 @@ npm run console:dev
 
 - `http://127.0.0.1:3200` 提供控制台页面
 - `/api/*` 默认代理到 `http://127.0.0.1:3100`
-- `VITE_CONSOLE_DATA_MODE` 支持 `api` 和 `mock`
-- 代码未设置时默认使用 `api`
-- `console/.env.example` 中保留 `mock` 示例，适合没有后端的新环境预览页面
+- 控制台始终走真实 API，不再保留本地 mock 数据模式
 
 切换代理目标时，复制 [console/.env.local.example](console/.env.local.example) 为 `console/.env.local`，修改 `VITE_API_PROXY_TARGET` 后重启控制台。
 
@@ -230,6 +228,107 @@ npm run mysql:schema:apply
 npm run mysql:import-config
 npm run mysql:import-config:verify
 ```
+
+## 模板化新增场景
+
+控制台新增场景入口是 `/scenes/new`。新增页展示的是“场景模板”：由当前已发布的五个场景配置和对应 BusinessSkill 抽象而来，包含来源场景、底层 WorkflowTemplate、实际启用节点、资产类型、查询/RAG 能力和默认输入输出契约。后端提供两个控制台接口：
+
+- `GET /api/console/scene-templates`：返回五个现有场景抽象出的场景模板摘要，例如 `payment-info-split@v1`、`sales-opportunity-advisor@v1`、`sales-opportunity-smart-entry@v1`，并包含 `sourceScene`、`workflowTemplateRef`、`orderedNodeIds`、`requiresQueryProfile`、`requiresRag`、支持资产类型和默认契约。
+- `POST /api/console/scenes`：基于场景模板创建场景草稿，写入 `cfg_scene_configs`、`cfg_platform_resources` 和 `cfg_scene_assets`；可配置 prompt、dictionary、rules 等场景资产，RAG 场景可配置检索策略；查询增强场景会额外生成 `QueryProfile` 草稿，并固定绑定 `tool://data/generic-query-runner@v1`。生成后的 BusinessSkill 仍绑定底层 WorkflowTemplate，以进入现有编译、发布和运行链路。
+
+纯文本结构化抽取示例：
+
+```bash
+curl -sS -X POST http://127.0.0.1:3100/api/console/scenes \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "scene": "contract-summary-extraction",
+    "title": "合同摘要抽取",
+    "description": "从合同文本中抽取摘要和关键风险。",
+    "templateRef": { "name": "payment-info-split", "version": "v1" },
+    "inputContract": {
+      "required": ["rawText"],
+      "fields": {
+        "rawText": { "type": "string", "sourcePath": "request.bizParams.rawText" }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": ["summary", "risks"],
+      "properties": {
+        "summary": { "type": "string" },
+        "risks": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "assets": {
+      "prompt": { "contentText": "你是合同摘要抽取器，只返回 JSON。" }
+    }
+  }'
+```
+
+客户投诉归因查询增强示例：
+
+```bash
+curl -sS -X POST http://127.0.0.1:3100/api/console/scenes \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "scene": "customer-complaint-attribution",
+    "title": "客户投诉归因",
+    "description": "根据投诉文本和客户历史订单生成归因、责任部门和建议动作。",
+    "templateRef": { "name": "sales-opportunity-advisor", "version": "v1" },
+    "inputContract": {
+      "required": ["complaintText", "customerId"],
+      "fields": {
+        "complaintText": { "type": "string", "sourcePath": "request.bizParams.complaintText" },
+        "customerId": { "type": "string", "sourcePath": "request.bizParams.customerId" }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": ["attribution", "responsibleDepartment", "suggestedActions"],
+      "properties": {
+        "attribution": { "type": "string" },
+        "responsibleDepartment": { "type": "string" },
+        "suggestedActions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "assets": {
+      "prompt": { "contentText": "你是客户投诉归因助手，只返回符合 schema 的 JSON。" },
+      "dictionary": { "contentText": "field_name\tfield_description\ncustomerId\t客户 ID\ncomplaintText\t投诉文本\n" },
+      "rules": { "contentText": "# 归因规则\n\n- 不要编造客户历史。\n- 只基于投诉文本和查询结果输出建议。\n" }
+    },
+    "queryProfile": {
+      "enabled": true,
+      "name": "customer-orders-by-customer-id",
+      "title": "客户历史订单查询",
+      "primaryEntity": { "table": "t_customer_order", "idField": "customerId" },
+      "where": [
+        { "field": "customerId", "operator": "equals", "param": "customerId" }
+      ],
+      "resultPolicy": { "mode": "multi-rows", "fields": ["*"], "limit": 20 }
+    }
+  }'
+```
+
+RAG 场景可额外传入：
+
+```json
+{
+  "ragConfig": {
+    "topK": 5,
+    "docId": "",
+    "query": "",
+    "failOnError": true
+  }
+}
+```
+
+一期限制：
+
+- 不做 AI 自然语言生成场景。
+- 不做自由拖拽流程画布。
+- 不开放任意 SQL、raw SQL、join、subquery、多语句或写查询。
+- 不做外部数据源凭据管理。
 
 ## 本地初始化
 
@@ -357,7 +456,7 @@ npm run regression:self-contained
 npm run regression:no-retired-runtime
 ```
 
-该命令不设置旧 gateway token，会关闭 langgraph legacy fallback，并检查本轮请求日志中没有旧 Gateway 主链路痕迹。
+该命令会扫描依赖和本轮请求日志，确认没有旧 Gateway 主链路痕迹。
 
 ## Git 和发布注意
 

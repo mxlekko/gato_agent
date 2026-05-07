@@ -1,15 +1,12 @@
-const path = require("path");
-const { loadPlatformResources } = require("../compiler/validate");
+const { loadPlatformResources, resolvePlatformBaseDir } = require("../compiler/validate");
 const { createAppError } = require("../../utils/errors");
-
-const PLATFORM_BASE_DIR = path.resolve(__dirname, "..");
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function loadRegistrySnapshot() {
-  const resources = loadPlatformResources(PLATFORM_BASE_DIR);
+  const resources = loadPlatformResources(resolvePlatformBaseDir());
   const toolsByRef = new Map();
   const queriesByRef = new Map();
   const skillsByScene = new Map();
@@ -314,7 +311,6 @@ function resolveHttpEndpoint(toolDocument) {
 }
 
 module.exports = {
-  PLATFORM_BASE_DIR,
   buildToolRequestPayload,
   isObject,
   loadRegistrySnapshot,

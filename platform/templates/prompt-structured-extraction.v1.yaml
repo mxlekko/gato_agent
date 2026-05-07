@@ -12,6 +12,8 @@ spec:
     with a project LLM, validate it, and return a stable result envelope.
   compatibleScenes:
     - payment-info-split
+  sceneCreation:
+    allowNewScenes: true
   engine:
     type: langgraph-stategraph
     runtimeRef: langgraph

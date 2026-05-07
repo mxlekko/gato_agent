@@ -1,6 +1,6 @@
 # Regression Reports
 
-本目录用于承载 baseline 回放和后续 shadow 对比的输出报告。
+本目录用于承载 baseline 回放输出报告。
 
 ## 1. 当前脚本
 
@@ -59,44 +59,7 @@ tests/regression/output/<timestamp>/
 - `strictBodyMatch` 会额外输出，但当前不作为默认 pass gate。
 - 这样做是因为成功样例中包含 LLM 文案，后续回放时可能存在轻微漂移。
 
-## 4. 预留的 shadow 对比报告格式
-
-当前报告中已预留：
-
-```json
-{
-  "shadow": {
-    "enabled": false,
-    "shadowRunId": null,
-    "baselineRunId": "2026-04-12T05-50-00-000Z",
-    "diffSummary": null
-  }
-}
-```
-
-后续接入 shadow 运行时，建议扩展为：
-
-```json
-{
-  "reportType": "shadow-diff",
-  "comparisonMode": "shadow",
-  "baseline": {
-    "requestId": "req_xxx",
-    "route": "POST /api/agent/run"
-  },
-  "shadow": {
-    "enabled": true,
-    "requestId": "req_shadow_xxx",
-    "graphVersion": "v1",
-    "nodeDiffs": [],
-    "resultDiffs": []
-  }
-}
-```
-
-这样可以沿用当前报告结构，而不需要再重新设计输出目录和报告顶层字段。
-
-## 5. 用法示例
+## 4. 用法示例
 
 回放全部 baseline：
 
@@ -118,4 +81,3 @@ node scripts/compare_results.js \
   --actual tests/regression/output/<timestamp>/sales-opportunity-advisor.not-found.actual.json \
   --dynamic-fields requestId
 ```
-

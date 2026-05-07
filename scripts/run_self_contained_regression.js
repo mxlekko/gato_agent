@@ -30,8 +30,7 @@ const DEFAULT_NO_RETIRED_RUNTIME_LOG_FILES = [
 ];
 const NO_RETIRED_RUNTIME_FORBIDDEN_LOG_PATTERNS = [
   /gateway-http/i,
-  /RetiredRuntime Gateway request timed out/i,
-  /agent\.langgraph\.fallback\.triggered/i
+  /RetiredRuntime Gateway request timed out/i
 ];
 const API_BASE_URL = process.env.SELF_CONTAINED_API_BASE_URL || "http://127.0.0.1:3100";
 const MODEL_TOOL_BASE_URL = process.env.SELF_CONTAINED_MODEL_TOOL_BASE_URL || "http://127.0.0.1:19103";
@@ -385,14 +384,6 @@ function buildNoRetiredRuntimeLogCheck({ snapshots, requestIds }) {
   };
 }
 
-function buildNoRetiredRuntimeEnvironmentCheck() {
-  const legacyFallbackEnabled = parseBooleanValue(process.env.LANGGRAPH_LEGACY_FALLBACK_ENABLED, false);
-  return {
-    legacyFallbackEnabled,
-    failed: legacyFallbackEnabled
-  };
-}
-
 async function runCase(caseItem, manifestDir, outputDir) {
   const requestPath = path.join(manifestDir, caseItem.requestFile);
   const requestBody = readJson(requestPath);
@@ -462,7 +453,6 @@ async function main() {
         outputDir
       })
     : null;
-  const noRetiredRuntimeEnvironmentCheck = noRetiredRuntimeRequired ? buildNoRetiredRuntimeEnvironmentCheck() : null;
 
   const cases = Array.isArray(manifest.cases)
     ? manifest.cases.filter((item) => !selectedCaseId || item.id === selectedCaseId)
@@ -506,12 +496,10 @@ async function main() {
     noRetiredRuntime: noRetiredRuntimeRequired
       ? {
           required: true,
-          env: {
-            LANGGRAPH_LEGACY_FALLBACK_ENABLED: process.env.LANGGRAPH_LEGACY_FALLBACK_ENABLED || null,
-            LANGGRAPH_DRAFT_MODE: process.env.LANGGRAPH_DRAFT_MODE || null
-          },
-          environmentCheck: noRetiredRuntimeEnvironmentCheck,
-          dependencyScan: noRetiredRuntimeScan,
+	          env: {
+	            LANGGRAPH_DRAFT_MODE: process.env.LANGGRAPH_DRAFT_MODE || null
+	          },
+	          dependencyScan: noRetiredRuntimeScan,
           logCheck: noRetiredRuntimeLogCheck
         }
       : {

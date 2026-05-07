@@ -7,7 +7,8 @@ const {
   loadPlatformResources,
   validatePlatformConfigs
 } = require("../platform/compiler/validate");
-const { isDirectModelScene } = require("./direct-model");
+const { createTemplateSceneDraft } = require("./scene-draft-generator");
+const { getSceneTemplateSummaries } = require("./scene-template-catalog");
 const { getSceneConfigs, getSceneConfigSourceState } = require("./scene-config");
 const { createConfigStore } = require("./config-store");
 const { createAppError, normalizeError } = require("../utils/errors");
@@ -137,17 +138,17 @@ function isObject(value) {
 }
 
 function getExecutionMode(sceneConfig) {
-  return isDirectModelScene(sceneConfig) ? "direct-model" : "agent-runtime";
+  return sceneConfig?.execution?.mode || "agent-runtime";
 }
 
 function getRoutingMode(sceneConfig) {
-  return sceneConfig?.routing?.mode || "legacy";
+  return sceneConfig?.routing?.mode || "langgraph";
 }
 
 function getAllowedModes(sceneConfig) {
   return Array.isArray(sceneConfig?.routing?.allowedModes)
     ? sceneConfig.routing.allowedModes.slice()
-    : ["legacy"];
+    : ["langgraph"];
 }
 
 function listConfigFiles(directoryPath, extension) {
@@ -231,10 +232,14 @@ function resolveSceneSkillSelection(sceneConfig) {
   };
 }
 
-function resolveSceneConfigFilePath(scene) {
+function resolveSceneConfigFilePath(scene, options = {}) {
   const { sceneConfigDir } = getSceneConfigSourceState();
   const filePath = path.join(sceneConfigDir, `${scene}.json`);
   if (!fs.existsSync(filePath)) {
+    if (options.required === false) {
+      return null;
+    }
+
     throw createAppError("INVALID_REQUEST", `Scene config file not found for ${scene}.`, {
       stage: "console-scene",
       details: {
@@ -314,6 +319,92 @@ function buildSceneConfigSkillRef(sceneConfig) {
     : null;
 }
 
+function collectTemplateNodeValues(templateDocument, fieldName) {
+  const nodes = Array.isArray(templateDocument?.spec?.nodes)
+    ? templateDocument.spec.nodes
+    : [];
+
+  return nodes.flatMap((node) => (
+    Array.isArray(node?.[fieldName]) ? node[fieldName] : []
+  ));
+}
+
+function buildTemplateCapabilitySummary(templateDocument) {
+  const nodes = Array.isArray(templateDocument?.spec?.nodes)
+    ? templateDocument.spec.nodes
+    : [];
+  const activeNodes = nodes.filter((node) => node?.required === true || node?.defaultEnabled !== false);
+  const outputs = new Set(collectTemplateNodeValues(templateDocument, "outputs"));
+  const nodeIds = new Set(activeNodes.map((node) => node?.id).filter(Boolean));
+  const toolRoles = new Set(activeNodes.map((node) => node?.toolRole).filter(Boolean));
+  const supportedAssetTypes = [];
+
+  if (outputs.has("references.prompt")) {
+    supportedAssetTypes.push("prompt");
+  }
+  if (outputs.has("references.output_schema")) {
+    supportedAssetTypes.push("schema");
+  }
+  if (outputs.has("references.dictionary")) {
+    supportedAssetTypes.push("dictionary");
+  }
+  if (outputs.has("references.rules")) {
+    supportedAssetTypes.push("rules");
+  }
+
+  return {
+    requiresQueryProfile:
+      nodeIds.has("resolve_data_plan") ||
+      nodeIds.has("fetch_business_context") ||
+      toolRoles.has("context_fetcher"),
+    requiresRag:
+      nodeIds.has("retrieve_knowledge_context") ||
+      toolRoles.has("knowledge_retriever"),
+    supportedAssetTypes
+  };
+}
+
+function buildTemplateSummary(record) {
+  const document = record?.document || {};
+  const metadata = document.metadata || {};
+  const spec = document.spec || {};
+  const capabilitySummary = buildTemplateCapabilitySummary(document);
+
+  return {
+    name: metadata.name || null,
+    version: metadata.version || "v1",
+    title: metadata.title || metadata.name || null,
+    status: metadata.status || null,
+    description: typeof spec.description === "string" ? spec.description.trim() : "",
+    compatibleScenes: Array.isArray(spec.compatibleScenes) ? spec.compatibleScenes.slice() : [],
+    engine: cloneJson(spec.engine || null),
+    phaseCount: Array.isArray(spec.phases) ? spec.phases.length : 0,
+    nodeCount: Array.isArray(spec.nodes) ? spec.nodes.length : 0,
+    ...capabilitySummary
+  };
+}
+
+function loadConsoleSceneTemplateRecords() {
+  const templateDir = path.join(PLATFORM_BASE_DIR, "templates");
+  return listConfigFiles(templateDir, ".yaml")
+    .map((filePath) => {
+      const sourceText = fs.readFileSync(filePath, "utf8");
+      const document = parseYamlContent(sourceText, `WorkflowTemplate ${path.basename(filePath)}`);
+      return {
+        filePath,
+        document,
+        sourceText
+      };
+    })
+    .filter((record) => record.document?.kind === "WorkflowTemplate");
+}
+
+async function getConsoleSceneTemplates() {
+  return {
+    items: getSceneTemplateSummaries()
+  };
+}
+
 function buildPlatformSourceMetadataIndex() {
   const resources = loadPlatformResources(PLATFORM_BASE_DIR);
   const byKey = new Map();
@@ -371,6 +462,11 @@ function buildDraftPlatformIndex(platformRecords = []) {
       || (spec.ref ? sourceMetadataIndex.byRef.get(spec.ref) : null)
       || null;
     const normalizedRecord = {
+      kind,
+      name: metadata.name || null,
+      version: metadata.version || null,
+      ref: spec.ref || null,
+      scene: record?.scene || spec.scene || null,
       document,
       sourceText: typeof record?.sourceText === "string" ? record.sourceText : null,
       filePath: sourceMetadata?.filePath || null,
@@ -435,8 +531,57 @@ async function loadDraftPlatformIndex() {
   return buildDraftPlatformIndex(platformRecords);
 }
 
+async function loadDraftSceneContext(scene) {
+  const [draftSceneConfigRecord, platformIndex] = await Promise.all([
+    getDraftSceneConfigRecord(scene),
+    loadDraftPlatformIndex()
+  ]);
+
+  return {
+    draftSceneConfigRecord,
+    sceneConfig: cloneJson(draftSceneConfigRecord.document || {}),
+    platformIndex
+  };
+}
+
+function getPlatformResourceIdentity(record, document = record?.document || {}) {
+  const metadata = document.metadata || {};
+  const spec = document.spec || {};
+  const kind = getPlatformResourceKind(document);
+
+  return {
+    kind,
+    name: metadata.name || record?.name,
+    version: metadata.version || record?.version || "v1",
+    ref: spec.ref || record?.ref || null,
+    scene: record?.scene || spec.scene || null,
+    status: record?.status || metadata.status || "draft"
+  };
+}
+
+async function savePlatformResourceDocumentDraft(record, document, sourceText, changeNote) {
+  const identity = getPlatformResourceIdentity(record, document);
+
+  return withConsoleSceneDraftStore((store) => store.savePlatformResourceDraft(
+    {
+      ...identity,
+      document,
+      sourceText,
+      updatedBy: CONSOLE_SCENE_CONFIG_UPDATED_BY
+    },
+    {
+      operator: CONSOLE_SCENE_CONFIG_UPDATED_BY,
+      changeNote
+    }
+  ));
+}
+
 function getPublishedSceneConfigSnapshot(scene) {
-  const filePath = resolveSceneConfigFilePath(scene);
+  const filePath = resolveSceneConfigFilePath(scene, { required: false });
+  if (!filePath) {
+    return null;
+  }
+
   const sourceText = fs.readFileSync(filePath, "utf8");
   const stat = fs.statSync(filePath);
   let document;
@@ -532,16 +677,24 @@ function normalizeSceneConfigForDiff(document) {
 
 function buildSceneConfigState(scene, draftRecord, publishedSnapshot, platformIndex) {
   const draftSceneConfig = cloneJson(draftRecord?.document || {});
-  const publishedSceneConfig = cloneJson(publishedSnapshot?.document || {});
+  const hasPublishedSnapshot = Boolean(publishedSnapshot?.document);
+  const publishedSceneConfig = hasPublishedSnapshot
+    ? cloneJson(publishedSnapshot.document)
+    : {};
   const storagePath = buildSceneConfigStoragePath(scene);
   const draftSkillRef = buildSceneConfigSkillRef(draftSceneConfig);
-  const publishedSkillRef = buildSceneConfigSkillRef(publishedSceneConfig);
+  const publishedSkillRef = hasPublishedSnapshot
+    ? buildSceneConfigSkillRef(publishedSceneConfig)
+    : null;
 
   return {
     storageDriver: CONSOLE_SCENE_CONFIG_STORE_DRIVER,
     storageTable: CONSOLE_SCENE_CONFIG_STORAGE_TABLE,
     storagePath,
+    publishState: hasPublishedSnapshot ? "published" : "unpublished",
+    hasPublishedSnapshot,
     hasUnpublishedChanges:
+      !hasPublishedSnapshot ||
       JSON.stringify(normalizeSceneConfigForDiff(draftSceneConfig))
       !== JSON.stringify(normalizeSceneConfigForDiff(publishedSceneConfig)),
     draft: {
@@ -554,16 +707,20 @@ function buildSceneConfigState(scene, draftRecord, publishedSnapshot, platformIn
       allowedModes: getAllowedModes(draftSceneConfig),
       executionMode: getExecutionMode(draftSceneConfig)
     },
-    published: {
-      status: "published",
-      path: publishedSnapshot?.path || null,
-      updatedAt: publishedSnapshot?.updatedAt || null,
-      skillRef: publishedSkillRef,
-      routingMode: getRoutingMode(publishedSceneConfig),
-      allowedModes: getAllowedModes(publishedSceneConfig),
-      executionMode: getExecutionMode(publishedSceneConfig)
-    },
-    publishedCurrent: buildPublishedSkillBinding(publishedSceneConfig, platformIndex)
+    published: hasPublishedSnapshot
+      ? {
+          status: "published",
+          path: publishedSnapshot?.path || null,
+          updatedAt: publishedSnapshot?.updatedAt || null,
+          skillRef: publishedSkillRef,
+          routingMode: getRoutingMode(publishedSceneConfig),
+          allowedModes: getAllowedModes(publishedSceneConfig),
+          executionMode: getExecutionMode(publishedSceneConfig)
+        }
+      : null,
+    publishedCurrent: hasPublishedSnapshot
+      ? buildPublishedSkillBinding(publishedSceneConfig, platformIndex)
+      : null
   };
 }
 
@@ -585,7 +742,7 @@ function resolveSceneSkillRecord(scene, platformIndex = null, sceneConfig = null
   const skillRecord = selectedSkill?.name
     ? resolveSkillRecordBySelection(selectedSkill, activePlatformIndex)
     : activePlatformIndex.skillsByScene.get(scene);
-  if (!skillRecord?.document?.spec || !skillRecord?.filePath) {
+  if (!skillRecord?.document?.spec) {
     const detail = selectedSkill?.name
       ? `skillRef ${buildSkillKey(selectedSkill.name, selectedSkill.version)}`
       : `scene ${scene}`;
@@ -880,6 +1037,22 @@ const SCENE_EDITABLE_ASSET_TYPES = {
   }
 };
 
+function isDraftOnlySceneAssetPath(scene, assetType, sourcePath) {
+  if (typeof sourcePath !== "string" || !sourcePath.trim()) {
+    return false;
+  }
+
+  if (sourcePath.startsWith(`project://references/${scene}/`)) {
+    return true;
+  }
+
+  if (assetType === "dictionary") {
+    return sourcePath === `project://metadata/${scene.replace(/-/g, "_")}_dictionary.tsv`;
+  }
+
+  return false;
+}
+
 function resolveSceneAsset(scene, assetType, sceneConfig = null, platformIndex = null) {
   const assetConfig = SCENE_EDITABLE_ASSET_TYPES[assetType];
   if (!assetConfig) {
@@ -889,82 +1062,6 @@ function resolveSceneAsset(scene, assetType, sceneConfig = null, platformIndex =
   }
 
   const activeSceneConfig = sceneConfig || getCachedSceneConfig(scene);
-  if (isDirectModelScene(activeSceneConfig)) {
-    const directModel = activeSceneConfig.directModel || {};
-    const sceneReferences = Array.isArray(activeSceneConfig.references) ? activeSceneConfig.references : [];
-    let assetRef = null;
-    let sourceType = "local-file";
-    let sourcePath = null;
-    let assetKey = null;
-
-    if (assetType === "prompt") {
-      sourcePath = directModel.promptFile || null;
-      const promptReference = sceneReferences.find(
-        (reference) =>
-          reference?.path === sourcePath
-          || reference?.pathRef === directModel.promptFileRef
-      );
-      assetRef = promptReference?.id || directModel.promptFileRef || directModel.promptFile || null;
-      assetKey = "promptFile";
-    } else if (assetType === "schema") {
-      const schemaReference = sceneReferences.find((reference) => reference?.id === directModel.schemaReferenceId);
-
-      assetRef = schemaReference?.id || directModel.schemaReferenceId || null;
-      sourceType = schemaReference?.type || "local-file";
-      sourcePath = schemaReference?.path || null;
-      assetKey = schemaReference?.id || "schemaReferenceId";
-    } else {
-      throw createAppError(
-        "INVALID_REQUEST",
-        `Direct-model scene ${scene} does not have ${assetConfig.label.toLowerCase()} configuration.`,
-        {
-          stage: "console-scene",
-          details: {
-            scene,
-            assetType
-          }
-        }
-      );
-    }
-
-    if (!assetRef || !sourcePath) {
-      throw createAppError("INVALID_REQUEST", `Scene ${scene} is missing ${assetConfig.label.toLowerCase()} configuration.`, {
-        stage: "console-scene",
-        details: {
-          scene,
-          assetType
-        }
-      });
-    }
-
-    const resolution = resolvePathReference(sourcePath);
-    const resolvedPath = resolution.resolvedPath;
-    if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
-      throw createAppError("INVALID_REQUEST", `${assetConfig.label} asset file not found for scene ${scene}.`, {
-        stage: "console-scene",
-        details: {
-          scene,
-          assetRef,
-          assetType,
-          resolvedPath
-        }
-      });
-    }
-
-    return {
-      scene,
-      assetType,
-      label: assetConfig.label,
-      ref: assetRef,
-      assetKey,
-      sourceType,
-      sourcePath,
-      resolvedPath,
-      editable: sourceType === "local-file" && isEditableProjectPath(resolvedPath),
-      normalizeContent: assetConfig.normalizeContent
-    };
-  }
-
   const activePlatformIndex = platformIndex || getCachedPlatformIndex();
   const skillRecord = resolveSceneSkillRecord(scene, activePlatformIndex, activeSceneConfig);
   if (!skillRecord?.document?.spec) {
@@ -1003,6 +1100,23 @@ function resolveSceneAsset(scene, assetType, sceneConfig = null, platformIndex =
   const resolution = resolvePathReference(assetEntry.sourcePath);
   const resolvedPath = resolution.resolvedPath;
   if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+    const sourcePath = typeof assetEntry.sourcePath === "string" ? assetEntry.sourcePath : "";
+    if (assetEntry.sourceType === "local-file" && isDraftOnlySceneAssetPath(scene, assetType, sourcePath)) {
+      return {
+        scene,
+        assetType,
+        label: assetConfig.label,
+        ref: assetRef,
+        assetKey: assetEntry.assetKey,
+        sourceType: assetEntry.sourceType,
+        sourcePath: assetEntry.sourcePath,
+        resolvedPath: null,
+        editable: true,
+        draftOnly: true,
+        normalizeContent: assetConfig.normalizeContent
+      };
+    }
+
     throw createAppError("INVALID_REQUEST", `${assetConfig.label} asset file not found for scene ${scene}.`, {
       stage: "console-scene",
       details: {
@@ -1100,7 +1214,7 @@ function resolveSceneQueryProfile(scene, sceneConfig = null, platformIndex = nul
     ? activePlatformIndex.queriesByRef.get(queryProfileRef)
     : null;
 
-  if (!queryProfileRef || !queryRecord?.document?.spec || !queryRecord?.filePath) {
+  if (!queryProfileRef || !queryRecord?.document?.spec) {
     throw createAppError("INVALID_REQUEST", `Scene ${scene} is missing query profile configuration.`, {
       stage: "console-scene",
       details: {
@@ -1114,7 +1228,9 @@ function resolveSceneQueryProfile(scene, sceneConfig = null, platformIndex = nul
     scene,
     queryProfileRef,
     queryRecord,
-    editable: isEditableProjectPath(queryRecord.filePath)
+    editable: queryRecord.filePath
+      ? isEditableProjectPath(queryRecord.filePath)
+      : queryRecord.storageDriver === CONSOLE_SCENE_CONFIG_STORE_DRIVER
   };
 }
 
@@ -1130,7 +1246,9 @@ function resolveSceneInputMapping(scene, sceneConfig = null, platformIndex = nul
     scene,
     skillRecord,
     inputMapping,
-    editable: isEditableProjectPath(skillRecord.filePath)
+    editable: skillRecord.filePath
+      ? isEditableProjectPath(skillRecord.filePath)
+      : skillRecord.storageDriver === CONSOLE_SCENE_CONFIG_STORE_DRIVER
   };
 }
 
@@ -1269,13 +1387,18 @@ function buildPlatformManagedWorkflow(scene, sceneConfig, platformIndex) {
   const contextToolRef = skillSpec?.toolBindings?.context_fetcher?.toolRef
     || platformIndex.queriesByRef.get(queryProfileRef)?.document?.spec?.toolRef
     || null;
-  const contextToolRecord = contextToolRef ? platformIndex.toolsByRef.get(contextToolRef) : null;
+  const primaryToolRef = contextToolRef || skillSpec?.toolBindings?.advisory_llm?.toolRef || null;
+  const primaryToolRecord = primaryToolRef ? platformIndex.toolsByRef.get(primaryToolRef) : null;
   const queryRecord = queryProfileRef ? platformIndex.queriesByRef.get(queryProfileRef) : null;
-  const dataSource = inferDataSource(contextToolRef, contextToolRecord);
+  const dataSource = inferDataSource(primaryToolRef, primaryToolRecord);
   const promptAsset = resolvePromptAsset(scene, sceneConfig, platformIndex);
   const schemaAsset = resolveSchemaAsset(scene, sceneConfig, platformIndex);
-  const dictionaryAsset = resolveDictionaryAsset(scene, sceneConfig, platformIndex);
-  const rulesAsset = resolveRulesAsset(scene, sceneConfig, platformIndex);
+  const dictionaryAsset = selectSceneDictionaryRef(skillSpec)
+    ? resolveDictionaryAsset(scene, sceneConfig, platformIndex)
+    : null;
+  const rulesAsset = selectSceneRulesRef(skillSpec)
+    ? resolveRulesAsset(scene, sceneConfig, platformIndex)
+    : null;
 
   return {
     scene,
@@ -1344,20 +1467,20 @@ function buildPlatformManagedWorkflow(scene, sceneConfig, platformIndex) {
         storageTable: CONSOLE_SCENE_ASSET_STORAGE_TABLE
       },
       dictionary: {
-        ref: dictionaryAsset.ref,
-        sourceType: dictionaryAsset.sourceType,
-        sourcePath: dictionaryAsset.sourcePath,
-        path: dictionaryAsset.resolvedPath,
-        editable: dictionaryAsset.editable,
+        ref: dictionaryAsset?.ref || null,
+        sourceType: dictionaryAsset?.sourceType || null,
+        sourcePath: dictionaryAsset?.sourcePath || null,
+        path: dictionaryAsset?.resolvedPath || null,
+        editable: Boolean(dictionaryAsset?.editable),
         storageDriver: CONSOLE_SCENE_ASSET_STORE_DRIVER,
         storageTable: CONSOLE_SCENE_ASSET_STORAGE_TABLE
       },
       rules: {
-        ref: rulesAsset.ref,
-        sourceType: rulesAsset.sourceType,
-        sourcePath: rulesAsset.sourcePath,
-        path: rulesAsset.resolvedPath,
-        editable: rulesAsset.editable,
+        ref: rulesAsset?.ref || null,
+        sourceType: rulesAsset?.sourceType || null,
+        sourcePath: rulesAsset?.sourcePath || null,
+        path: rulesAsset?.resolvedPath || null,
+        editable: Boolean(rulesAsset?.editable),
         storageDriver: CONSOLE_SCENE_ASSET_STORE_DRIVER,
         storageTable: CONSOLE_SCENE_ASSET_STORAGE_TABLE
       }
@@ -1373,63 +1496,7 @@ function buildPlatformManagedWorkflow(scene, sceneConfig, platformIndex) {
         editable: Boolean(skillRecord?.filePath) && isEditableProjectPath(skillRecord.filePath)
       }
     },
-    legacyOrchestration: cloneJson(sceneConfig.orchestration || [])
-  };
-}
-
-function buildDirectModelWorkflow(scene, sceneConfig) {
-  const directModel = sceneConfig.directModel || {};
-  const schemaRef = sceneConfig.references?.find(
-    (reference) => reference.id === directModel.schemaReferenceId
-  );
-  const promptAsset = resolveSceneAsset(scene, "prompt", sceneConfig);
-  const schemaAsset = resolveSceneAsset(scene, "schema", sceneConfig);
-
-  return {
-    scene,
-    title: sceneConfig.title || scene,
-    description: sceneConfig.description || "",
-    executionMode: getExecutionMode(sceneConfig),
-    routingMode: getRoutingMode(sceneConfig),
-    allowedModes: getAllowedModes(sceneConfig),
-    platformManagedScene: false,
-    dataSourceLabel: "Direct Model",
-    dataSourceKind: "direct-model",
-    directModel: {
-      provider: directModel.provider || null,
-      model: directModel.model || null,
-      promptRef: directModel.promptFileRef || directModel.promptFile || null,
-      schemaRef: schemaRef?.id || directModel.schemaReferenceId || null
-    },
-    editableAssets: {
-      prompt: {
-        ref: promptAsset.ref,
-        sourceType: promptAsset.sourceType,
-        sourcePath: promptAsset.sourcePath,
-        path: promptAsset.resolvedPath,
-        editable: promptAsset.editable,
-        storageDriver: CONSOLE_SCENE_ASSET_STORE_DRIVER,
-        storageTable: CONSOLE_SCENE_ASSET_STORAGE_TABLE
-      },
-      schema: {
-        ref: schemaAsset.ref,
-        sourceType: schemaAsset.sourceType,
-        sourcePath: schemaAsset.sourcePath,
-        path: schemaAsset.resolvedPath,
-        editable: schemaAsset.editable,
-        storageDriver: CONSOLE_SCENE_ASSET_STORE_DRIVER,
-        storageTable: CONSOLE_SCENE_ASSET_STORAGE_TABLE
-      }
-    },
-    references: cloneJson(
-      (sceneConfig.references || []).map((reference) => ({
-        type: reference.type || "local-file",
-        ref: reference.id || null,
-        purpose: reference.purpose || ""
-      }))
-    ),
-    legacyOrchestration: cloneJson(sceneConfig.orchestration || []),
-    legacyOnlyReason: "该场景使用 direct-model 独立执行边界，由直连模型链路处理，不进入模板化 LangGraph 节点编排。"
+    orchestration: cloneJson(sceneConfig.orchestration || [])
   };
 }
 
@@ -1445,9 +1512,7 @@ async function buildSceneWorkflow(scene, sceneConfigRecord = null, platformIndex
     activePlatformIndex
   );
 
-  const workflow = isDirectModelScene(draftSceneConfig)
-    ? buildDirectModelWorkflow(scene, draftSceneConfig)
-    : buildPlatformManagedWorkflow(scene, draftSceneConfig, activePlatformIndex);
+  const workflow = buildPlatformManagedWorkflow(scene, draftSceneConfig, activePlatformIndex);
 
   return {
     ...workflow,
@@ -1459,14 +1524,94 @@ async function getConsoleSceneWorkflow(scene) {
   return buildSceneWorkflow(scene);
 }
 
+async function createConsoleSceneDraft(body = {}) {
+  const createdDraft = await createTemplateSceneDraft(body, {
+    save: true
+  });
+  const workflow = await buildSceneWorkflow(createdDraft.scene);
+
+  return {
+    scene: createdDraft.scene,
+    title: createdDraft.title,
+    status: "draft",
+    templateRef: cloneJson(createdDraft.templateRef),
+    created: {
+      sceneConfig: {
+        currentRevisionId: createdDraft.saved?.sceneConfig?.currentRevisionId || null
+      },
+      platformResourceCount: Array.isArray(createdDraft.saved?.platformResources)
+        ? createdDraft.saved.platformResources.length
+        : 0,
+      sceneAssetCount: Array.isArray(createdDraft.saved?.sceneAssets)
+        ? createdDraft.saved.sceneAssets.length
+        : 0
+    },
+    workflow
+  };
+}
+
+async function deleteConsoleSceneDraft(scene) {
+  const draftSceneConfigRecord = await getDraftSceneConfigRecord(scene);
+  const title = draftSceneConfigRecord?.title
+    || draftSceneConfigRecord?.document?.title
+    || scene;
+
+  const result = await withConsoleSceneDraftStore(async (store) => {
+    const [platformResources, sceneAssets] = await Promise.all([
+      store.listPlatformResources({ scene }),
+      store.listSceneAssets({ scene })
+    ]);
+    const deletedPlatformResources = [];
+    const deletedSceneAssets = [];
+
+    for (const asset of sceneAssets) {
+      const deleted = await store.deleteSceneAsset(scene, asset.assetType);
+      if (deleted) {
+        deletedSceneAssets.push({
+          assetType: asset.assetType,
+          ref: asset.ref || null
+        });
+      }
+    }
+
+    for (const resource of platformResources) {
+      const deleted = await store.deletePlatformResource(resource);
+      if (deleted) {
+        deletedPlatformResources.push({
+          kind: resource.kind,
+          name: resource.name,
+          version: resource.version,
+          ref: resource.ref || null
+        });
+      }
+    }
+
+    return {
+      sceneConfigDeleted: await store.deleteSceneConfig(scene),
+      deletedPlatformResources,
+      deletedSceneAssets
+    };
+  });
+
+  CONSOLE_SCENE_CACHE.signature = null;
+
+  return {
+    scene,
+    title,
+    deleted: Boolean(result.sceneConfigDeleted),
+    deletedCounts: {
+      sceneConfigs: result.sceneConfigDeleted ? 1 : 0,
+      platformResources: result.deletedPlatformResources.length,
+      sceneAssets: result.deletedSceneAssets.length
+    },
+    deletedPlatformResources: result.deletedPlatformResources,
+    deletedSceneAssets: result.deletedSceneAssets
+  };
+}
+
 async function getConsoleSceneSkillBinding(scene) {
   const draftSceneConfigRecord = await getDraftSceneConfigRecord(scene);
   const sceneConfig = cloneJson(draftSceneConfigRecord.document || {});
-  if (isDirectModelScene(sceneConfig)) {
-    throw createAppError("INVALID_REQUEST", `Scene ${scene} is not a platform-managed BusinessSkill scene.`, {
-      stage: "console-scene"
-    });
-  }
 
   const platformIndex = await loadDraftPlatformIndex();
   const currentSkillRecord = resolveSceneSkillRecord(scene, platformIndex, sceneConfig);
@@ -1481,7 +1626,7 @@ async function getConsoleSceneSkillBinding(scene) {
   return {
     scene,
     path: buildSceneConfigStoragePath(scene),
-    publishedPath: publishedSceneConfig.path,
+    publishedPath: publishedSceneConfig?.path || null,
     editable: true,
     storageDriver: CONSOLE_SCENE_CONFIG_STORE_DRIVER,
     storageTable: CONSOLE_SCENE_CONFIG_STORAGE_TABLE,
@@ -1513,11 +1658,6 @@ function normalizeSceneSkillBindingPayload(body = {}) {
 async function updateConsoleSceneSkillBinding(scene, body = {}) {
   const draftSceneConfigRecord = await getDraftSceneConfigRecord(scene);
   const currentSceneConfig = cloneJson(draftSceneConfigRecord.document || {});
-  if (isDirectModelScene(currentSceneConfig)) {
-    throw createAppError("INVALID_REQUEST", `Scene ${scene} is not a platform-managed BusinessSkill scene.`, {
-      stage: "console-scene-save"
-    });
-  }
 
   const nextSkillSelection = normalizeSceneSkillBindingPayload(body);
   const platformIndex = await loadDraftPlatformIndex();
@@ -1649,6 +1789,8 @@ async function getConsoleSceneCatalog() {
             version: workflow.skill.version
           }
         : null,
+      publishState: workflow.configState?.publishState || "unpublished",
+      hasPublishedSnapshot: Boolean(workflow.configState?.hasPublishedSnapshot),
       publishedSkillRef: workflow.configState?.published?.skillRef || null,
       dataSourceLabel: workflow.dataSourceLabel,
       configState: cloneJson(workflow.configState || null)
@@ -1661,7 +1803,8 @@ async function getConsoleSceneCatalog() {
 }
 
 async function getConsoleSceneAssetContent(scene, assetType) {
-  const asset = resolveSceneAsset(scene, assetType);
+  const { sceneConfig, platformIndex } = await loadDraftSceneContext(scene);
+  const asset = resolveSceneAsset(scene, assetType, sceneConfig, platformIndex);
   const draftAsset = await withConsoleSceneAssetStore((store) => store.getSceneAsset(scene, assetType));
 
   if (!draftAsset) {
@@ -1700,33 +1843,37 @@ async function getConsoleSceneRulesAssetContent(scene) {
 }
 
 async function getConsoleSceneQueryProfileContent(scene) {
-  const { queryProfileRef, queryRecord, editable } = resolveSceneQueryProfile(scene);
-  const content = await fsp.readFile(queryRecord.filePath, "utf8");
-  const stat = await fsp.stat(queryRecord.filePath);
+  const { sceneConfig, platformIndex } = await loadDraftSceneContext(scene);
+  const { queryProfileRef, queryRecord, editable } = resolveSceneQueryProfile(scene, sceneConfig, platformIndex);
+  const content = queryRecord.filePath
+    ? await fsp.readFile(queryRecord.filePath, "utf8")
+    : (queryRecord.sourceText || `${dumpYamlDocument(queryRecord.document)}\n`);
+  const stat = queryRecord.filePath ? await fsp.stat(queryRecord.filePath) : null;
 
   return {
     scene,
     configType: "queryProfile",
     ref: queryProfileRef,
-    path: queryRecord.filePath,
+    path: queryRecord.filePath || queryRecord.storagePath || null,
     editable,
     content,
-    updatedAt: stat.mtime.toISOString()
+    updatedAt: stat ? stat.mtime.toISOString() : queryRecord.updatedAt
   };
 }
 
 async function getConsoleSceneInputMappingContent(scene) {
-  const { skillRecord, inputMapping, editable } = resolveSceneInputMapping(scene);
-  const stat = await fsp.stat(skillRecord.filePath);
+  const { sceneConfig, platformIndex } = await loadDraftSceneContext(scene);
+  const { skillRecord, inputMapping, editable } = resolveSceneInputMapping(scene, sceneConfig, platformIndex);
+  const stat = skillRecord.filePath ? await fsp.stat(skillRecord.filePath) : null;
 
   return {
     scene,
     configType: "inputMapping",
-    path: skillRecord.filePath,
+    path: skillRecord.filePath || skillRecord.storagePath || null,
     editable,
     content: `${JSON.stringify(inputMapping, null, 2)}\n`,
     value: inputMapping,
-    updatedAt: stat.mtime.toISOString()
+    updatedAt: stat ? stat.mtime.toISOString() : skillRecord.updatedAt
   };
 }
 
@@ -1875,10 +2022,9 @@ function withRollbackDetails(error, rollbackError = null) {
 }
 
 async function updateConsoleSceneAssetContent(scene, assetType, content) {
-  const asset = resolveSceneAsset(scene, assetType);
-  const sceneConfig = getCachedSceneConfig(scene);
+  const { sceneConfig, platformIndex } = await loadDraftSceneContext(scene);
+  const asset = resolveSceneAsset(scene, assetType, sceneConfig, platformIndex);
   const selectedSkill = resolveSceneSkillSelection(sceneConfig);
-  const directModelScene = isDirectModelScene(sceneConfig);
   if (!asset.editable) {
     throw createAppError("INVALID_REQUEST", `${asset.label} asset for scene ${scene} is not editable through the platform.`, {
       stage: "console-scene-save",
@@ -1893,19 +2039,19 @@ async function updateConsoleSceneAssetContent(scene, assetType, content) {
 
   const nextContent = asset.normalizeContent(content);
   const validationSummary = validatePlatformConfigs({
-    baseDir: PLATFORM_BASE_DIR
+    baseDir: PLATFORM_BASE_DIR,
+    resources: platformIndex.resources
   });
   if (!validationSummary.valid) {
     buildValidationFailure(scene, asset.ref, validationSummary, asset.label);
   }
 
-  const compileSummary = directModelScene
-    ? null
-    : compileWorkflowGraphForScene({
-        scene,
-        baseDir: PLATFORM_BASE_DIR,
-        skillRef: selectedSkill
-      });
+  const compileSummary = compileWorkflowGraphForScene({
+    scene,
+    baseDir: PLATFORM_BASE_DIR,
+    resources: platformIndex.resources,
+    skillRef: selectedSkill
+  });
 
   try {
     const savedAsset = await withConsoleSceneAssetStore(async (store) => {
@@ -1971,8 +2117,8 @@ async function updateConsoleSceneRulesAssetContent(scene, content) {
 }
 
 async function updateConsoleSceneQueryProfileContent(scene, content) {
-  const { queryProfileRef, queryRecord, editable } = resolveSceneQueryProfile(scene);
-  const sceneConfig = getCachedSceneConfig(scene);
+  const { sceneConfig, platformIndex } = await loadDraftSceneContext(scene);
+  const { queryProfileRef, queryRecord, editable } = resolveSceneQueryProfile(scene, sceneConfig, platformIndex);
   const selectedSkill = resolveSceneSkillSelection(sceneConfig);
   if (!editable) {
     throw createAppError("INVALID_REQUEST", `Query profile for scene ${scene} is not editable through the platform.`, {
@@ -1980,19 +2126,22 @@ async function updateConsoleSceneQueryProfileContent(scene, content) {
       details: {
         scene,
         queryProfileRef,
-        path: queryRecord.filePath
+        path: queryRecord.filePath || queryRecord.storagePath || null
       }
     });
   }
 
-  const previousContent = await fsp.readFile(queryRecord.filePath, "utf8");
+  const previousContent = queryRecord.filePath ? await fsp.readFile(queryRecord.filePath, "utf8") : null;
   const { content: nextContent } = normalizeQueryProfileContent(content, queryRecord.document);
+  const nextDocument = parseYamlContent(nextContent, "Query profile content");
 
   try {
-    await fsp.writeFile(queryRecord.filePath, nextContent, "utf8");
+    queryRecord.document = nextDocument;
+    queryRecord.sourceText = nextContent;
 
     const validationSummary = validatePlatformConfigs({
-      baseDir: PLATFORM_BASE_DIR
+      baseDir: PLATFORM_BASE_DIR,
+      resources: platformIndex.resources
     });
     if (!validationSummary.valid) {
       buildValidationFailure(scene, queryProfileRef, validationSummary, "Query profile");
@@ -2001,14 +2150,26 @@ async function updateConsoleSceneQueryProfileContent(scene, content) {
     const compileSummary = compileWorkflowGraphForScene({
       scene,
       baseDir: PLATFORM_BASE_DIR,
+      resources: platformIndex.resources,
       skillRef: selectedSkill
     });
+
+    if (queryRecord.filePath) {
+      await fsp.writeFile(queryRecord.filePath, nextContent, "utf8");
+    } else {
+      await savePlatformResourceDocumentDraft(
+        queryRecord,
+        nextDocument,
+        nextContent,
+        `console query profile draft update for ${scene}`
+      );
+    }
 
     return {
       scene,
       configType: "queryProfile",
       ref: queryProfileRef,
-      path: queryRecord.filePath,
+      path: queryRecord.filePath || queryRecord.storagePath || null,
       editable: true,
       content: nextContent,
       updatedAt: new Date().toISOString(),
@@ -2025,10 +2186,12 @@ async function updateConsoleSceneQueryProfileContent(scene, content) {
     };
   } catch (error) {
     let rollbackError = null;
-    try {
-      await fsp.writeFile(queryRecord.filePath, previousContent, "utf8");
-    } catch (caughtRollbackError) {
-      rollbackError = caughtRollbackError;
+    if (queryRecord.filePath) {
+      try {
+        await fsp.writeFile(queryRecord.filePath, previousContent, "utf8");
+      } catch (caughtRollbackError) {
+        rollbackError = caughtRollbackError;
+      }
     }
 
     throw withRollbackDetails(error, rollbackError);
@@ -2036,15 +2199,15 @@ async function updateConsoleSceneQueryProfileContent(scene, content) {
 }
 
 async function updateConsoleSceneInputMappingContent(scene, content) {
-  const { skillRecord, editable } = resolveSceneInputMapping(scene);
-  const sceneConfig = getCachedSceneConfig(scene);
+  const { sceneConfig, platformIndex } = await loadDraftSceneContext(scene);
+  const { skillRecord, editable } = resolveSceneInputMapping(scene, sceneConfig, platformIndex);
   const selectedSkill = resolveSceneSkillSelection(sceneConfig);
   if (!editable) {
     throw createAppError("INVALID_REQUEST", `Input mapping for scene ${scene} is not editable through the platform.`, {
       stage: "console-scene-save",
       details: {
         scene,
-        path: skillRecord.filePath
+        path: skillRecord.filePath || skillRecord.storagePath || null
       }
     });
   }
@@ -2052,13 +2215,13 @@ async function updateConsoleSceneInputMappingContent(scene, content) {
   const currentSkillDocument = cloneJson(skillRecord.document);
   const currentQueryProfileRef = currentSkillDocument?.spec?.dataBindings?.queryProfileRef || null;
   const currentQueryRecord = currentQueryProfileRef
-    ? getCachedPlatformIndex().queriesByRef.get(currentQueryProfileRef)
+    ? platformIndex.queriesByRef.get(currentQueryProfileRef)
     : null;
   const requiredInputs = Array.isArray(currentQueryRecord?.document?.spec?.inputContract?.requiredInputs)
     ? currentQueryRecord.document.spec.inputContract.requiredInputs
     : Object.keys(currentQueryRecord?.document?.spec?.inputContract?.fields || {});
   const { content: nextContent, value: nextValue } = normalizeInputMappingContent(content, requiredInputs);
-  const previousContent = await fsp.readFile(skillRecord.filePath, "utf8");
+  const previousContent = skillRecord.filePath ? await fsp.readFile(skillRecord.filePath, "utf8") : null;
 
   if (!isObject(currentSkillDocument.spec)) {
     throw createAppError("INVALID_REQUEST", `BusinessSkill for scene ${scene} is missing spec.`, {
@@ -2074,10 +2237,12 @@ async function updateConsoleSceneInputMappingContent(scene, content) {
   const nextSkillFileContent = dumpYamlDocument(currentSkillDocument);
 
   try {
-    await fsp.writeFile(skillRecord.filePath, nextSkillFileContent, "utf8");
+    skillRecord.document = currentSkillDocument;
+    skillRecord.sourceText = `${nextSkillFileContent}\n`;
 
     const validationSummary = validatePlatformConfigs({
-      baseDir: PLATFORM_BASE_DIR
+      baseDir: PLATFORM_BASE_DIR,
+      resources: platformIndex.resources
     });
     if (!validationSummary.valid) {
       buildValidationFailure(scene, currentQueryProfileRef || "inputMapping", validationSummary, "Input mapping");
@@ -2086,13 +2251,25 @@ async function updateConsoleSceneInputMappingContent(scene, content) {
     const compileSummary = compileWorkflowGraphForScene({
       scene,
       baseDir: PLATFORM_BASE_DIR,
+      resources: platformIndex.resources,
       skillRef: selectedSkill
     });
+
+    if (skillRecord.filePath) {
+      await fsp.writeFile(skillRecord.filePath, nextSkillFileContent, "utf8");
+    } else {
+      await savePlatformResourceDocumentDraft(
+        skillRecord,
+        currentSkillDocument,
+        `${nextSkillFileContent}\n`,
+        `console input mapping draft update for ${scene}`
+      );
+    }
 
     return {
       scene,
       configType: "inputMapping",
-      path: skillRecord.filePath,
+      path: skillRecord.filePath || skillRecord.storagePath || null,
       editable: true,
       content: nextContent,
       value: nextValue,
@@ -2110,10 +2287,12 @@ async function updateConsoleSceneInputMappingContent(scene, content) {
     };
   } catch (error) {
     let rollbackError = null;
-    try {
-      await fsp.writeFile(skillRecord.filePath, previousContent, "utf8");
-    } catch (caughtRollbackError) {
-      rollbackError = caughtRollbackError;
+    if (skillRecord.filePath) {
+      try {
+        await fsp.writeFile(skillRecord.filePath, previousContent, "utf8");
+      } catch (caughtRollbackError) {
+        rollbackError = caughtRollbackError;
+      }
     }
 
     throw withRollbackDetails(error, rollbackError);
@@ -2121,6 +2300,8 @@ async function updateConsoleSceneInputMappingContent(scene, content) {
 }
 
 module.exports = {
+  createConsoleSceneDraft,
+  deleteConsoleSceneDraft,
   getConsoleSceneCatalog,
   getConsoleSceneDictionaryAssetContent,
   getConsoleSceneInputMappingContent,
@@ -2129,6 +2310,7 @@ module.exports = {
   getConsoleSceneRulesAssetContent,
   getConsoleSceneSchemaAssetContent,
   getConsoleSceneSkillBinding,
+  getConsoleSceneTemplates,
   getConsoleSceneWorkflow,
   updateConsoleSceneDictionaryAssetContent,
   updateConsoleSceneInputMappingContent,

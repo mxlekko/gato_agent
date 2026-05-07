@@ -7,7 +7,6 @@ const {
   normalizeRoutingMode,
   resolveSceneRoutePlan
 } = require("../platform/gateway");
-const { isDirectModelScene } = require("./direct-model");
 const { getSceneConfig, getSceneConfigs } = require("./scene-config");
 const { createAppError } = require("../utils/errors");
 const { info } = require("../utils/logger");
@@ -90,15 +89,15 @@ function loadRolloutEntries() {
 
 function buildSceneOptions(sceneConfigs) {
   return Object.values(sceneConfigs)
-    .map((sceneConfig) => ({
-      scene: sceneConfig.scene,
-      title: sceneConfig.title || sceneConfig.scene,
-      executionMode: isDirectModelScene(sceneConfig) ? "direct-model" : "agent-runtime",
-      routingMode: sceneConfig?.routing?.mode || "legacy",
-      allowedModes: Array.isArray(sceneConfig?.routing?.allowedModes)
-        ? cloneJson(sceneConfig.routing.allowedModes)
-        : ["legacy"]
-    }))
+	    .map((sceneConfig) => ({
+	      scene: sceneConfig.scene,
+	      title: sceneConfig.title || sceneConfig.scene,
+	      executionMode: sceneConfig?.execution?.mode || "agent-runtime",
+	      routingMode: sceneConfig?.routing?.mode || "langgraph",
+	      allowedModes: Array.isArray(sceneConfig?.routing?.allowedModes)
+	        ? cloneJson(sceneConfig.routing.allowedModes)
+	        : ["langgraph"]
+	    }))
     .sort((left, right) => left.scene.localeCompare(right.scene));
 }
 
@@ -117,12 +116,11 @@ function buildLatestRuns(report, scene) {
       requestId: run.requestId,
       requestedMode: run.requestedMode,
       effectiveMode: run.effectiveMode,
-      success: run.success === true,
-      httpStatus: run.httpStatus,
-      durationMs: run.durationMs,
-      fallbackTriggered: run.fallbackTriggered === true,
-      finalMessage: run.finalMessage
-    }));
+	      success: run.success === true,
+	      httpStatus: run.httpStatus,
+	      durationMs: run.durationMs,
+	      finalMessage: run.finalMessage
+	    }));
 }
 
 function buildSceneRolloutSummary(report, scene) {
@@ -136,16 +134,14 @@ function buildSceneRolloutSummary(report, scene) {
     totals: {
       runs: safeNumber(totals.runs) || 0,
       successfulRuns: safeNumber(totals.successfulRuns) || 0,
-      failedRuns: safeNumber(totals.failedRuns) || 0,
-      langgraphRuns: safeNumber(totals.langgraphRuns) || 0,
-      fallbackRuns: safeNumber(totals.fallbackRuns) || 0,
-      schemaFailureRuns: safeNumber(totals.schemaFailureRuns) || 0
-    },
-    rates: {
-      successRate: safeRate(rates.successRate),
-      fallbackRatio: safeRate(rates.fallbackRatio),
-      schemaFailureRate: safeRate(rates.schemaFailureRate)
-    },
+	      failedRuns: safeNumber(totals.failedRuns) || 0,
+	      langgraphRuns: safeNumber(totals.langgraphRuns) || 0,
+	      schemaFailureRuns: safeNumber(totals.schemaFailureRuns) || 0
+	    },
+	    rates: {
+	      successRate: safeRate(rates.successRate),
+	      schemaFailureRate: safeRate(rates.schemaFailureRate)
+	    },
     latency: {
       p95DurationMs: safeNumber(latency.p95DurationMs),
       maxDurationMs: safeNumber(latency.maxDurationMs)
@@ -162,29 +158,27 @@ function buildRoutingSummary(sceneConfig, report) {
   );
 
   return {
-    scene: sceneConfig.scene,
-    title: sceneConfig.title || sceneConfig.scene,
-    description: sceneConfig.description || "",
-    executionMode: isDirectModelScene(sceneConfig) ? "direct-model" : "agent-runtime",
-    current: {
-      routingMode: sceneConfig?.routing?.mode || "legacy",
-      allowedModes: cloneJson(routePlan.allowedModes || ["legacy"]),
-      effectiveMode: routePlan.effectiveMode,
-      routeReason: routePlan.reason,
-      shadowExecutionEnabled: routePlan.shadowExecutionEnabled === true,
-      platformManagedScene: routePlan.platformManagedScene === true,
-      deprecatedLegacyRole: routePlan.deprecatedLegacyRole || null
-    },
+	    scene: sceneConfig.scene,
+	    title: sceneConfig.title || sceneConfig.scene,
+	    description: sceneConfig.description || "",
+	    executionMode: sceneConfig?.execution?.mode || "agent-runtime",
+	    current: {
+	      routingMode: sceneConfig?.routing?.mode || "langgraph",
+	      allowedModes: cloneJson(routePlan.allowedModes || ["langgraph"]),
+	      effectiveMode: routePlan.effectiveMode,
+	      routeReason: routePlan.reason,
+	      platformManagedScene: routePlan.platformManagedScene === true
+	    },
     cutover: {
       requestPercentage: cutover.requestPercentage,
       tenantAllowlist: cloneJson(cutover.tenantAllowlist),
       userAllowlist: cloneJson(cutover.userAllowlist),
       tenantCount: cutover.tenantAllowlist.length,
       userCount: cutover.userAllowlist.length
-    },
-    rollout: buildSceneRolloutSummary(report, sceneConfig.scene),
-    canPreviewChange: !isDirectModelScene(sceneConfig)
-  };
+	    },
+	    rollout: buildSceneRolloutSummary(report, sceneConfig.scene),
+	    canPreviewChange: true
+	  };
 }
 
 function parseStringList(value) {
@@ -200,10 +194,10 @@ function parseStringList(value) {
 }
 
 function normalizePreviewPayload(sceneConfig, payload = {}) {
-  const currentAllowedModes = Array.isArray(sceneConfig?.routing?.allowedModes)
-    ? cloneJson(sceneConfig.routing.allowedModes)
-    : ["legacy"];
-  const proposedMode = normalizeRoutingMode(payload.mode ?? sceneConfig?.routing?.mode ?? "legacy");
+	  const currentAllowedModes = Array.isArray(sceneConfig?.routing?.allowedModes)
+	    ? cloneJson(sceneConfig.routing.allowedModes)
+	    : ["langgraph"];
+	  const proposedMode = normalizeRoutingMode(payload.mode ?? sceneConfig?.routing?.mode ?? "langgraph");
 
   if (!currentAllowedModes.includes(proposedMode)) {
     throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig.scene} does not allow preview mode=${proposedMode}.`, {
@@ -279,14 +273,12 @@ function buildPercentageExamples(scene, requestPercentage) {
 
 function buildPreviewDecision(label, routePlan, details = {}) {
   return {
-    label,
-    requestedMode: routePlan.requestedMode,
-    effectiveMode: routePlan.effectiveMode,
-    routeReason: routePlan.reason,
-    shadowExecutionEnabled: routePlan.shadowExecutionEnabled === true,
-    deprecatedLegacyRole: routePlan.deprecatedLegacyRole || null,
-    matchedBy: routePlan.cutover?.matchedBy || null,
-    bucket: routePlan.cutover?.bucket ?? null,
+	    label,
+	    requestedMode: routePlan.requestedMode,
+	    effectiveMode: routePlan.effectiveMode,
+	    routeReason: routePlan.reason,
+	    matchedBy: routePlan.cutover?.matchedBy || null,
+	    bucket: routePlan.cutover?.bucket ?? null,
     details
   };
 }
@@ -357,34 +349,10 @@ function previewConsoleSceneRoutingChange(scene, payload = {}, requestId = null)
     ));
   }
 
-  if (
-    proposedRouting.mode === "langgraph"
-    && proposedRouting.langgraphCutover.requestPercentage === 0
-    && proposedRouting.langgraphCutover.tenantAllowlist.length === 0
-    && proposedRouting.langgraphCutover.userAllowlist.length === 0
-  ) {
-    warnings.push("当前 langgraph 模式下没有任何白名单或比例命中条件，正式请求仍会保持 legacy。");
-  }
-
-  if (
-    proposedRouting.mode !== "langgraph"
-    && (
-      proposedRouting.langgraphCutover.requestPercentage > 0
-      || proposedRouting.langgraphCutover.tenantAllowlist.length > 0
-      || proposedRouting.langgraphCutover.userAllowlist.length > 0
-    )
-  ) {
-    warnings.push("非 langgraph 模式下，langgraphCutover 设置不会生效。");
-  }
-
-  if (isDirectModelScene(sceneConfig)) {
-    warnings.push("当前 scene 属于 direct-model，只允许 legacy，不能参与 langgraph 灰度。");
-  }
-
-  info("console.routing.change.previewed", {
-    requestId,
-    scene,
-    currentMode: sceneConfig?.routing?.mode || "legacy",
+	  info("console.routing.change.previewed", {
+	    requestId,
+	    scene,
+	    currentMode: sceneConfig?.routing?.mode || "langgraph",
     proposedMode: proposedRouting.mode,
     allowedModes: proposedRouting.allowedModes,
     requestPercentage: proposedRouting.langgraphCutover.requestPercentage,
@@ -396,8 +364,8 @@ function previewConsoleSceneRoutingChange(scene, payload = {}, requestId = null)
   return {
     scene,
     title: sceneConfig.title || scene,
-    currentRouting: {
-      mode: sceneConfig?.routing?.mode || "legacy",
+	    currentRouting: {
+	      mode: sceneConfig?.routing?.mode || "langgraph",
       allowedModes: cloneJson(proposedRouting.allowedModes),
       langgraphCutover: normalizeLangGraphCutoverPolicy(
         sceneConfig?.routing?.langgraphCutover ?? sceneConfig?.routing?.cutover

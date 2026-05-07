@@ -60,8 +60,9 @@ async function main() {
       "manifest.json",
       path.join("scene-configs", "sales-opportunity-advisor.json"),
       path.join("scene-configs", "payment-info-split.json"),
-      path.join("platform", "skills", "sales-opportunity-advisor.v1.yaml"),
-      path.join("platform", "tools", "sales-opportunity-by-opportunity-id.query.yaml"),
+	      path.join("platform", "skills", "sales-opportunity-advisor.v1.yaml"),
+	      path.join("platform", "skills", "payment-info-split.v1.yaml"),
+	      path.join("platform", "tools", "sales-opportunity-by-opportunity-id.query.yaml"),
       path.join("platform", "assets", "prompts", "sales-opportunity-advisor.draft-business-output.v1.md"),
       path.join("references", "sales-opportunity-advisor", "skill_contract.md"),
       path.join("references", "sales-opportunity-advisor", "output_schema.json"),
@@ -70,9 +71,10 @@ async function main() {
       path.join("runtime-assets", "project-runtime", "workspace", "skills", "sales-opportunity-advisor", "references", "decision_rules.md"),
       path.join("runtime-assets", "model-profiles", "payment-fast-agent", "models.json"),
       path.join("ContextHelper", "generated-queries", "sales-opportunity-advisor.generated.js"),
-      path.join("metadata", "sales_opportunity_dictionary.tsv"),
-      path.join("references", "payment-info-split", "prompt.md"),
-      path.join("DirectDbRunner", "sql-cache", "sales-opportunity-advisor-directdb.sql.json")
+	      path.join("metadata", "sales_opportunity_dictionary.tsv"),
+	      path.join("references", "payment-info-split", "prompt.md"),
+	      path.join("references", "payment-info-split", "output_schema.json"),
+	      path.join("DirectDbRunner", "sql-cache", "sales-opportunity-advisor-directdb.sql.json")
     ];
 
     for (const relativePath of requiredFiles) {
@@ -86,12 +88,15 @@ async function main() {
       throw new Error(`Unexpected scene config payload: ${sceneConfig.scene || "missing"}`);
     }
 
-    const paymentInfoSceneConfig = JSON.parse(
-      await fs.readFile(path.join(bundleDir, "scene-configs", "payment-info-split.json"), "utf8")
-    );
-    if (paymentInfoSceneConfig.directModel?.promptFile !== "project://references/payment-info-split/prompt.md") {
-      throw new Error("Direct-model promptFile was not rendered as a bundle-safe project path.");
-    }
+	    const paymentInfoSceneConfig = JSON.parse(
+	      await fs.readFile(path.join(bundleDir, "scene-configs", "payment-info-split.json"), "utf8")
+	    );
+	    if (paymentInfoSceneConfig.execution?.mode !== "agent-runtime") {
+	      throw new Error(`Unexpected payment execution mode: ${paymentInfoSceneConfig.execution?.mode || "missing"}`);
+	    }
+	    if (paymentInfoSceneConfig.skill?.entryFile !== "project://references/payment-info-split/skill_contract.md") {
+	      throw new Error(`Unexpected payment skill.entryFile: ${paymentInfoSceneConfig.skill?.entryFile || "missing"}`);
+	    }
 
     const platformResources = loadPlatformResources(path.join(bundleDir, "platform"));
     const resourceSummary = {
@@ -113,12 +118,18 @@ async function main() {
       );
     }
 
-    const advisorSkill = platformResources.skills.find(
-      (item) => item?.document?.metadata?.name === "sales-opportunity-advisor"
-    )?.document;
-    if (!advisorSkill) {
-      throw new Error("Rendered bundle is missing BusinessSkill sales-opportunity-advisor.");
-    }
+	    const advisorSkill = platformResources.skills.find(
+	      (item) => item?.document?.metadata?.name === "sales-opportunity-advisor"
+	    )?.document;
+	    if (!advisorSkill) {
+	      throw new Error("Rendered bundle is missing BusinessSkill sales-opportunity-advisor.");
+	    }
+	    const paymentSkill = platformResources.skills.find(
+	      (item) => item?.document?.metadata?.name === "payment-info-split"
+	    )?.document;
+	    if (!paymentSkill) {
+	      throw new Error("Rendered bundle is missing BusinessSkill payment-info-split.");
+	    }
 
     const advisorPromptPath = advisorSkill.spec?.assetRefs?.prompts?.draftBusinessOutput?.source?.path;
     const advisorSchemaPath = advisorSkill.spec?.assetRefs?.schemas?.output?.source?.path;
@@ -129,9 +140,13 @@ async function main() {
     if (advisorSchemaPath !== "project://references/sales-opportunity-advisor/output_schema.json") {
       throw new Error(`Unexpected schema source.path: ${advisorSchemaPath || "missing"}`);
     }
-    if (advisorDictionaryPath !== "project://metadata/sales_opportunity_dictionary.tsv") {
-      throw new Error(`Unexpected dictionary source.path: ${advisorDictionaryPath || "missing"}`);
-    }
+	    if (advisorDictionaryPath !== "project://metadata/sales_opportunity_dictionary.tsv") {
+	      throw new Error(`Unexpected dictionary source.path: ${advisorDictionaryPath || "missing"}`);
+	    }
+	    const paymentPromptPath = paymentSkill.spec?.assetRefs?.prompts?.draftBusinessOutput?.source?.path;
+	    if (paymentPromptPath !== "project://references/payment-info-split/prompt.md") {
+	      throw new Error(`Unexpected payment prompt source.path: ${paymentPromptPath || "missing"}`);
+	    }
 
     const advisorQuery = platformResources.queries.find(
       (item) => item?.document?.metadata?.name === "sales-opportunity-by-opportunity-id"

@@ -8,9 +8,7 @@ const { createAppError } = require("../utils/errors");
 const FINAL_MESSAGES = new Set([
   "agent.run.success",
   "agent.run.completed",
-  "agent.run.failed",
-  "agent.langgraph.fallback.completed",
-  "agent.langgraph.fallback.failed"
+  "agent.run.failed"
 ]);
 
 const DEFAULT_API_LOG_FILES = [
@@ -23,40 +21,8 @@ const LOG_MESSAGE_LABELS = {
   "agent.run.start": "请求开始",
   "agent.run.success": "请求成功",
   "agent.run.completed": "请求完成",
-  "agent.run.failed": "请求失败",
-  "agent.langgraph.fallback.triggered": "触发回退",
-  "agent.langgraph.fallback.completed": "回退完成",
-  "agent.langgraph.fallback.failed": "回退失败",
-  "agent.shadow.completed": "影子完成",
-  "agent.shadow.failed": "影子失败"
+  "agent.run.failed": "请求失败"
 };
-
-const SHADOW_CHECKS = [
-  {
-    id: "http-status",
-    label: "HTTP Status",
-    description: "新旧链路的 HTTP 状态码是否一致。",
-    contextKey: "shadowHttpStatusMatch"
-  },
-  {
-    id: "response-envelope",
-    label: "Response Envelope",
-    description: "success/data/error 的响应包络是否一致。",
-    contextKey: "shadowEnvelopeMatch"
-  },
-  {
-    id: "consistency-fields",
-    label: "Consistency Fields",
-    description: "关键业务字段的一致性检查是否通过。",
-    contextKey: "shadowConsistencyMatch"
-  },
-  {
-    id: "strict-body",
-    label: "Strict Body",
-    description: "忽略动态字段后，响应体是否严格一致。",
-    contextKey: "shadowStrictBodyMatch"
-  }
-];
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -70,10 +36,6 @@ function parseTimestamp(value) {
 function safeNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function safeBoolean(value) {
-  return typeof value === "boolean" ? value : null;
 }
 
 function normalizeResponseEnvelope(value) {
@@ -193,9 +155,7 @@ function groupEntriesByRequestId(entries) {
         requestId,
         events: [],
         startEvent: null,
-        finalEvent: null,
-        fallbackTriggeredEvent: null,
-        shadowCompletedEvent: null
+        finalEvent: null
       });
     }
 
@@ -210,13 +170,6 @@ function groupEntriesByRequestId(entries) {
       record.finalEvent = pickLatestEvent(record.finalEvent, entry);
     }
 
-    if (entry.message === "agent.langgraph.fallback.triggered") {
-      record.fallbackTriggeredEvent = pickLatestEvent(record.fallbackTriggeredEvent, entry);
-    }
-
-    if (entry.message === "agent.shadow.completed") {
-      record.shadowCompletedEvent = pickLatestEvent(record.shadowCompletedEvent, entry);
-    }
   }
 
   return Array.from(recordsByRequestId.values());
@@ -305,29 +258,6 @@ function summarizeFinalState(record) {
     };
   }
 
-  if (finalMessage === "agent.langgraph.fallback.completed") {
-    return {
-      success: finalContext.fallbackLegacySuccess === true,
-      httpStatus: safeNumber(finalContext.fallbackLegacyHttpStatus),
-      errorCode: finalContext.fallbackErrorCode || null,
-      errorStage: finalContext.fallbackErrorStage || null
-    };
-  }
-
-  if (finalMessage === "agent.langgraph.fallback.failed") {
-    return {
-      success: false,
-      httpStatus: safeNumber(finalContext.fallbackLegacyErrorHttpStatus)
-        ?? safeNumber(finalContext.fallbackErrorHttpStatus),
-      errorCode: finalContext.fallbackLegacyErrorCode
-        || finalContext.fallbackErrorCode
-        || null,
-      errorStage: finalContext.fallbackLegacyErrorStage
-        || finalContext.fallbackErrorStage
-        || null
-    };
-  }
-
   return {
     success: null,
     httpStatus: null,
@@ -338,8 +268,7 @@ function summarizeFinalState(record) {
 
 function deriveDurationMs(record) {
   const finalContext = isObject(record?.finalEvent?.context) ? record.finalEvent.context : {};
-  const directDuration = safeNumber(finalContext.durationMs)
-    ?? safeNumber(finalContext.fallbackLegacyDurationMs);
+  const directDuration = safeNumber(finalContext.durationMs);
   if (directDuration !== null) {
     return directDuration;
   }
@@ -356,11 +285,8 @@ function deriveDurationMs(record) {
 function summarizeRunRecord(record) {
   const startContext = isObject(record?.startEvent?.context) ? record.startEvent.context : {};
   const finalContext = isObject(record?.finalEvent?.context) ? record.finalEvent.context : {};
-  const fallbackContext = isObject(record?.fallbackTriggeredEvent?.context)
-    ? record.fallbackTriggeredEvent.context
-    : {};
   const finalState = summarizeFinalState(record);
-  const scene = startContext.scene || finalContext.scene || fallbackContext.scene || null;
+  const scene = startContext.scene || finalContext.scene || null;
   const configuredExecutionMode = getConfiguredExecutionMode(scene);
   const executionMode = finalContext.executionMode
     || startContext.executionMode
@@ -371,12 +297,10 @@ function summarizeRunRecord(record) {
     || null;
   const requestedMode = finalContext.requestedMode
     || startContext.requestedMode
-    || fallbackContext.requestedMode
-    || (sceneExecutionType === "langgraph-stategraph" ? "langgraph" : "legacy");
+    || (sceneExecutionType === "langgraph-stategraph" ? "langgraph" : null);
   const effectiveMode = finalContext.effectiveMode
     || startContext.effectiveMode
-    || fallbackContext.effectiveMode
-    || (record?.fallbackTriggeredEvent ? "legacy" : requestedMode);
+    || requestedMode;
   const bizParamKeys = Array.isArray(startContext.bizParamKeys) ? startContext.bizParamKeys : [];
   const bizParamSummary = isObject(startContext.bizParamSummary) ? startContext.bizParamSummary : {};
   const startedAt = record?.startEvent?.ts || null;
@@ -395,7 +319,6 @@ function summarizeRunRecord(record) {
     success: finalState.success,
     httpStatus: finalState.httpStatus,
     durationMs: deriveDurationMs(record),
-    fallbackTriggered: Boolean(record?.fallbackTriggeredEvent),
     errorCode: finalState.errorCode,
     errorStage: finalState.errorStage,
     finalMessage: record?.finalEvent?.message || null,
@@ -406,10 +329,6 @@ function summarizeRunRecord(record) {
       scene,
       bizParamKeys,
       bizParams: normalizeBizParamsSummary(bizParamSummary, bizParamKeys, scene)
-    },
-    shadow: {
-      available: Boolean(record?.shadowCompletedEvent),
-      shadowRunId: record?.shadowCompletedEvent?.context?.shadowRequestId || null
     }
   };
 }
@@ -433,7 +352,6 @@ function buildListItem(summary) {
     success: summary.success,
     httpStatus: summary.httpStatus,
     durationMs: summary.durationMs,
-    fallbackTriggered: summary.fallbackTriggered,
     errorCode: summary.errorCode || null,
     startedAt: summary.startedAt,
     completedAt: summary.completedAt,
@@ -491,65 +409,6 @@ function findRunBundle(runId, options = {}) {
   return bundle;
 }
 
-function buildTracePath(traceId) {
-  return traceId ? `/traces/${traceId}` : null;
-}
-
-function buildShadowChecks(context = {}) {
-  return SHADOW_CHECKS.map((definition) => ({
-    id: definition.id,
-    label: definition.label,
-    description: definition.description,
-    passed: safeBoolean(context?.[definition.contextKey])
-  }));
-}
-
-function buildShadowDifferences(summary, context = {}) {
-  const differences = [];
-
-  if (summary.success !== null && safeBoolean(context.shadowResultSuccess) !== null) {
-    const shadowResultSuccess = safeBoolean(context.shadowResultSuccess);
-    if (summary.success !== shadowResultSuccess) {
-      differences.push({
-        id: "result-success",
-        label: "Result Success",
-        baselineValue: String(summary.success),
-        shadowValue: String(shadowResultSuccess),
-        severity: "high"
-      });
-    }
-  }
-
-  const baselineErrorCode = summary.errorCode || null;
-  const shadowErrorCode = context.shadowErrorCode || null;
-  if (baselineErrorCode !== shadowErrorCode) {
-    differences.push({
-      id: "error-code",
-      label: "Error Code",
-      baselineValue: baselineErrorCode || "null",
-      shadowValue: shadowErrorCode || "null",
-      severity: "medium"
-    });
-  }
-
-  const checkDifferences = buildShadowChecks(context)
-    .filter((item) => item.passed === false)
-    .map((item) => ({
-      id: item.id,
-      label: item.label,
-      baselineValue: item.id === "http-status"
-        ? String(summary.httpStatus || "unknown")
-        : "match",
-      shadowValue: item.id === "http-status"
-        ? "mismatch"
-        : "mismatch",
-      severity: "medium",
-      description: item.description
-    }));
-
-  return differences.concat(checkDifferences);
-}
-
 function loadRunSummaries(options = {}) {
   return sortRunSummaries(
     loadRunBundles(options).map((bundle) => bundle.summary)
@@ -564,14 +423,10 @@ function buildLogListItem(entry) {
   const requestedMode = context.requestedMode || null;
   const effectiveMode = context.effectiveMode || null;
   const executionMode = context.executionMode || getConfiguredExecutionMode(scene) || null;
-  const durationMs = safeNumber(context.durationMs) ?? safeNumber(context.fallbackLegacyDurationMs);
+  const durationMs = safeNumber(context.durationMs);
   const httpStatus = safeNumber(context.httpStatus)
-    ?? safeNumber(context.fallbackLegacyHttpStatus)
     ?? (entry.message === "agent.run.success" ? 200 : null);
   const errorCode = context.code
-    || context.fallbackErrorCode
-    || context.fallbackLegacyErrorCode
-    || context.shadowErrorCode
     || null;
 
   return {
@@ -652,8 +507,7 @@ function getConsoleRunDetail(runId, options = {}) {
       requestedMode: summary.requestedMode,
       effectiveMode: summary.effectiveMode,
       executionMode: summary.executionMode,
-      sceneExecutionType: summary.sceneExecutionType,
-      fallbackTriggered: summary.fallbackTriggered
+      sceneExecutionType: summary.sceneExecutionType
     },
     result: {
       success: summary.success,
@@ -671,91 +525,12 @@ function getConsoleRunDetail(runId, options = {}) {
           httpStatus: summary.httpStatus || null
         }
       : null,
-    shadow: summary.shadow,
     startedAt: summary.startedAt,
     completedAt: summary.completedAt
   };
 }
 
-function getConsoleShadowDetail(runId, options = {}) {
-  const { summary, record } = findRunBundle(runId, options);
-  const shadowContext = isObject(record?.shadowCompletedEvent?.context)
-    ? record.shadowCompletedEvent.context
-    : null;
-  const resolvedScene = summary.scene || shadowContext?.scene || null;
-  const resolvedBaselineTraceId = summary.traceId || shadowContext?.traceId || null;
-
-  const baseline = {
-    requestId: summary.requestId,
-    traceId: resolvedBaselineTraceId,
-    tracePath: buildTracePath(resolvedBaselineTraceId),
-    mode: summary.effectiveMode || shadowContext?.effectiveMode || "legacy",
-    success: summary.success,
-    httpStatus: summary.httpStatus,
-    errorCode: summary.errorCode,
-    durationMs: summary.durationMs
-  };
-
-  if (!shadowContext) {
-    return {
-      runId: summary.runId,
-      requestId: summary.requestId,
-      scene: resolvedScene,
-      available: false,
-      baseline,
-      shadow: null,
-      diffSummary: null,
-      differences: [],
-      links: {
-        runDetailPath: `/runs/${summary.runId}`,
-        baselineTracePath: baseline.tracePath,
-        shadowTracePath: null
-      },
-      note: "当前 run 未记录 shadow 执行结果。"
-    };
-  }
-
-  const checks = buildShadowChecks(shadowContext);
-  const shadowTraceId = shadowContext.shadowTraceId || null;
-  const differences = buildShadowDifferences(summary, shadowContext);
-  const loggedDifferenceCount = safeNumber(shadowContext.shadowDifferenceCount) || 0;
-
-  return {
-    runId: summary.runId,
-    requestId: summary.requestId,
-    scene: resolvedScene,
-    available: true,
-    baseline,
-    shadow: {
-      requestId: shadowContext.shadowRequestId || null,
-      traceId: shadowTraceId,
-      tracePath: buildTracePath(shadowTraceId),
-      mode: "langgraph-compat",
-      resultSuccess: safeBoolean(shadowContext.shadowResultSuccess),
-      errorCode: shadowContext.shadowErrorCode || null,
-      nodeRunCount: safeNumber(shadowContext.shadowNodeRunCount),
-      nodeStatuses: Array.isArray(shadowContext.shadowNodeStatuses)
-        ? shadowContext.shadowNodeStatuses
-        : [],
-      sessionSeparated: safeBoolean(shadowContext.sessionSeparated)
-    },
-    diffSummary: {
-      passed: safeBoolean(shadowContext.shadowDiffPassed),
-      differenceCount: Math.max(loggedDifferenceCount, differences.length),
-      checks
-    },
-    differences,
-    links: {
-      runDetailPath: `/runs/${summary.runId}`,
-      baselineTracePath: baseline.tracePath,
-      shadowTracePath: buildTracePath(shadowTraceId)
-    },
-    note: "当前页面展示的是日志里已落盘的 shadow 摘要；完整节点差异请继续查看 trace。"
-  };
-}
-
 module.exports = {
-  getConsoleShadowDetail,
   getConsoleRunDetail,
   loadRunBundles,
   listConsoleRuns

@@ -7,7 +7,6 @@ import { RunOncePage } from "./pages/debug/RunOncePage";
 import { RolloutPage } from "./pages/rollout/RolloutPage";
 import { RunDetailPage } from "./pages/runs/RunDetailPage";
 import { RunListPage } from "./pages/runs/RunListPage";
-import { ShadowComparePage } from "./pages/runs/ShadowComparePage";
 import { RagJobsPage } from "./pages/rag/RagJobsPage";
 import { RagLibraryDetailPage } from "./pages/rag/RagLibraryDetailPage";
 import { RagLibraryEditPage } from "./pages/rag/RagLibraryEditPage";
@@ -16,6 +15,7 @@ import { RagOverviewPage } from "./pages/rag/RagOverviewPage";
 import { RagSearchPage } from "./pages/rag/RagSearchPage";
 import { RagSettingsPage } from "./pages/rag/RagSettingsPage";
 import { RagSyncPage } from "./pages/rag/RagSyncPage";
+import { NewScenePage } from "./pages/scenes/NewScenePage";
 import { SceneWorkflowPage } from "./pages/scenes/SceneWorkflowPage";
 import { ScenesPage } from "./pages/scenes/ScenesPage";
 import { TraceDetailPage } from "./pages/traces/TraceDetailPage";
@@ -28,11 +28,11 @@ export default function App() {
       <Route path="/" element={<ShellLayout />}>
         <Route index element={<Navigate to="/scenes" replace />} />
         <Route path="scenes" element={<ScenesPage />} />
+        <Route path="scenes/new" element={<NewScenePage />} />
         <Route path="scenes/:scene" element={<SceneWorkflowPage />} />
         <Route path="debug/run-once" element={<RunOncePage />} />
         <Route path="runs" element={<RunListPage />} />
         <Route path="runs/:runId" element={<RunDetailPage />} />
-        <Route path="runs/:runId/shadow" element={<ShadowComparePage />} />
         <Route path="traces/:traceId" element={<TraceDetailPage />} />
         <Route path="rag" element={<Navigate to="/rag/overview" replace />} />
         <Route path="rag/overview" element={<RagOverviewPage />} />

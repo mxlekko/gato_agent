@@ -1,4 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#0f172a" />
-  <path d="M18 46 29.5 18h5L46 46h-6.3l-2.2-5.9H26.4L24.2 46Zm10.3-11h7l-3.4-9.2h-.2Z" fill="#f8fafc" />
+  <defs>
+    <linearGradient id="mark-bg" x1="11" y1="9" x2="53" y2="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#165DFF" />
+      <stop offset="0.58" stop-color="#1748D8" />
+      <stop offset="1" stop-color="#00A3A3" />
+    </linearGradient>
+    <linearGradient id="mark-line" x1="20" y1="16" x2="45" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#D7FFF4" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#mark-bg)" />
+  <path
+    d="M20 22c7.8 0 11.5 4.4 11.5 10S36.2 42 44 42"
+    fill="none"
+    stroke="url(#mark-line)"
+    stroke-width="7"
+    stroke-linecap="round"
+  />
+  <path
+    d="M44 22c-7.8 0-11.5 4.4-11.5 10S27.8 42 20 42"
+    fill="none"
+    stroke="#B8E7FF"
+    stroke-width="7"
+    stroke-linecap="round"
+    opacity="0.55"
+  />
+  <circle cx="20" cy="22" r="5.5" fill="#FFFFFF" />
+  <circle cx="44" cy="42" r="5.5" fill="#D7FFF4" />
+  <circle cx="44" cy="22" r="4.5" fill="#9FE8FF" opacity="0.9" />
+  <circle cx="20" cy="42" r="4.5" fill="#9AFFD5" opacity="0.9" />
 </svg>

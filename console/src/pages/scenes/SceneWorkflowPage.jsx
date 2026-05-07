@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
-import { consoleClient, consoleDataMode } from "../../services/clientFactory";
+import { consoleClient } from "../../services/clientFactory";
 import { WorkflowIvrFlow } from "../workflows/WorkflowIvrFlow";
 import { WorkflowNodeList } from "../workflows/WorkflowNodeList";
 
@@ -138,6 +138,14 @@ function formatConfigStatus(status) {
   }[status] || status || "-";
 }
 
+function formatPublishState(configState = {}) {
+  if (configState.publishState === "unpublished" || configState.hasPublishedSnapshot === false) {
+    return "未发布";
+  }
+
+  return configState.hasUnpublishedChanges ? "草稿未发布" : "已发布";
+}
+
 export function SceneWorkflowPage() {
   const { scene } = useParams();
   const [workflow, setWorkflow] = useState(null);
@@ -149,6 +157,9 @@ export function SceneWorkflowPage() {
   const [skillBindingStatus, setSkillBindingStatus] = useState("idle");
   const [skillBindingMessage, setSkillBindingMessage] = useState("");
   const [workflowView, setWorkflowView] = useState("ivr");
+  const [publishStatus, setPublishStatus] = useState("idle");
+  const [publishMessage, setPublishMessage] = useState("");
+  const [publishResult, setPublishResult] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -179,6 +190,9 @@ export function SceneWorkflowPage() {
         setSkillBindingDraft("");
         setSkillBindingStatus("idle");
         setSkillBindingMessage("");
+        setPublishStatus("idle");
+        setPublishMessage("");
+        setPublishResult(null);
       } catch (error) {
         if (!active) {
           return;
@@ -196,6 +210,19 @@ export function SceneWorkflowPage() {
       active = false;
     };
   }, [scene]);
+
+  async function reloadWorkflow() {
+    const workflowResponse = await consoleClient.getSceneWorkflow(scene);
+    if (workflowResponse?.ok && workflowResponse?.payload?.success !== false) {
+      setWorkflow(workflowResponse?.payload?.data || null);
+      setStatus("ready");
+      setErrorMessage("");
+      return;
+    }
+
+    setStatus("error");
+    setErrorMessage(workflowResponse?.payload?.error?.message || "流程详情刷新失败。");
+  }
 
   const overrideableNodeIds = useMemo(() => {
     if (!workflow?.nodesById || !workflow?.orderedNodeIds) {
@@ -286,23 +313,54 @@ export function SceneWorkflowPage() {
         `已保存业务技能绑定草稿为 ${nextSkillBinding?.current?.title || nextSkillBinding?.current?.name || "目标业务技能"}。`
       );
 
-      const workflowResponse = await consoleClient.getSceneWorkflow(scene);
-      if (workflowResponse?.ok && workflowResponse?.payload?.success !== false) {
-        setWorkflow(workflowResponse?.payload?.data || null);
-        setStatus("ready");
-        setErrorMessage("");
-      }
+      await reloadWorkflow();
     } catch (error) {
       setSkillBindingStatus("error");
       setSkillBindingMessage(error.message || "业务技能绑定保存失败。");
     }
   }
 
-  const skillEditDisabled = consoleDataMode !== "api";
+  async function handlePublishCurrentDraft() {
+    setPublishStatus("publishing");
+    setPublishMessage("");
+    setPublishResult(null);
+
+    try {
+      const response = await consoleClient.publishRelease({
+        scopeType: "all",
+        scopeValue: "*",
+        operator: "console-ui",
+        publishNote: `publish scene draft from console: ${scene}`
+      });
+
+      if (!response?.ok || response?.payload?.success === false) {
+        setPublishStatus("error");
+        setPublishMessage(response?.payload?.error?.message || "发布失败。");
+        return;
+      }
+
+      const result = response?.payload?.data || null;
+      setPublishStatus("success");
+      setPublishResult(result);
+      setPublishMessage(
+        `发布成功：${result?.release?.releaseId || "已生成 release"}，active runtime 已切到新 bundle。`
+      );
+      await reloadWorkflow();
+    } catch (error) {
+      setPublishStatus("error");
+      setPublishMessage(error.message || "发布失败。");
+    }
+  }
+
   const currentSkillLabel = workflow?.skill?.title || workflow?.skill?.name || "未纳入模板";
   const currentSkillRef = workflow?.skill
     ? `${workflow.skill.name}@${workflow.skill.version}`
     : "-";
+  const canPublishDraft = Boolean(
+    workflow?.configState?.hasUnpublishedChanges
+    || workflow?.configState?.publishState === "unpublished"
+    || workflow?.configState?.hasPublishedSnapshot === false
+  );
 
   return (
     <PageFrame hideHeader>
@@ -324,11 +382,11 @@ export function SceneWorkflowPage() {
             <article className="stat-card">
               <span className="meta-label">模板</span>
               <strong>
-                {workflow.template
-                  ? `${workflow.template.name}@${workflow.template.version}`
-                  : "非模板编排"}
-              </strong>
-              <p>{workflow.template?.title || workflow.legacyOnlyReason}</p>
+	                {workflow.template
+	                  ? `${workflow.template.name}@${workflow.template.version}`
+	                  : "非模板编排"}
+	              </strong>
+	              <p>{workflow.template?.title || "当前场景没有可展示的模板绑定。"}</p>
             </article>
             <article className="stat-card">
               <span className="meta-label">业务技能</span>
@@ -349,8 +407,40 @@ export function SceneWorkflowPage() {
                   <p className="eyebrow">场景</p>
                   <h4>场景与运行信息</h4>
                 </div>
+                {canPublishDraft ? (
+                  <button
+                    className="button-primary"
+                    disabled={publishStatus === "publishing"}
+                    onClick={handlePublishCurrentDraft}
+                    type="button"
+                  >
+                    {publishStatus === "publishing" ? "发布中..." : "发布到运行态"}
+                  </button>
+                ) : (
+                  <span className="tag tag-success">已发布</span>
+                )}
               </div>
               <p className="section-text">{workflow.description}</p>
+              {publishMessage ? (
+                <div
+                  className={`callout ${
+                    publishStatus === "error"
+                      ? "callout-error"
+                      : "callout-success"
+                  }`}
+                >
+                  <strong>{publishStatus === "error" ? "发布失败" : "发布完成"}</strong>
+                  <p>{publishMessage}</p>
+                  {publishResult?.currentBundleTarget ? (
+                    <p>{`Current bundle: ${publishResult.currentBundleTarget}`}</p>
+                  ) : null}
+                </div>
+              ) : canPublishDraft ? (
+                <div className="callout callout-neutral">
+                  <strong>草稿尚未进入运行态</strong>
+                  <p>单次请求调试只调用 active runtime。发布成功后，新增场景才会被 /api/agent/run 识别。</p>
+                </div>
+              ) : null}
               <KeyValueList
                 items={[
                   { label: "执行方式", value: workflow.executionMode || "-" },
@@ -368,6 +458,10 @@ export function SceneWorkflowPage() {
                     value: formatConfigStatus(workflow.configState?.draft?.status)
                   },
                   {
+                    label: "发布状态",
+                    value: formatPublishState(workflow.configState)
+                  },
+                  {
                     label: "草稿存储",
                     value: workflow.configState?.storagePath || "-"
                   },
@@ -377,7 +471,7 @@ export function SceneWorkflowPage() {
                   },
                   {
                     label: "当前发布",
-                    value: workflow.configState?.published?.path || "-"
+                    value: workflow.configState?.published?.path || "未发布"
                   }
                 ]}
               />
@@ -394,23 +488,22 @@ export function SceneWorkflowPage() {
                 <AssetCard
                   label="流程模板"
                   value={workflow.template?.title || "非模板编排"}
-                  detail={
-                    workflow.template
-                      ? `${workflow.template.name}@${workflow.template.version}`
-                      : workflow.legacyOnlyReason
-                  }
+	                  detail={
+	                    workflow.template
+	                      ? `${workflow.template.name}@${workflow.template.version}`
+	                      : "当前场景没有可展示的模板绑定。"
+	                  }
                 />
                 <AssetCard
                   label="业务技能"
                   value={currentSkillLabel}
                   note="场景页只负责切换当前草稿绑定的业务技能；提示词、结构定义、数据字典和规则等具体内容请到“配置目录 / 业务技能”里编辑。"
-                  detail={`草稿：${currentSkillRef} | 当前发布：${workflow.configState?.published?.skillRef || "-"}`}
+                  detail={`草稿：${currentSkillRef} | 当前发布：${workflow.configState?.published?.skillRef || "未发布"}`}
                   action={workflow.platformManagedScene ? (
-                    <button
-                      className="button-secondary button-inline"
-                      disabled={skillEditDisabled}
-                      onClick={handleOpenSkillBindingEditor}
-                      type="button"
+	                    <button
+	                      className="button-secondary button-inline"
+	                      onClick={handleOpenSkillBindingEditor}
+	                      type="button"
                     >
                       编辑
                     </button>
@@ -635,58 +728,12 @@ export function SceneWorkflowPage() {
                 </section>
               </section>
             </>
-          ) : (
-            <section className="detail-grid">
-              <section className="section-card">
-                <div className="section-header">
-                  <div>
-                    <p className="eyebrow">直连模型</p>
-                    <h4>当前直模配置</h4>
-                  </div>
-                </div>
-                <KeyValueList
-                  items={[
-                    {
-                      label: "供应商",
-                      value: workflow.directModel?.provider || "-"
-                    },
-                    {
-                      label: "模型",
-                      value: workflow.directModel?.model || "-"
-                    },
-                    {
-                      label: "提示词引用",
-                      value: workflow.directModel?.promptRef || "-"
-                    },
-                    {
-                      label: "结构引用",
-                      value: workflow.directModel?.schemaRef || "-"
-                    }
-                  ]}
-                />
-              </section>
-
-              <section className="section-card">
-                <div className="section-header">
-                  <div>
-                    <p className="eyebrow">引用</p>
-                    <h4>引用资产</h4>
-                  </div>
-                </div>
-                <div className="simple-list">
-                  {workflow.references?.map((item) => (
-                    <div className="simple-list-row" key={item.ref}>
-                      <div>
-                        <strong>{item.ref}</strong>
-                        <p>{item.purpose}</p>
-                      </div>
-                      <span className="tag tag-neutral">{item.type}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </section>
-          )}
+	          ) : (
+	            <section className="section-card">
+	              <h4>未纳入平台编排</h4>
+	              <p className="muted-text">当前场景没有可展示的 LangGraph 模板绑定。</p>
+	            </section>
+	          )}
         </>
       ) : null}
 

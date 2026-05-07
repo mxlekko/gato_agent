@@ -437,11 +437,11 @@ def build_overview_image() -> Path:
     draw_container(base, agent_domain, "项目内运行域", AMBER, with_alpha(AMBER, 18)[:3], title_fill=WHITE)
 
     draw_card(base, api_box, "本地 API 服务", "server.js + routes/agent.js\n对外统一入口\n负责桥接而不做业务清洗", TEAL, PANEL_MINT, badge="API")
-    draw_card(base, gateway_box, "Platform Gateway", "按 scene-config 决策\n选择 langgraph/direct-model\n记录 routePlan", NAVY, PANEL_ALT, badge="gateway")
+    draw_card(base, gateway_box, "Platform Gateway", "按 scene-config 决策\n统一进入 langgraph\n记录 routePlan", NAVY, PANEL_ALT, badge="gateway")
     draw_card(base, agent_box, "LangGraph Runtime", "编译 BusinessSkill + Template\n调度平台节点\n返回标准 result state", AMBER, PANEL_WARM, badge="graph")
 
     draw_card(base, api_resp, "API 负责什么", "校验请求\n读取 scene-config\n组装 runtime body\n解析返回并统一回包", TEAL, WHITE)
-    draw_card(base, gateway_resp, "Gateway 负责什么", "执行 routing 策略\n拒绝退役 legacy 主链路\n不承载业务判断", NAVY, WHITE)
+    draw_card(base, gateway_resp, "Gateway 负责什么", "执行 routing 策略\n统一 LangGraph 主链路\n不承载业务判断", NAVY, WHITE)
     draw_card(base, agent_resp, "Runtime 负责什么", "加载 workflow contract\n调用数据/LLM/校验节点\n产出统一 envelope", AMBER, WHITE)
 
     draw_connector(draw, [(300, 524), (430, 524)], fill=BLUE, width=7)

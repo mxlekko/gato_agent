@@ -111,9 +111,9 @@ export function TraceDetailPage() {
 
   return (
     <PageFrame
-      eyebrow="追踪"
-      title={traceId}
-      description="查看节点时间线、节点摘要以及工具 / 模型摘要，优先用于定位 langgraph 和 shadow 的节点级异常。"
+	      eyebrow="追踪"
+	      title={traceId}
+	      description="查看 LangGraph 节点时间线、节点摘要以及工具 / 模型摘要。"
       actions={<span className="pill">真实接口：GET /api/console/traces/:traceId</span>}
     >
       {status === "error" ? (
@@ -210,21 +210,17 @@ export function TraceDetailPage() {
                         ? `${trace.workflow.skill.name}@${trace.workflow.skill.version}`
                         : "-"
                     },
-                    {
-                      label: "场景类型",
-                      value: trace.routing?.sceneExecutionType || "-"
-                    },
-                    {
-                      label: "触发回退",
-                      value: String(Boolean(trace.routing?.fallbackTriggered))
-                    }
-                  ]}
+	                    {
+	                      label: "场景类型",
+	                      value: trace.routing?.sceneExecutionType || "-"
+	                    }
+	                  ]}
                 />
-              ) : (
-                <div className="callout callout-neutral">
-                  <strong>当前追踪没有关联到流程模板</strong>
-                  <p>通常意味着这条链路来自非模板编排或直模，或当前场景还没有纳入模板编译。</p>
-                </div>
+	              ) : (
+	                <div className="callout callout-neutral">
+	                  <strong>当前追踪没有关联到流程模板</strong>
+	                  <p>通常意味着当前日志没有记录足够的模板编译信息。</p>
+	                </div>
               )}
             </section>
           </div>

@@ -290,17 +290,11 @@ function buildComparisonReport(options) {
       responseEnvelopeMatch: envelope.passed,
       consistencyFieldsMatch: consistency.passed,
       strictBodyMatch
-    },
-    envelopeChecks: envelope.details,
-    consistencyChecks: consistency.details,
-    diffs,
-    shadow: {
-      enabled: false,
-      baselineRequestId: actualBody?.requestId || expectedBody?.requestId || null,
-      shadowRequestId: null,
-      diffSummary: null
-    }
-  };
+	    },
+	    envelopeChecks: envelope.details,
+	    consistencyChecks: consistency.details,
+	    diffs
+	  };
 }
 
 function writeJson(filePath, value) {

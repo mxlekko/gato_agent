@@ -30,12 +30,12 @@ function KeyValueList({ items }) {
 
 function AlertList({ alerts = [] }) {
   if (alerts.length === 0) {
-    return (
-      <div className="callout callout-success">
-        <strong>当前没有灰度告警</strong>
-        <p>这批样本没有命中成功率、回退率或影子差异的阈值警报。</p>
-      </div>
-    );
+	    return (
+	      <div className="callout callout-success">
+	        <strong>当前没有灰度告警</strong>
+	        <p>这批样本没有命中成功率、结构失败率或耗时阈值警报。</p>
+	      </div>
+	    );
   }
 
   return (
@@ -193,9 +193,9 @@ export function RolloutPage() {
   const [status, setStatus] = useState("loading");
   const [previewStatus, setPreviewStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [formState, setFormState] = useState({
-    mode: "legacy",
-    requestPercentage: "0",
+	  const [formState, setFormState] = useState({
+	    mode: "langgraph",
+	    requestPercentage: "0",
     tenantAllowlist: "",
     userAllowlist: ""
   });
@@ -273,8 +273,8 @@ export function RolloutPage() {
             releaseStatusResponse?.payload?.error?.message || "发布状态读取失败。"
           );
         }
-        setFormState({
-          mode: routingData?.current?.routingMode || "legacy",
+	        setFormState({
+	          mode: routingData?.current?.routingMode || "langgraph",
           requestPercentage: String(routingData?.cutover?.requestPercentage ?? 0),
           tenantAllowlist: (routingData?.cutover?.tenantAllowlist || []).join(", "),
           userAllowlist: (routingData?.cutover?.userAllowlist || []).join(", ")
@@ -315,8 +315,8 @@ export function RolloutPage() {
 
       const routingData = response?.payload?.data || null;
       setRouting(routingData);
-      setFormState({
-        mode: routingData?.current?.routingMode || "legacy",
+	      setFormState({
+	        mode: routingData?.current?.routingMode || "langgraph",
         requestPercentage: String(routingData?.cutover?.requestPercentage ?? 0),
         tenantAllowlist: (routingData?.cutover?.tenantAllowlist || []).join(", "),
         userAllowlist: (routingData?.cutover?.userAllowlist || []).join(", ")
@@ -379,7 +379,7 @@ export function RolloutPage() {
   const selectedSceneTitle = useMemo(() => (
     sceneOptions.find((item) => item.scene === scene)?.title || scene || "-"
   ), [scene, sceneOptions]);
-  const allowedModes = routing?.current?.allowedModes || ["legacy"];
+	  const allowedModes = routing?.current?.allowedModes || ["langgraph"];
   const cutoverEditable = formState.mode === "langgraph" && allowedModes.includes("langgraph");
 
   return (
@@ -488,21 +488,21 @@ export function RolloutPage() {
               <strong>{formatRate(report?.rates?.successRate)}</strong>
               <p>{`运行数=${report?.totals?.runs ?? 0}`}</p>
             </article>
-            <article className="stat-card">
-              <span className="meta-label">回退比例</span>
-              <strong>{formatRate(report?.rates?.fallbackRatio)}</strong>
-              <p>{`回退数=${report?.totals?.fallbackRuns ?? 0}`}</p>
-            </article>
+	            <article className="stat-card">
+	              <span className="meta-label">LangGraph 请求</span>
+	              <strong>{report?.totals?.langgraphRuns ?? 0}</strong>
+	              <p>统一运行时已观测请求数。</p>
+	            </article>
             <article className="stat-card">
               <span className="meta-label">结构失败率</span>
               <strong>{formatRate(report?.rates?.schemaFailureRate)}</strong>
               <p>{`P95=${report?.latency?.p95DurationMs ?? "-"} ms`}</p>
             </article>
-            <article className="stat-card">
-              <span className="meta-label">影子差异通过率</span>
-              <strong>{formatRate(report?.shadowDiff?.diffPassRate)}</strong>
-              <p>{`告警数=${report?.alerts?.length ?? 0}`}</p>
-            </article>
+	            <article className="stat-card">
+	              <span className="meta-label">告警数</span>
+	              <strong>{report?.alerts?.length ?? 0}</strong>
+	              <p>{`最大耗时=${report?.latency?.maxDurationMs ?? "-"} ms`}</p>
+	            </article>
           </section>
 
           <section className="section-card">
@@ -551,7 +551,7 @@ export function RolloutPage() {
                   readOnly
                   value={selectedSceneTitle}
                 />
-                <p className="field-help">直模场景只读观察，不参与流程化灰度切流。</p>
+	                <p className="field-help">当前场景统一按 LangGraph agent-runtime 路由。</p>
               </div>
             </div>
           </section>
@@ -566,14 +566,12 @@ export function RolloutPage() {
               </div>
               <KeyValueList
                 items={[
-                  { label: "配置模式", value: routing.current?.routingMode || "-" },
-                  { label: "允许模式", value: (routing.current?.allowedModes || []).join(" / ") || "-" },
-                  { label: "生效模式", value: routing.current?.effectiveMode || "-" },
-                  { label: "路由原因", value: routing.current?.routeReason || "-" },
-                  { label: "兼容执行角色", value: routing.current?.deprecatedLegacyRole || routing.current?.legacyRole || "-" },
-                  { label: "影子执行", value: String(Boolean(routing.current?.shadowExecutionEnabled)) },
-                  { label: "平台管理", value: routing.current?.platformManagedScene ? "是" : "否" },
-                  { label: "执行方式", value: routing.executionMode || "-" }
+	                  { label: "配置模式", value: routing.current?.routingMode || "-" },
+	                  { label: "允许模式", value: (routing.current?.allowedModes || []).join(" / ") || "-" },
+	                  { label: "生效模式", value: routing.current?.effectiveMode || "-" },
+	                  { label: "路由原因", value: routing.current?.routeReason || "-" },
+	                  { label: "平台管理", value: routing.current?.platformManagedScene ? "是" : "否" },
+	                  { label: "执行方式", value: routing.executionMode || "-" }
                 ]}
               />
             </section>
@@ -582,16 +580,14 @@ export function RolloutPage() {
               <div className="section-header">
                 <div>
                   <p className="eyebrow">观测</p>
-                  <h4>fallback 与运行观察</h4>
+	                  <h4>运行观察</h4>
                 </div>
               </div>
               <KeyValueList
                 items={[
-                  { label: "运行数", value: String(routing.rollout?.totals?.runs ?? 0) },
-                  { label: "回退数", value: String(routing.rollout?.totals?.fallbackRuns ?? 0) },
-                  { label: "成功率", value: formatRate(routing.rollout?.rates?.successRate) },
-                  { label: "回退比例", value: formatRate(routing.rollout?.rates?.fallbackRatio) },
-                  { label: "结构失败率", value: formatRate(routing.rollout?.rates?.schemaFailureRate) },
+	                  { label: "运行数", value: String(routing.rollout?.totals?.runs ?? 0) },
+	                  { label: "成功率", value: formatRate(routing.rollout?.rates?.successRate) },
+	                  { label: "结构失败率", value: formatRate(routing.rollout?.rates?.schemaFailureRate) },
                   { label: "P95 耗时", value: routing.rollout?.latency?.p95DurationMs ? `${routing.rollout.latency.p95DurationMs} ms` : "-" }
                 ]}
               />
@@ -673,7 +669,7 @@ export function RolloutPage() {
                     type="number"
                     value={formState.requestPercentage}
                   />
-                  <p className="field-help">只有选择 `langgraph` 且场景允许该模式时才会参与命中计算。</p>
+	                  <p className="field-help">当前只预检 LangGraph 命中策略，不会写回配置。</p>
                 </div>
               </div>
 

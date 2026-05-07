@@ -646,14 +646,19 @@ function validateToolSceneAllowance({
   scene,
   filePath,
   field,
-  issues
+  issues,
+  allowTemplateScene = false
 } = {}) {
   const allowedScenes = toolRecord?.document?.spec?.policy?.allowedScenes;
   if (!Array.isArray(allowedScenes) || allowedScenes.length === 0) {
     return;
   }
 
-  if (allowedScenes.includes(scene)) {
+  if (allowedScenes.includes(scene) || allowedScenes.includes("*")) {
+    return;
+  }
+
+  if (allowTemplateScene && toolRecord?.document?.spec?.policy?.allowTemplateScenes === true) {
     return;
   }
 
@@ -663,6 +668,10 @@ function validateToolSceneAllowance({
     field,
     message: `ToolDefinition ${toolRecord?.document?.spec?.ref || "missing"} does not allow scene=${scene || "missing"} in spec.policy.allowedScenes.`
   });
+}
+
+function templateAllowsNewScenes(templateRecord) {
+  return templateRecord?.document?.spec?.sceneCreation?.allowNewScenes === true;
 }
 
 function validateBusinessSkill(record, registry, issues) {
@@ -682,9 +691,16 @@ function validateBusinessSkill(record, registry, issues) {
     });
   }
 
+  const allowTemplateScene = templateAllowsNewScenes(templateRecord);
+
   if (templateRecord) {
     const compatibleScenes = templateRecord.document?.spec?.compatibleScenes || [];
-    if (Array.isArray(compatibleScenes) && compatibleScenes.length > 0 && !compatibleScenes.includes(spec.scene)) {
+    if (
+      Array.isArray(compatibleScenes)
+      && compatibleScenes.length > 0
+      && !compatibleScenes.includes(spec.scene)
+      && !allowTemplateScene
+    ) {
       pushIssue(issues, {
         code: "INCOMPATIBLE_SCENE",
         file: filePath,
@@ -723,7 +739,8 @@ function validateBusinessSkill(record, registry, issues) {
       scene: spec.scene,
       filePath,
       field: `spec.toolBindings.${role}.toolRef`,
-      issues
+      issues,
+      allowTemplateScene
     });
   }
 

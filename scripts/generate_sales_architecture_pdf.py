@@ -407,7 +407,7 @@ def page_architecture(c: canvas.Canvas) -> None:
     cards = [
         ("调用方", ["前端页面 / 业务后端", "发起 POST /api/agent/run", "仅传 scene + opportunityId"], 34, 330, 126, 136, colors.white, "#6B92C3"),
         ("AI API 服务", ["server.js / routes/agent.js", "参数校验", "requestId 生成", "request file 写入"], 182, 330, 138, 136, colors.white, "#5A8DA9"),
-        ("Platform Gateway", ["platform/gateway/index.js", "按 scene-config 选路", "拒绝退役 legacy 主链路", "传递 routePlan"], 342, 330, 146, 136, colors.white, "#5F7AB1"),
+        ("Platform Gateway", ["platform/gateway/index.js", "按 scene-config 选路", "统一 LangGraph 主链路", "传递 routePlan"], 342, 330, 146, 136, colors.white, "#5F7AB1"),
         ("LangGraph Runtime", ["platform/runtime/graphs", "承接 sales-opportunity scene", "调度并执行节点图"], 510, 330, 118, 136, colors.white, "#7D7BC5"),
         ("BusinessSkill workflow", ["validate-input", "fetch-context", "normalize-facts", "draft-output", "validate-output / finalize"], 650, 320, 162, 156, colors.white, "#D28C32"),
     ]
@@ -476,7 +476,7 @@ def page_architecture(c: canvas.Canvas) -> None:
         "职责边界",
         [
             "API 层：scene 与 bizParams 校验、requestId 生成、runtime 调用、HTTP 回传。",
-            "Platform Gateway：根据 scene-config 选择 langgraph/direct-model，拒绝退役 agent-runtime legacy 主链路。",
+            "Platform Gateway：根据 scene-config 统一进入 LangGraph agent-runtime 主链路。",
             "LangGraph Runtime：固定承载该业务场景的节点图，不依赖外部 agent session。",
             "BusinessSkill：声明查数、非空字段过滤、字段字典映射、事实构造、模型调用、输出校验。",
             "模型：通过项目内 LLM client 仅对已知事实做推进建议生成。",

@@ -34,6 +34,7 @@ spec:
     timeoutMsMax: 60000
     retryMaxAttempts: 1
   policy:
+    allowTemplateScenes: true
     allowedScenes:
       - payment-info-split
     deny:

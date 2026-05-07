@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageFrame } from "../../components/PageFrame";
 import { apiClient } from "../../services/apiClient";
 
@@ -59,15 +59,155 @@ function prettyJson(value) {
   return JSON.stringify(value, null, 2);
 }
 
-function buildInitialFormState(scene = "payment-info-split") {
+function buildInitialFormState(scene = "payment-info-split", bizParamsExample = null) {
   const preset = scenePresets[scene];
 
   return {
     scene,
-    tenantId: preset?.tenantId || "",
-    userId: preset?.userId || "",
-    bizParamsText: prettyJson(preset?.bizParams || {})
+    tenantId: preset?.tenantId || "tenant-a",
+    userId: preset?.userId || "user-a",
+    bizParamsText: prettyJson(preset?.bizParams || bizParamsExample || {})
   };
+}
+
+function sampleValueForBizParam(fieldName) {
+  const normalized = String(fieldName || "").trim();
+  const lowerName = normalized.toLowerCase();
+
+  if (!normalized) {
+    return "示例值";
+  }
+
+  if (lowerName === "opportunityid" || lowerName.endsWith("opportunityid")) {
+    return "2041340312877535232";
+  }
+
+  if (lowerName === "rawtext" || lowerName.endsWith("text")) {
+    return "客户确认这单属于招标已设计场景，核心参数满足，预计 2026-05-20 完成采购。";
+  }
+
+  if (lowerName.includes("requirement") || lowerName.includes("需求")) {
+    return "客户需要按行业、区域和客户等级组合筛选，输出重点客户清单和下一步跟进建议。";
+  }
+
+  if (lowerName.endsWith("no") || lowerName.endsWith("code") || lowerName.includes("order")) {
+    return "TEST-20260507-001";
+  }
+
+  if (lowerName.endsWith("id")) {
+    return `${normalized}-001`;
+  }
+
+  if (lowerName.includes("date") || lowerName.includes("time")) {
+    return "2026-05-07";
+  }
+
+  if (lowerName.includes("count") || lowerName.includes("amount") || lowerName.includes("limit")) {
+    return 1;
+  }
+
+  return `示例${normalized}`;
+}
+
+function extractBizParamNameFromMapping(value) {
+  const normalized = String(value || "").trim();
+  const match = normalized.match(/^request\.bizParams\.([a-zA-Z0-9_-]+)$/u);
+  return match ? match[1] : "";
+}
+
+function buildBizParamsExampleFromWorkflow(workflow) {
+  const inputContract = workflow?.inputContract || {};
+  const names = new Set();
+
+  for (const fieldName of inputContract.requiredBizParams || []) {
+    if (fieldName) {
+      names.add(fieldName);
+    }
+  }
+
+  for (const [fieldName, mappingValue] of Object.entries(inputContract.inputMapping || {})) {
+    if (fieldName) {
+      names.add(fieldName);
+    }
+
+    const mappedName = extractBizParamNameFromMapping(mappingValue);
+    if (mappedName) {
+      names.add(mappedName);
+    }
+  }
+
+  return Object.fromEntries(
+    Array.from(names).map((fieldName) => [fieldName, sampleValueForBizParam(fieldName)])
+  );
+}
+
+function getScenePublishState(sceneItem) {
+  const publishState = sceneItem?.publishState || sceneItem?.configState?.publishState || "";
+  const hasPublishedSnapshot = sceneItem?.hasPublishedSnapshot ?? sceneItem?.configState?.hasPublishedSnapshot;
+  const hasUnpublishedChanges = sceneItem?.configState?.hasUnpublishedChanges === true;
+
+  if (publishState === "unpublished" || hasPublishedSnapshot === false) {
+    return {
+      runnable: false,
+      label: "未发布",
+      help: "这个场景目前只有配置中心草稿，还没有进入 active runtime。发布成功后才能在单次请求调试中执行。"
+    };
+  }
+
+  if (hasUnpublishedChanges) {
+    return {
+      runnable: true,
+      label: "运行当前发布版",
+      help: "这个场景有草稿未发布；单次请求调试会运行 active runtime 中的当前发布版本。"
+    };
+  }
+
+  return {
+    runnable: true,
+    label: "可运行",
+    help: "这个场景已经发布到 active runtime，可以通过真实接口调试。"
+  };
+}
+
+function buildSceneOptions(sceneItems, listStatus) {
+  if (sceneItems.length === 0 && listStatus !== "ready") {
+    return Object.entries(scenePresets).map(([scene, preset]) => ({
+      scene,
+      label: preset.label,
+      note: preset.note,
+      publishLabel: "内置示例",
+      runnable: true
+    }));
+  }
+
+  const seen = new Set();
+  const options = sceneItems.map((item) => {
+    seen.add(item.scene);
+    const preset = scenePresets[item.scene];
+    const publishState = getScenePublishState(item);
+
+    return {
+      scene: item.scene,
+      label: item.title || preset?.label || item.scene,
+      note: preset?.note || publishState.help,
+      publishLabel: publishState.label,
+      runnable: publishState.runnable
+    };
+  });
+
+  for (const [scene, preset] of Object.entries(scenePresets)) {
+    if (!seen.has(scene)) {
+      options.push({
+        scene,
+        label: preset.label,
+        note: preset.note,
+        publishLabel: "内置示例",
+        runnable: true
+      });
+    }
+  }
+
+  return options;
 }
 
 function buildRequestBody({ scene, tenantId, userId, bizParams }) {
@@ -93,11 +233,132 @@ export function RunOncePage() {
   const [formState, setFormState] = useState(() =>
     buildInitialFormState("payment-info-split")
   );
+  const [sceneItems, setSceneItems] = useState([]);
+  const [sceneListStatus, setSceneListStatus] = useState("loading");
+  const [sceneListError, setSceneListError] = useState("");
+  const [sceneExampleStatus, setSceneExampleStatus] = useState("idle");
+  const [sceneExampleMessage, setSceneExampleMessage] = useState("");
+  const [sceneExampleReloadKey, setSceneExampleReloadKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState("");
   const [lastRun, setLastRun] = useState(null);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadScenes() {
+      setSceneListStatus("loading");
+      setSceneListError("");
+
+      try {
+        const response = await apiClient.listScenes();
+        if (!active) {
+          return;
+        }
+
+        if (!response?.ok || response?.payload?.success === false) {
+          setSceneListStatus("error");
+          setSceneListError(response?.payload?.error?.message || "场景列表读取失败。");
+          return;
+        }
+
+        const items = response?.payload?.data?.items || [];
+        setSceneItems(items);
+        setSceneListStatus("ready");
+
+        if (!items.some((item) => item.scene === formState.scene)) {
+          const fallbackScene = (
+            items.find((item) => getScenePublishState(item).runnable)
+            || items[0]
+          )?.scene;
+
+          if (fallbackScene) {
+            setFormState(buildInitialFormState(fallbackScene));
+          }
+        }
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setSceneListStatus("error");
+        setSceneListError(error.message || "场景列表读取失败。");
+      }
+    }
+
+    loadScenes();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadDynamicExample() {
+      if (!formState.scene || scenePresets[formState.scene]) {
+        setSceneExampleStatus("idle");
+        setSceneExampleMessage("");
+        return;
+      }
+
+      setSceneExampleStatus("loading");
+      setSceneExampleMessage("正在按场景输入契约生成业务参数示例。");
+
+      try {
+        const response = await apiClient.getSceneWorkflow(formState.scene);
+        if (!active) {
+          return;
+        }
+
+        if (!response?.ok || response?.payload?.success === false) {
+          setSceneExampleStatus("error");
+          setSceneExampleMessage(response?.payload?.error?.message || "业务参数示例生成失败。");
+          return;
+        }
+
+        const example = buildBizParamsExampleFromWorkflow(response?.payload?.data || {});
+        setFormState((current) => {
+          if (current.scene !== formState.scene) {
+            return current;
+          }
+
+          return {
+            ...current,
+            bizParamsText: prettyJson(example)
+          };
+        });
+        setSceneExampleStatus("ready");
+        setSceneExampleMessage(
+          Object.keys(example).length > 0
+            ? "已根据场景输入契约生成示例，可按实际请求修改。"
+            : "当前场景没有声明必填业务参数，示例保持为空对象。"
+        );
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setSceneExampleStatus("error");
+        setSceneExampleMessage(error.message || "业务参数示例生成失败。");
+      }
+    }
+
+    loadDynamicExample();
+
+    return () => {
+      active = false;
+    };
+  }, [formState.scene, sceneExampleReloadKey]);
+
+  const sceneOptions = useMemo(
+    () => buildSceneOptions(sceneItems, sceneListStatus),
+    [sceneItems, sceneListStatus]
+  );
+  const selectedOption = sceneOptions.find((item) => item.scene === formState.scene);
   const selectedPreset = scenePresets[formState.scene];
+  const selectedSceneCanRun = selectedOption?.runnable !== false;
 
   const requestPreview = useMemo(() => {
     try {
@@ -125,11 +386,21 @@ export function RunOncePage() {
   function applyPreset(scene) {
     setFormState(buildInitialFormState(scene));
     setLocalError("");
+    setSceneExampleMessage("");
+    setSceneExampleStatus(scenePresets[scene] ? "idle" : "loading");
+    if (!scenePresets[scene]) {
+      setSceneExampleReloadKey((current) => current + 1);
+    }
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setLocalError("");
+
+    if (!selectedSceneCanRun) {
+      setLocalError("当前场景还没有发布到 active runtime。请先在发布链路中发布场景，发布成功后再回来做单次请求调试。");
+      return;
+    }
 
     let bizParams = null;
     try {
@@ -225,13 +496,28 @@ export function RunOncePage() {
                 onChange={(event) => applyPreset(event.target.value)}
                 value={formState.scene}
               >
-                {Object.entries(scenePresets).map(([scene, preset]) => (
-                  <option key={scene} value={scene}>
-                    {preset.label}
+                {sceneOptions.map((item) => (
+                  <option key={item.scene} value={item.scene}>
+                    {item.label} ({item.scene}){item.runnable ? "" : " - 未发布"}
                   </option>
                 ))}
               </select>
-              <p className="field-help">{selectedPreset?.note}</p>
+              <div className="tag-list">
+                <span className={selectedSceneCanRun ? "tag tag-success" : "tag tag-warning"}>
+                  {selectedOption?.publishLabel || "状态未知"}
+                </span>
+                {sceneListStatus === "loading" ? (
+                  <span className="tag tag-neutral">场景目录加载中</span>
+                ) : null}
+              </div>
+              <p className="field-help">
+                {selectedOption?.note || selectedPreset?.note || "新场景没有内置示例参数，请按场景详情页里的输入契约填写业务参数 JSON。"}
+              </p>
+              {sceneListStatus === "error" ? (
+                <p className="field-help field-help-warning">
+                  场景目录读取失败，当前仅展示内置调试示例：{sceneListError}
+                </p>
+              ) : null}
             </div>
 
             <div className="form-grid-two">
@@ -272,6 +558,11 @@ export function RunOncePage() {
               <p className="field-help">
                 这里直接编辑业务参数对象，页面会自动拼成统一请求包。
               </p>
+              {sceneExampleMessage ? (
+                <p className={`field-help ${sceneExampleStatus === "error" ? "field-help-warning" : ""}`}>
+                  {sceneExampleMessage}
+                </p>
+              ) : null}
             </div>
 
             {localError ? (
@@ -282,7 +573,7 @@ export function RunOncePage() {
             ) : null}
 
             <div className="button-row">
-              <button className="button-primary" disabled={submitting} type="submit">
+              <button className="button-primary" disabled={submitting || !selectedSceneCanRun} type="submit">
                 {submitting ? "请求发送中..." : "发送真实请求"}
               </button>
             </div>

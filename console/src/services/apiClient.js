@@ -20,8 +20,28 @@ export const apiClient = {
     const suffix = buildQueryString(params);
     return requestJson(`/api/console/releases/status${suffix}`);
   },
+  publishRelease(body = {}) {
+    return requestJson("/api/console/releases/publish", {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+  },
   listScenes() {
     return requestJson("/api/console/scenes");
+  },
+  listSceneTemplates() {
+    return requestJson("/api/console/scene-templates");
+  },
+  createScene(body) {
+    return requestJson("/api/console/scenes", {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+  },
+  deleteScene(scene) {
+    return requestJson(`/api/console/scenes/${encodeURIComponent(scene)}`, {
+      method: "DELETE"
+    });
   },
   getSceneWorkflow(scene) {
     return requestJson(`/api/console/scenes/${scene}/workflow`);
@@ -100,9 +120,6 @@ export const apiClient = {
   },
   getRun(runId) {
     return requestJson(`/api/console/runs/${runId}`);
-  },
-  getShadow(runId) {
-    return requestJson(`/api/console/runs/${runId}/shadow`);
   },
   getTrace(traceId) {
     return requestJson(`/api/console/traces/${traceId}`);

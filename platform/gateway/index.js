@@ -1,18 +1,12 @@
-const path = require("path");
 const { createHash } = require("crypto");
-const { loadPlatformResources } = require("../compiler/validate");
-const { isDirectModelScene } = require("../../services/direct-model");
+const { loadPlatformResources, resolvePlatformBaseDir } = require("../compiler/validate");
 const { buildTraceContext } = require("../trace/context");
-const { isLangGraphLegacyFallbackEnabled } = require("../runtime/fallback");
 const { createAppError } = require("../../utils/errors");
 const { info } = require("../../utils/logger");
 
 const SUPPORTED_ROUTE_MODES = new Set([
-  "legacy",
-  "shadow",
   "langgraph"
 ]);
-const PLATFORM_BASE_DIR = path.resolve(__dirname, "..");
 
 function uniqueStrings(values) {
   return Array.from(
@@ -26,7 +20,7 @@ function uniqueStrings(values) {
 }
 
 function normalizeRoutingMode(rawMode) {
-  const candidate = rawMode || "legacy";
+  const candidate = rawMode || "langgraph";
 
   if (typeof candidate !== "string") {
     throw createAppError("INVALID_REQUEST", "scene routing.mode must be a string.", {
@@ -34,7 +28,7 @@ function normalizeRoutingMode(rawMode) {
     });
   }
 
-  const normalized = candidate.trim() || "legacy";
+  const normalized = candidate.trim() || "langgraph";
   if (!SUPPORTED_ROUTE_MODES.has(normalized)) {
     throw createAppError("INVALID_REQUEST", `Unsupported scene routing.mode: ${normalized}.`, {
       stage: "scene-routing",
@@ -90,8 +84,8 @@ function normalizeRequestPercentage(rawValue) {
   return numericValue;
 }
 
-function loadPlatformManagedAgentRuntimeScenes(baseDir = PLATFORM_BASE_DIR) {
-  const resources = loadPlatformResources(baseDir);
+function loadPlatformManagedAgentRuntimeScenes(baseDir = null) {
+  const resources = loadPlatformResources(resolvePlatformBaseDir(baseDir));
   return new Set(
     resources.skills
       .map((record) => record?.document?.spec?.scene)
@@ -99,13 +93,7 @@ function loadPlatformManagedAgentRuntimeScenes(baseDir = PLATFORM_BASE_DIR) {
   );
 }
 
-function assertAgentRuntimeSceneIsTemplateBacked(sceneConfig, baseDir = PLATFORM_BASE_DIR) {
-  if (isDirectModelScene(sceneConfig)) {
-    return {
-      platformManagedScene: false
-    };
-  }
-
+function assertAgentRuntimeSceneIsTemplateBacked(sceneConfig, baseDir = null) {
   const scene = sceneConfig?.scene || null;
   const platformManagedScenes = loadPlatformManagedAgentRuntimeScenes(baseDir);
   const platformManagedScene = platformManagedScenes.has(scene);
@@ -128,36 +116,6 @@ function assertAgentRuntimeSceneIsTemplateBacked(sceneConfig, baseDir = PLATFORM
   return {
     platformManagedScene
   };
-}
-
-function determineLegacyRole({
-  requestedMode,
-  effectiveMode,
-  executionMode,
-  platformManagedScene,
-  reason = null
-} = {}) {
-  if (effectiveMode !== "legacy") {
-    return null;
-  }
-
-  if (executionMode === "direct-model") {
-    return "legacy-primary";
-  }
-
-  if (!platformManagedScene) {
-    return "legacy-unmanaged";
-  }
-
-  if (reason === "langgraph_auto_fallback") {
-    return "compatibility-fallback";
-  }
-
-  if (requestedMode === "shadow") {
-    return "compatibility-shadow-baseline";
-  }
-
-  return "compatibility";
 }
 
 function normalizeLangGraphCutoverPolicy(rawPolicy) {
@@ -262,9 +220,19 @@ function resolveLangGraphCutoverDecision({
 function resolveSceneRoutePlan(sceneConfig, routingContext = {}) {
   const requestedMode = normalizeRoutingMode(sceneConfig?.routing?.mode);
   const allowedModes = normalizeAllowedModes(sceneConfig?.routing?.allowedModes);
-  const executionMode = isDirectModelScene(sceneConfig) ? "direct-model" : "agent-runtime";
+  const executionMode = sceneConfig?.execution?.mode || "agent-runtime";
   const { platformManagedScene } = assertAgentRuntimeSceneIsTemplateBacked(sceneConfig);
-  const legacyFallbackEnabled = isLangGraphLegacyFallbackEnabled();
+
+  if (executionMode !== "agent-runtime") {
+    throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} must use agent-runtime execution.`, {
+      stage: "scene-routing",
+      details: {
+        scene: sceneConfig?.scene || null,
+        executionMode,
+        requiredExecutionMode: "agent-runtime"
+      }
+    });
+  }
 
   if (allowedModes && !allowedModes.includes(requestedMode)) {
     throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} does not allow routing.mode=${requestedMode}.`, {
@@ -276,73 +244,26 @@ function resolveSceneRoutePlan(sceneConfig, routingContext = {}) {
     });
   }
 
-  if (executionMode === "direct-model" && requestedMode !== "legacy") {
-    throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} only supports legacy routing in V1.`, {
+  if (requestedMode !== "langgraph") {
+    throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} must use langgraph routing.`, {
       stage: "scene-routing",
       details: {
         requestedMode,
-        executionMode
+        executionMode,
+        requiredMode: "langgraph"
       }
     });
   }
 
-  if (requestedMode === "legacy") {
-    if (executionMode !== "direct-model") {
-      throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} cannot use legacy routing after agent-runtime retirement.`, {
-        stage: "scene-routing",
-        retryable: false,
-        details: {
-          scene: sceneConfig?.scene || null,
-          requestedMode,
-          executionMode,
-          requiredMode: "langgraph"
-        }
-      });
-    }
+  const cutoverDecision = resolveLangGraphCutoverDecision({
+    sceneConfig,
+    requestId: routingContext.requestId || null,
+    tenantId: routingContext.tenantId || null,
+    userId: routingContext.userId || null
+  });
 
-    const reason = "legacy_direct_model_primary";
-    return {
-      requestedMode,
-      effectiveMode: "legacy",
-      executionMode,
-      allowedModes,
-      reason,
-      shadowExecutionEnabled: false,
-      platformManagedScene,
-      deprecatedLegacyRole: determineLegacyRole({
-        requestedMode,
-        effectiveMode: "legacy",
-        executionMode,
-        platformManagedScene,
-        reason
-      })
-    };
-  }
-
-  if (requestedMode === "langgraph") {
-    const cutoverDecision = resolveLangGraphCutoverDecision({
-      sceneConfig,
-      requestId: routingContext.requestId || null,
-      tenantId: routingContext.tenantId || null,
-      userId: routingContext.userId || null
-    });
-
-    if (cutoverDecision.matched) {
-      return {
-        requestedMode,
-        effectiveMode: "langgraph",
-        executionMode,
-        allowedModes,
-        reason: cutoverDecision.reason,
-        shadowExecutionEnabled: false,
-        cutover: cutoverDecision,
-        platformManagedScene,
-        legacyFallbackEnabled,
-        deprecatedLegacyRole: null
-      };
-    }
-
-    throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} did not match langgraph cutover, and agent-runtime legacy routing is retired.`, {
+  if (!cutoverDecision.matched) {
+    throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} did not match langgraph cutover.`, {
       stage: "scene-routing",
       retryable: false,
       details: {
@@ -356,16 +277,15 @@ function resolveSceneRoutePlan(sceneConfig, routingContext = {}) {
     });
   }
 
-  throw createAppError("INVALID_REQUEST", `Scene ${sceneConfig?.scene || "unknown"} cannot use shadow routing after agent-runtime legacy retirement.`, {
-    stage: "scene-routing",
-    retryable: false,
-    details: {
-      scene: sceneConfig?.scene || null,
-      requestedMode,
-      executionMode,
-      requiredMode: "langgraph"
-    }
-  });
+  return {
+    requestedMode,
+    effectiveMode: "langgraph",
+    executionMode,
+    allowedModes,
+    reason: cutoverDecision.reason,
+    cutover: cutoverDecision,
+    platformManagedScene
+  };
 }
 
 async function runSceneThroughGateway({
@@ -399,46 +319,10 @@ async function runSceneThroughGateway({
       tenantId,
       userId
     }),
-    platformManagedScene: routePlan.platformManagedScene ?? null,
-    deprecatedLegacyRole: routePlan.deprecatedLegacyRole || null
+    platformManagedScene: routePlan.platformManagedScene ?? null
   };
 
   info("agent-gateway.route.selected", traceContext);
-
-  if (routePlan.executionMode === "direct-model") {
-    if (typeof handlers.runLegacyDirectModel !== "function") {
-      throw createAppError("RUNTIME_INVALID_RESPONSE", "Agent Gateway missing runLegacyDirectModel handler.", {
-        stage: "scene-routing"
-      });
-    }
-
-    try {
-      return await handlers.runLegacyDirectModel({
-        requestId,
-        traceId,
-        scene,
-        sceneConfig,
-        bizParams,
-        routePlan,
-        traceContext
-      });
-    } catch (error) {
-      error.traceContext = traceContext;
-      throw error;
-    }
-  }
-
-  if (routePlan.effectiveMode !== "langgraph") {
-    throw createAppError("INVALID_REQUEST", `Scene ${scene} cannot use ${routePlan.effectiveMode} agent-runtime routing after legacy retirement.`, {
-      stage: "scene-routing",
-      retryable: false,
-      details: {
-        scene,
-        effectiveMode: routePlan.effectiveMode,
-        requiredMode: "langgraph"
-      }
-    });
-  }
 
   const routeHandler = handlers.runLangGraphAgentRuntime;
 
@@ -473,7 +357,6 @@ module.exports = {
   SUPPORTED_ROUTE_MODES,
   assertAgentRuntimeSceneIsTemplateBacked,
   buildRequestTrafficBucket,
-  determineLegacyRole,
   loadPlatformManagedAgentRuntimeScenes,
   normalizeAllowedModes,
   normalizeLangGraphCutoverPolicy,

@@ -1,12 +1,9 @@
-const path = require("path");
-const { loadPlatformResources } = require("../compiler/validate");
+const { loadPlatformResources, resolvePlatformBaseDir } = require("../compiler/validate");
 const { createAppError, normalizeError } = require("../../utils/errors");
 const { mergeWorkflowState, recordNodeRun } = require("../runtime/state");
 const { resolveHttpEndpoint } = require("./tool-runtime");
 
 const NODE_ID = "fetch-context";
-const PLATFORM_BASE_DIR = path.resolve(__dirname, "..");
-
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -32,7 +29,7 @@ function summarizeInput(state) {
 }
 
 function loadRegistrySnapshot() {
-  const resources = loadPlatformResources(PLATFORM_BASE_DIR);
+  const resources = loadPlatformResources(resolvePlatformBaseDir());
   const toolsByRef = new Map();
   const queriesByRef = new Map();
   const skillsByScene = new Map();

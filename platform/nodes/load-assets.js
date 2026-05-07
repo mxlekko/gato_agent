@@ -66,90 +66,11 @@ function summarizeInput(state) {
     ? state.scene_contract.references.length
     : 0;
 
-  return {
-    scene: state?.request?.scene || null,
-    hasWorkflowBinding: Boolean(state?.scene_contract?.workflow_binding),
-    legacyReferenceCount: references
-  };
-}
-
-function buildLegacyRef(scene, suffix) {
-  return `${suffix}://${scene || "unknown-scene"}/legacy-${suffix}@legacy`;
-}
-
-function findLegacyReference(references, matchers) {
-  return references.find((reference) => {
-    const haystack = [
-      reference?.id,
-      reference?.type,
-      reference?.purpose
-    ]
-      .filter((value) => typeof value === "string")
-      .join(" ")
-      .toLowerCase();
-
-    return matchers.some((matcher) => haystack.includes(matcher));
-  }) || null;
-}
-
-function buildLegacyReferenceCatalog(state) {
-  const scene = state?.request?.scene || null;
-  const references = Array.isArray(state?.scene_contract?.references)
-    ? state.scene_contract.references
-    : [];
-  const skillEntryFile = state?.scene_contract?.skill?.entryFile || null;
-
-  const catalog = {
-    prompts: {},
-    schemas: {},
-    dictionaries: {},
-    rules: {}
-  };
-
-  if (skillEntryFile) {
-    catalog.prompts.legacySkillEntry = {
-      promptRef: buildLegacyRef(scene, "prompt"),
-      source: {
-        type: "legacy-skill-file",
-        path: skillEntryFile
-      }
-    };
-  }
-
-  const dictionaryReference = findLegacyReference(references, ["dictionary", "字段"]);
-  if (dictionaryReference?.path) {
-    catalog.dictionaries.legacyDictionary = {
-      dictionaryRef: buildLegacyRef(scene, "dictionary"),
-      source: {
-        type: "local-file",
-        path: dictionaryReference.path
-      }
-    };
-  }
-
-  const rulesReference = findLegacyReference(references, ["rule", "规则"]);
-  if (rulesReference?.path) {
-    catalog.rules.legacyRules = {
-      rulesRef: buildLegacyRef(scene, "rules"),
-      source: {
-        type: "local-file",
-        path: rulesReference.path
-      }
-    };
-  }
-
-  const schemaReference = findLegacyReference(references, ["schema"]);
-  if (schemaReference?.path) {
-    catalog.schemas.legacyOutputSchema = {
-      schemaRef: buildLegacyRef(scene, "schema"),
-      source: {
-        type: "local-file",
-        path: schemaReference.path
-      }
-    };
-  }
-
-  return catalog;
+	  return {
+	    scene: state?.request?.scene || null,
+	    hasWorkflowBinding: Boolean(state?.scene_contract?.workflow_binding),
+	    referenceCount: references
+	  };
 }
 
 function hasCatalogCategories(value) {
@@ -191,7 +112,7 @@ function resolveCatalogSource(state, referenceBundle = null) {
     }
   }
 
-  return buildLegacyReferenceCatalog(state);
+  return null;
 }
 
 function resolveSelectionSource(state, referenceBundle = null) {
@@ -320,7 +241,7 @@ async function readAssetFile(entry, categoryName) {
     });
   }
 
-  if (!["local-file", "legacy-skill-file"].includes(sourceType)) {
+  if (sourceType !== "local-file") {
     throw createAppError("INVALID_REQUEST", `Asset ${entry.ref} uses unsupported source type ${sourceType}.`, {
       stage: "load-assets",
       details: {
@@ -352,7 +273,7 @@ async function readAssetFile(entry, categoryName) {
 
   const blockedWarnings = getBlockedPathWarnings(resolution.warnings);
   if (blockedWarnings.length > 0) {
-    throw createAppError("INVALID_REQUEST", `Legacy runtime path is not allowed for asset ${entry.ref}.`, {
+    throw createAppError("INVALID_REQUEST", `Retired runtime path is not allowed for asset ${entry.ref}.`, {
       stage: "load-assets",
       details: {
         assetRef: entry.ref,

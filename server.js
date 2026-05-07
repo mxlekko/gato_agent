@@ -3,6 +3,8 @@ require("./utils/load-env").loadProjectEnv();
 const http = require("http");
 const { runAgentRoute } = require("./routes/agent");
 const {
+  createConsoleSceneRoute,
+  deleteConsoleSceneRoute,
   getConsoleSceneDictionaryAssetRoute,
   getConsoleSceneInputMappingRoute,
   getConsoleScenePromptAssetRoute,
@@ -11,6 +13,7 @@ const {
   getConsoleSceneSchemaAssetRoute,
   getConsoleSceneSkillBindingRoute,
   getConsoleSceneWorkflowRoute,
+  listConsoleSceneTemplatesRoute,
   listConsoleScenesRoute,
   updateConsoleSceneDictionaryAssetRoute,
   updateConsoleSceneInputMappingRoute,
@@ -39,9 +42,10 @@ const {
 } = require("./routes/console-rollout");
 const {
   getConsoleReleaseStatusRoute,
+  publishConsoleReleaseRoute,
   rollbackConsoleReleaseRoute
 } = require("./routes/console-releases");
-const { getConsoleRunRoute, getConsoleShadowRoute, listConsoleRunsRoute } = require("./routes/console-runs");
+const { getConsoleRunRoute, listConsoleRunsRoute } = require("./routes/console-runs");
 const { getConsoleTraceRoute } = require("./routes/console-traces");
 const {
   createConsoleRagDbSyncJobRoute,
@@ -483,6 +487,28 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (method === "POST" && pathname === "/api/console/scenes") {
+      const body = await readJsonBody(req);
+      const result = await createConsoleSceneRoute(body);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const sceneRootMatch = pathname.match(/^\/api\/console\/scenes\/([^/]+)$/);
+    if (method === "DELETE" && sceneRootMatch) {
+      const result = await deleteConsoleSceneRoute(
+        decodeURIComponent(sceneRootMatch[1])
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/api/console/scene-templates") {
+      const result = await listConsoleSceneTemplatesRoute();
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
     const scenePromptAssetMatch = pathname.match(/^\/api\/console\/scenes\/([^/]+)\/assets\/prompt$/);
     if (method === "GET" && scenePromptAssetMatch) {
       const result = await getConsoleScenePromptAssetRoute(
@@ -625,13 +651,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const shadowDetailMatch = pathname.match(/^\/api\/console\/runs\/([^/]+)\/shadow$/);
-    if (method === "GET" && shadowDetailMatch) {
-      const result = await getConsoleShadowRoute(decodeURIComponent(shadowDetailMatch[1]));
-      sendJson(res, result.statusCode, result.payload);
-      return;
-    }
-
     const runDetailMatch = pathname.match(/^\/api\/console\/runs\/([^/]+)$/);
     if (method === "GET" && runDetailMatch) {
       const result = await getConsoleRunRoute(decodeURIComponent(runDetailMatch[1]));
@@ -711,6 +730,13 @@ const server = http.createServer(async (req, res) => {
 
     if (method === "GET" && pathname === "/api/console/releases/status") {
       const result = await getConsoleReleaseStatusRoute(url);
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "POST" && pathname === "/api/console/releases/publish") {
+      const body = await readJsonBody(req);
+      const result = await publishConsoleReleaseRoute(body);
       sendJson(res, result.statusCode, result.payload);
       return;
     }

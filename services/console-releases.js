@@ -1,8 +1,10 @@
 const fs = require("fs/promises");
 const path = require("path");
 
+const { loadPlatformResources } = require("../platform/compiler/validate");
 const { createReleaseManager } = require("./release-manager");
 const { createAppError } = require("../utils/errors");
+const { PROJECT_ROOT } = require("../utils/path-resolver");
 
 function toTrimmedString(value, fieldName, { required = false } = {}) {
   const normalized = value === null || value === undefined ? "" : String(value).trim();
@@ -17,6 +19,10 @@ function toTrimmedString(value, fieldName, { required = false } = {}) {
 
 function cloneJson(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function isObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function toIsoDateTime(value) {
@@ -121,6 +127,201 @@ function buildReleaseListItem(release, pointer = null) {
     rendererVersion: release.manifest?.renderer_version || null,
     isActive: pointer?.activeReleaseId === release.releaseId,
     isPrevious: pointer?.previousReleaseId === release.releaseId
+  };
+}
+
+function buildPlatformResourceKey(resource) {
+  return `${resource?.kind || ""}:${resource?.name || ""}@${resource?.version || ""}`;
+}
+
+function buildRepositoryPlatformIndex() {
+  const resources = loadPlatformResources(path.join(PROJECT_ROOT, "platform"));
+  const byKey = new Map();
+  const toolByRef = new Map();
+
+  for (const group of [resources.templates, resources.tools, resources.queries, resources.skills]) {
+    for (const record of group) {
+      const metadata = record.document?.metadata || {};
+      const spec = record.document?.spec || {};
+      const kind = String(record.document?.kind || "").trim();
+      const normalizedKind = {
+        WorkflowTemplate: "template",
+        ToolDefinition: "tool",
+        QueryProfile: "query",
+        BusinessSkill: "skill"
+      }[kind] || kind.toLowerCase();
+      const indexed = {
+        ...record,
+        kind: normalizedKind,
+        name: metadata.name,
+        version: metadata.version
+      };
+
+      byKey.set(buildPlatformResourceKey(indexed), indexed);
+
+      if (normalizedKind === "tool" && spec.ref) {
+        toolByRef.set(spec.ref, indexed);
+      }
+    }
+  }
+
+  return {
+    byKey,
+    toolByRef
+  };
+}
+
+function ensureArrayIncludes(document, pathSegments, value) {
+  let cursor = document;
+  for (const segment of pathSegments.slice(0, -1)) {
+    if (!isObject(cursor[segment])) {
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment];
+  }
+
+  const finalKey = pathSegments[pathSegments.length - 1];
+  const current = Array.isArray(cursor[finalKey]) ? cursor[finalKey] : [];
+  if (current.includes(value)) {
+    return false;
+  }
+
+  cursor[finalKey] = Array.from(new Set([...current, value]));
+  return true;
+}
+
+function markDocumentPathTrue(document, pathSegments) {
+  let cursor = document;
+  for (const segment of pathSegments.slice(0, -1)) {
+    if (!isObject(cursor[segment])) {
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment];
+  }
+
+  const finalKey = pathSegments[pathSegments.length - 1];
+  if (cursor[finalKey] === true) {
+    return false;
+  }
+
+  cursor[finalKey] = true;
+  return true;
+}
+
+async function savePatchedPlatformResource(store, record, document, operator) {
+  return store.savePlatformResourceDraft(
+    {
+      kind: record.kind,
+      name: record.name,
+      version: record.version,
+      ref: record.ref,
+      scene: record.scene,
+      status: record.status,
+      document,
+      sourceText: JSON.stringify(document, null, 2),
+      updatedBy: operator
+    },
+    {
+      operator,
+      changeNote: "prepare template-scene release policies"
+    }
+  );
+}
+
+async function ensureTemplateSceneReleasePolicies(store, options = {}) {
+  const operator = toTrimmedString(options.operator || "console-api", "operator", { required: true });
+  const resources = await store.listPlatformResources();
+  const repositoryIndex = buildRepositoryPlatformIndex();
+  const byKey = new Map(resources.map((resource) => [buildPlatformResourceKey(resource), resource]));
+  const toolByRef = new Map(
+    resources
+      .filter((resource) => resource.kind === "tool" && resource.ref)
+      .map((resource) => [resource.ref, resource])
+  );
+  const patchedByKey = new Map();
+
+  function getMutableRecord(record) {
+    const key = buildPlatformResourceKey(record);
+    if (!patchedByKey.has(key)) {
+      patchedByKey.set(key, {
+        record,
+        document: cloneJson(record.document),
+        changed: false
+      });
+    }
+
+    return patchedByKey.get(key);
+  }
+
+  for (const skill of resources.filter((resource) => resource.kind === "skill")) {
+    const scene = toTrimmedString(skill.document?.spec?.scene || skill.scene);
+    const templateRef = skill.document?.spec?.templateRef || {};
+    const templateKey = `template:${templateRef.name || ""}@${templateRef.version || ""}`;
+    const templateRecord = byKey.get(templateKey);
+    const repositoryTemplate = repositoryIndex.byKey.get(templateKey);
+    const repositoryAllowsNewScenes =
+      repositoryTemplate?.document?.spec?.sceneCreation?.allowNewScenes === true;
+
+    if (scene && templateRecord && repositoryAllowsNewScenes) {
+      const mutable = getMutableRecord(templateRecord);
+      mutable.changed = ensureArrayIncludes(
+        mutable.document,
+        ["spec", "compatibleScenes"],
+        scene
+      ) || mutable.changed;
+      mutable.changed = markDocumentPathTrue(
+        mutable.document,
+        ["spec", "sceneCreation", "allowNewScenes"]
+      ) || mutable.changed;
+    }
+
+    const toolBindings = isObject(skill.document?.spec?.toolBindings)
+      ? skill.document.spec.toolBindings
+      : {};
+
+    for (const binding of Object.values(toolBindings)) {
+      const toolRef = toTrimmedString(binding?.toolRef);
+      const toolRecord = toolRef ? toolByRef.get(toolRef) : null;
+      const repositoryTool = toolRef ? repositoryIndex.toolByRef.get(toolRef) : null;
+      const repositoryAllowsTemplateScenes =
+        repositoryTool?.document?.spec?.policy?.allowTemplateScenes === true;
+
+      if (!scene || !toolRecord || !repositoryAllowsTemplateScenes) {
+        continue;
+      }
+
+      const mutable = getMutableRecord(toolRecord);
+      mutable.changed = ensureArrayIncludes(
+        mutable.document,
+        ["spec", "policy", "allowedScenes"],
+        scene
+      ) || mutable.changed;
+      mutable.changed = markDocumentPathTrue(
+        mutable.document,
+        ["spec", "policy", "allowTemplateScenes"]
+      ) || mutable.changed;
+    }
+  }
+
+  const patchedResources = [];
+  for (const item of patchedByKey.values()) {
+    if (item.changed) {
+      patchedResources.push(await savePatchedPlatformResource(
+        store,
+        item.record,
+        item.document,
+        operator
+      ));
+    }
+  }
+
+  return {
+    patchedCount: patchedResources.length,
+    patchedResources: patchedResources.map((resource) => ({
+      kind: resource.kind,
+      name: resource.name,
+      version: resource.version
+    }))
   };
 }
 
@@ -311,6 +512,59 @@ async function getConsoleReleaseStatus(input = {}) {
   }
 }
 
+async function publishConsoleRelease(input = {}) {
+  const environment = toTrimmedString(input.environment, "environment");
+  const scopeType = toTrimmedString(input.scopeType || "all", "scopeType", { required: true });
+  const scopeValue = scopeType === "all"
+    ? toTrimmedString(input.scopeValue || "*", "scopeValue", { required: true })
+    : toTrimmedString(input.scopeValue, "scopeValue", { required: true });
+  const createdBy = toTrimmedString(input.createdBy || input.operator || "console-api", "createdBy", {
+    required: true
+  });
+  const publishNote = toTrimmedString(input.publishNote || "console publish current drafts", "publishNote");
+  const manager = createReleaseManager({
+    activeEnv: environment || undefined
+  });
+
+  try {
+    const policySync = await ensureTemplateSceneReleasePolicies(manager.store, {
+      operator: createdBy
+    });
+    const published = await manager.publishRelease({
+      environment: environment || undefined,
+      scopeType,
+      scopeValue,
+      createdBy,
+      publishNote,
+      publishedAt: input.publishedAt
+    });
+    const entries = await manager.store.listReleaseEntries(published.release.releaseId);
+    const currentBundleTarget = published.activation?.currentPath
+      ? await manager.readCurrentLinkTarget(published.release.environment)
+      : null;
+
+    return {
+      release: await buildReleaseSnapshot(manager, published.release, {
+        entries,
+        validation: published.activation?.preflightValidation || published.preflightValidation
+      }),
+      scope: {
+        environment: published.release.environment,
+        scopeType: published.release.scopeType,
+        scopeValue: published.release.scopeValue
+      },
+      pointer: published.activation?.pointer || null,
+      currentPath: published.activation?.currentPath || null,
+      currentBundleTarget,
+      renderedBundle: published.renderedBundle || null,
+      policySync,
+      validation: summarizeValidation(published.activation?.preflightValidation || published.preflightValidation)
+    };
+  } finally {
+    await manager.close().catch(() => null);
+  }
+}
+
 async function rollbackConsoleRelease(input = {}) {
   const releaseId = toTrimmedString(input.releaseId, "releaseId", { required: true });
   const updatedBy = toTrimmedString(input.updatedBy || input.operator || "console-api", "updatedBy", {
@@ -383,5 +637,6 @@ async function rollbackConsoleRelease(input = {}) {
 
 module.exports = {
   getConsoleReleaseStatus,
+  publishConsoleRelease,
   rollbackConsoleRelease
 };

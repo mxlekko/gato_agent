@@ -3,10 +3,12 @@
   "enabled": true,
   "title": "销售机会推进建议（directdb）",
   "description": "通过 DirectDbRunner 数据 tool 获取销售机会 rawRow，由主 skill 完成字段清洗、字典映射、建议生成和结构化输出校验。",
+  "execution": {
+    "mode": "agent-runtime"
+  },
   "routing": {
     "mode": "langgraph",
     "allowedModes": [
-      "legacy",
       "langgraph"
     ],
     "langgraphCutover": {

@@ -57,16 +57,17 @@ async function verifyMysqlStore() {
           scene: probeScene,
           title: "Repository Probe Scene",
           enabled: true,
-          execution: {
-            mode: "direct-model"
-          },
-          directModel: {
-            provider: "probe-provider",
-            model: "probe-model",
-            promptFile: "project://probe/prompt.md",
-            schemaReferenceId: "probe-schema"
-          },
-          request: {
+	          execution: {
+	            mode: "agent-runtime"
+	          },
+	          routing: {
+	            mode: "langgraph",
+	            allowedModes: ["langgraph"],
+	            langgraphCutover: {
+	              requestPercentage: 100
+	            }
+	          },
+	          request: {
             bizParams: {
               rawText: {
                 type: "string",

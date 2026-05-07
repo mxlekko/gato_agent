@@ -33,6 +33,7 @@ spec:
     timeoutMsMax: 35000
     retryMaxAttempts: 2
   policy:
+    allowTemplateScenes: true
     allowedScenes:
     - sales-opportunity-advisor
     - sales-opportunity-advisor-directdb

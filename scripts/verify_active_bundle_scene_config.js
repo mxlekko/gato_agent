@@ -91,11 +91,19 @@ async function main() {
       advisorConfig.references[0].path,
       "advisor dictionary reference"
     );
-    assertPathInside(
-      sceneConfigModule.CONFIG_CURRENT_BUNDLE,
-      paymentConfig.directModel.promptFile,
-      "payment direct-model prompt"
-    );
+	    assertPathInside(
+	      sceneConfigModule.CONFIG_CURRENT_BUNDLE,
+	      paymentConfig.skill.entryFile,
+	      "payment skill.entryFile"
+	    );
+	    const paymentPromptReference = paymentConfig.references.find(
+	      (reference) => reference.id === "prompt://payment-info-split/draft-business-output@v1"
+	    );
+	    assertPathInside(
+	      sceneConfigModule.CONFIG_CURRENT_BUNDLE,
+	      paymentPromptReference.path,
+	      "payment prompt reference"
+	    );
     assertPathInside(
       sceneConfigModule.CONFIG_CURRENT_BUNDLE,
       validatedRequest.sceneConfig.skill.entryFile,
@@ -112,8 +120,9 @@ async function main() {
           sceneConfigDir: sourceState.sceneConfigDir,
           supportedScenes: sceneConfigModule.getSupportedScenes(),
           advisorEntryFile: advisorConfig.skill.entryFile,
-          paymentPromptFile: paymentConfig.directModel.promptFile
-        },
+	          paymentSkillEntryFile: paymentConfig.skill.entryFile,
+	          paymentPromptFile: paymentPromptReference.path
+	        },
         null,
         2
       )

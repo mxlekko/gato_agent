@@ -1,17 +1,13 @@
 const FINAL_RUN_MESSAGES = new Set([
   "agent.run.success",
   "agent.run.completed",
-  "agent.run.failed",
-  "agent.langgraph.fallback.completed",
-  "agent.langgraph.fallback.failed"
+  "agent.run.failed"
 ]);
 
 const DEFAULT_ALERT_THRESHOLDS = Object.freeze({
   minSuccessRate: 0.95,
   maxP95DurationMs: 2000,
-  maxSchemaFailureRate: 0.05,
-  maxFallbackRatio: 0.05,
-  minShadowDiffPassRate: 0.95
+  maxSchemaFailureRate: 0.05
 });
 
 const SCHEMA_ERROR_CODES = new Set([
@@ -43,10 +39,6 @@ function safeRate(numerator, denominator) {
 function parseTimestamp(value) {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function cloneJson(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
 function parseJsonLines(text) {
@@ -82,9 +74,9 @@ function percentile(values, targetPercentile) {
 }
 
 function deriveDurationMs(finalEvent, startEvent) {
-  const directDuration = safeNumber(finalEvent?.context?.durationMs);
-  if (directDuration !== null) {
-    return directDuration;
+  const recordedDuration = safeNumber(finalEvent?.context?.durationMs);
+  if (recordedDuration !== null) {
+    return recordedDuration;
   }
 
   const startTs = parseTimestamp(startEvent?.ts);
@@ -93,7 +85,7 @@ function deriveDurationMs(finalEvent, startEvent) {
     return endTs - startTs;
   }
 
-  return safeNumber(finalEvent?.context?.fallbackLegacyDurationMs);
+  return null;
 }
 
 function pickLatestEvent(currentEvent, nextEvent) {
@@ -130,8 +122,7 @@ function buildRunRecords(entries) {
         requestId,
         events: [],
         startEvent: null,
-        finalEvent: null,
-        fallbackTriggeredEvent: null
+        finalEvent: null
       });
     }
 
@@ -146,10 +137,6 @@ function buildRunRecords(entries) {
           ? record.startEvent
           : entry;
       }
-    }
-
-    if (entry.message === "agent.langgraph.fallback.triggered") {
-      record.fallbackTriggeredEvent = pickLatestEvent(record.fallbackTriggeredEvent, entry);
     }
 
     if (FINAL_RUN_MESSAGES.has(entry.message)) {
@@ -167,14 +154,9 @@ function isSchemaFailure(code, stage) {
 function summarizeRunRecord(record) {
   const startContext = isObject(record?.startEvent?.context) ? record.startEvent.context : {};
   const finalContext = isObject(record?.finalEvent?.context) ? record.finalEvent.context : {};
-  const fallbackContext = isObject(record?.fallbackTriggeredEvent?.context)
-    ? record.fallbackTriggeredEvent.context
-    : {};
   const primaryContext = Object.keys(finalContext).length > 0
     ? finalContext
-    : Object.keys(fallbackContext).length > 0
-      ? fallbackContext
-      : startContext;
+    : startContext;
   const finalMessage = record?.finalEvent?.message || null;
   const durationMs = deriveDurationMs(record?.finalEvent, record?.startEvent);
 
@@ -196,21 +178,6 @@ function summarizeRunRecord(record) {
     httpStatus = safeNumber(finalContext.httpStatus);
     errorCode = finalContext.code || null;
     errorStage = finalContext.stage || null;
-  } else if (finalMessage === "agent.langgraph.fallback.completed") {
-    success = finalContext.fallbackLegacySuccess === true;
-    httpStatus = safeNumber(finalContext.fallbackLegacyHttpStatus);
-    errorCode = finalContext.fallbackErrorCode || null;
-    errorStage = finalContext.fallbackErrorStage || null;
-  } else if (finalMessage === "agent.langgraph.fallback.failed") {
-    success = false;
-    httpStatus = safeNumber(finalContext.fallbackLegacyErrorHttpStatus)
-      ?? safeNumber(finalContext.fallbackErrorHttpStatus);
-    errorCode = finalContext.fallbackLegacyErrorCode
-      || finalContext.fallbackErrorCode
-      || null;
-    errorStage = finalContext.fallbackLegacyErrorStage
-      || finalContext.fallbackErrorStage
-      || null;
   }
 
   return {
@@ -224,7 +191,6 @@ function summarizeRunRecord(record) {
     success,
     httpStatus,
     durationMs,
-    fallbackTriggered: Boolean(record?.fallbackTriggeredEvent),
     schemaFailure: isSchemaFailure(errorCode, errorStage),
     errorCode,
     errorStage
@@ -240,23 +206,20 @@ function aggregateRunMetrics(runs) {
     (run) => run.sceneExecutionType === "langgraph-stategraph"
   );
   const successCount = finalizedRuns.filter((run) => run.success === true).length;
-  const fallbackCount = finalizedRuns.filter((run) => run.fallbackTriggered).length;
   const schemaFailureCount = finalizedRuns.filter((run) => run.schemaFailure).length;
   const failedRuns = finalizedRuns.filter((run) => run.success !== true);
 
   return {
     totals: {
       runs: finalizedRuns.length,
-      successfulRuns: successCount,
-      failedRuns: failedRuns.length,
-      langgraphRuns: langgraphRuns.length,
-      fallbackRuns: fallbackCount,
-      schemaFailureRuns: schemaFailureCount
-    },
-    rates: {
-      successRate: safeRate(successCount, finalizedRuns.length),
-      fallbackRatio: safeRate(fallbackCount, langgraphRuns.length),
-      schemaFailureRate: safeRate(schemaFailureCount, langgraphRuns.length || finalizedRuns.length)
+	      successfulRuns: successCount,
+	      failedRuns: failedRuns.length,
+	      langgraphRuns: langgraphRuns.length,
+	      schemaFailureRuns: schemaFailureCount
+	    },
+	    rates: {
+	      successRate: safeRate(successCount, finalizedRuns.length),
+	      schemaFailureRate: safeRate(schemaFailureCount, langgraphRuns.length || finalizedRuns.length)
     },
     latency: {
       p50DurationMs: percentile(durations, 50),
@@ -303,27 +266,6 @@ function aggregateByScene(runs) {
   return scenes;
 }
 
-function summarizeShadowDiff(entries) {
-  const shadowEntries = entries.filter((entry) => entry.message === "agent.shadow.completed");
-  const passedCount = shadowEntries.filter((entry) => entry?.context?.shadowDiffPassed === true).length;
-  const totalDifferenceCount = shadowEntries.reduce((accumulator, entry) => {
-    const differenceCount = safeNumber(entry?.context?.shadowDifferenceCount);
-    return accumulator + (differenceCount || 0);
-  }, 0);
-
-  return {
-    totalComparisons: shadowEntries.length,
-    passedComparisons: passedCount,
-    failedComparisons: shadowEntries.length - passedCount,
-    diffPassRate: safeRate(passedCount, shadowEntries.length),
-    totalDifferenceCount,
-    failedRequestIds: shadowEntries
-      .filter((entry) => entry?.context?.shadowDiffPassed !== true)
-      .map((entry) => entry?.context?.requestId || null)
-      .filter(Boolean)
-  };
-}
-
 function buildAlerts(report, thresholds = {}) {
   const resolvedThresholds = {
     ...DEFAULT_ALERT_THRESHOLDS,
@@ -364,29 +306,6 @@ function buildAlerts(report, thresholds = {}) {
     });
   }
 
-  if (report.rates.fallbackRatio > resolvedThresholds.maxFallbackRatio) {
-    alerts.push({
-      metric: "fallbackRatio",
-      level: "warn",
-      actual: report.rates.fallbackRatio,
-      threshold: resolvedThresholds.maxFallbackRatio,
-      message: `fallbackRatio ${report.rates.fallbackRatio} exceeds threshold ${resolvedThresholds.maxFallbackRatio}.`
-    });
-  }
-
-  if (
-    report.shadowDiff.totalComparisons > 0
-    && report.shadowDiff.diffPassRate < resolvedThresholds.minShadowDiffPassRate
-  ) {
-    alerts.push({
-      metric: "shadowDiffPassRate",
-      level: "warn",
-      actual: report.shadowDiff.diffPassRate,
-      threshold: resolvedThresholds.minShadowDiffPassRate,
-      message: `shadowDiffPassRate ${report.shadowDiff.diffPassRate} is below threshold ${resolvedThresholds.minShadowDiffPassRate}.`
-    });
-  }
-
   return alerts;
 }
 
@@ -416,11 +335,10 @@ function buildRolloutReport(entries, options = {}) {
     },
     totals: summary.totals,
     rates: summary.rates,
-    latency: summary.latency,
-    failures: summary.failures,
-    scenes: aggregateByScene(runRecords),
-    shadowDiff: summarizeShadowDiff(safeEntries),
-    runs: runRecords
+	    latency: summary.latency,
+	    failures: summary.failures,
+	    scenes: aggregateByScene(runRecords),
+	    runs: runRecords
   };
 
   report.alerts = buildAlerts(report, options.thresholds || {});

@@ -5,7 +5,6 @@ const fs = require("fs");
 const path = require("path");
 
 const { createConfigStore } = require("../services/config-store");
-const { SCENE_CONFIG_DIR, getSceneConfigs } = require("../services/scene-config");
 const { loadPlatformResources } = require("../platform/compiler/validate");
 const { PROJECT_ROOT, resolvePathReference } = require("../utils/path-resolver");
 
@@ -15,6 +14,7 @@ const HELPER_SCRIPT_TYPE = "generated-query";
 const HELPER_QUERY_DIR = path.join(PROJECT_ROOT, "ContextHelper", "generated-queries");
 const HELPER_QUERY_SUFFIX = ".generated.js";
 const PLATFORM_BASE_DIR = path.join(PROJECT_ROOT, "platform");
+const REPOSITORY_SCENE_CONFIG_DIR = path.join(PROJECT_ROOT, "scene-configs");
 const ASSET_GROUPS = [
   {
     groupName: "prompts",
@@ -164,13 +164,13 @@ function registerSceneAsset(targetMap, assetRecord) {
 }
 
 function loadSceneConfigRecords() {
-  getSceneConfigs();
+  const sceneConfigDir = REPOSITORY_SCENE_CONFIG_DIR;
 
   const records = fs
-    .readdirSync(SCENE_CONFIG_DIR, { withFileTypes: true })
+    .readdirSync(sceneConfigDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
     .map((entry) => {
-      const filePath = path.join(SCENE_CONFIG_DIR, entry.name);
+      const filePath = path.join(sceneConfigDir, entry.name);
       const sourceText = fs.readFileSync(filePath, "utf8");
       const document = JSON.parse(sourceText);
       const scene = String(document.scene || path.basename(entry.name, ".json")).trim();
@@ -280,60 +280,6 @@ function collectSkillSceneAssets(platformResources) {
   return assetMap;
 }
 
-function collectDirectModelSceneAssets(sceneConfigs, assetMap) {
-  for (const sceneConfig of sceneConfigs.filter((record) => record.executionMode === "direct-model")) {
-    const directModel = sceneConfig.document.directModel || {};
-    const references = Array.isArray(sceneConfig.document.references) ? sceneConfig.document.references : [];
-    const referenceById = new Map();
-
-    for (const reference of references) {
-      if (reference?.id) {
-        referenceById.set(String(reference.id), reference);
-      }
-    }
-
-    if (!directModel.promptFile) {
-      throw new Error(`Direct-model scene ${sceneConfig.scene} is missing directModel.promptFile.`);
-    }
-
-    const promptReference =
-      references.find((reference) => reference && reference.path === directModel.promptFile && reference.id) || null;
-
-    registerSceneAsset(
-      assetMap,
-      buildSceneAssetRecord({
-        scene: sceneConfig.scene,
-        assetType: "prompt",
-        ref: promptReference?.id || `prompt://${sceneConfig.scene}/direct-model@v1`,
-        sourcePath: directModel.promptFile,
-        declaredByPath: sceneConfig.filePath
-      })
-    );
-
-    if (!directModel.schemaReferenceId) {
-      throw new Error(`Direct-model scene ${sceneConfig.scene} is missing directModel.schemaReferenceId.`);
-    }
-
-    const schemaReference = referenceById.get(String(directModel.schemaReferenceId));
-    if (!schemaReference?.path) {
-      throw new Error(
-        `Direct-model scene ${sceneConfig.scene} is missing reference ${directModel.schemaReferenceId}.`
-      );
-    }
-
-    registerSceneAsset(
-      assetMap,
-      buildSceneAssetRecord({
-        scene: sceneConfig.scene,
-        assetType: "schema",
-        ref: schemaReference.id,
-        sourcePath: schemaReference.path,
-        declaredByPath: sceneConfig.filePath
-      })
-    );
-  }
-}
-
 function loadHelperScriptRecords(sceneConfigs) {
   const sceneSet = new Set(sceneConfigs.map((record) => record.scene));
   const helperScriptMap = new Map();
@@ -380,8 +326,6 @@ function buildImportPayload() {
   const sceneConfigs = loadSceneConfigRecords();
   const platformResources = loadPlatformResourceRecords();
   const sceneAssetMap = collectSkillSceneAssets(platformResources);
-
-  collectDirectModelSceneAssets(sceneConfigs, sceneAssetMap);
 
   const sceneAssets = sortRecords(Array.from(sceneAssetMap.values()), (record) => `${record.scene}:${record.assetType}`);
   const helperScripts = loadHelperScriptRecords(sceneConfigs);
@@ -629,30 +573,20 @@ async function assertRevisionState(store, { label, targetType, targetId, current
     throw new Error(`${label} is missing current_revision_id.`);
   }
 
-  const revisions = await store.listRevisions({
-    targetType,
-    targetId,
-    limit: 10
-  });
-
-  if (revisions.length !== 1) {
-    throw new Error(`${label} should have exactly 1 revision after initial import, received ${revisions.length}.`);
-  }
-
-  const currentRevision = revisions.find((revision) => revision.id === currentRevisionId);
+  const currentRevision = await store.getRevisionById(currentRevisionId);
   if (!currentRevision) {
     throw new Error(`${label} current_revision_id=${currentRevisionId} does not point to an existing revision.`);
   }
 
-  if (currentRevision.revisionNo !== 1) {
-    throw new Error(`${label} should point to revision 1, received revision ${currentRevision.revisionNo}.`);
+  if (currentRevision.targetType !== targetType || currentRevision.targetId !== targetId) {
+    throw new Error(`${label} current_revision_id=${currentRevisionId} points to a different target.`);
   }
 
   if (currentRevision.checksum !== expectedChecksum) {
     throw new Error(`${label} revision checksum mismatch.`);
   }
 
-  return 1;
+  return currentRevision.revisionNo;
 }
 
 async function verifySceneConfigRecords(store, expectedRecords, actualRecords) {

@@ -43,13 +43,11 @@ function writeJson(filePath, value) {
 }
 
 function resolveThresholds(args) {
-  return {
-    minSuccessRate: Number(args["min-success-rate"] ?? DEFAULT_ALERT_THRESHOLDS.minSuccessRate),
-    maxP95DurationMs: Number(args["max-p95-ms"] ?? DEFAULT_ALERT_THRESHOLDS.maxP95DurationMs),
-    maxSchemaFailureRate: Number(args["max-schema-failure-rate"] ?? DEFAULT_ALERT_THRESHOLDS.maxSchemaFailureRate),
-    maxFallbackRatio: Number(args["max-fallback-ratio"] ?? DEFAULT_ALERT_THRESHOLDS.maxFallbackRatio),
-    minShadowDiffPassRate: Number(args["min-shadow-diff-pass-rate"] ?? DEFAULT_ALERT_THRESHOLDS.minShadowDiffPassRate)
-  };
+	  return {
+	    minSuccessRate: Number(args["min-success-rate"] ?? DEFAULT_ALERT_THRESHOLDS.minSuccessRate),
+	    maxP95DurationMs: Number(args["max-p95-ms"] ?? DEFAULT_ALERT_THRESHOLDS.maxP95DurationMs),
+	    maxSchemaFailureRate: Number(args["max-schema-failure-rate"] ?? DEFAULT_ALERT_THRESHOLDS.maxSchemaFailureRate)
+	  };
 }
 
 function main() {

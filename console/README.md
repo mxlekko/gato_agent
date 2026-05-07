@@ -38,9 +38,6 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:3001
   - 可选。默认 `http://127.0.0.1:3100`，用于控制 `/api` 的 dev proxy 目标。
   - 在当前仓中，`3100` 应指向 `_副本` API。
   - 若要切换到实验端口，优先在 `.env.local` 中覆盖，不直接改 `.env.example`。
-- `VITE_CONSOLE_DATA_MODE`
-  - `mock` 或 `api`
-  - 当前默认 `mock`
 
 ## 当前包含
 
@@ -48,6 +45,5 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:3001
 - 路由骨架
 - 基础布局
 - API client
-- mock client
 
 后续页面按任务清单继续补齐，不在本次子任务内扩展。

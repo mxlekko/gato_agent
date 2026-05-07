@@ -346,16 +346,6 @@ function buildPlatformResourceRelativePath(entry) {
 
 function rewriteSceneConfigDocument(document) {
   const nextDocument = cloneJson(document) || {};
-  const directModel = nextDocument.directModel || null;
-
-  if (directModel) {
-    if (typeof directModel.promptFile === "string") {
-      directModel.promptFile = normalizeBundlePathReference(directModel.promptFile);
-    }
-    if (typeof directModel.fallbackModelsFile === "string") {
-      directModel.fallbackModelsFile = normalizeBundlePathReference(directModel.fallbackModelsFile);
-    }
-  }
 
   if (nextDocument.skill && typeof nextDocument.skill === "object") {
     if (typeof nextDocument.skill.workspacePath === "string") {
@@ -467,21 +457,6 @@ function collectSceneConfigAssetCandidates(sceneConfigDocument, sceneAssetEntry)
 
     if (sceneAssetEntry.snapshotJson?.ref && reference.id === sceneAssetEntry.snapshotJson.ref) {
       candidates.push(reference.path);
-    }
-  }
-
-  if (sceneConfigDocument.execution?.mode === "direct-model") {
-    if (sceneAssetEntry.snapshotJson?.assetType === "prompt" && sceneConfigDocument.directModel?.promptFile) {
-      candidates.push(sceneConfigDocument.directModel.promptFile);
-    }
-
-    if (sceneAssetEntry.snapshotJson?.assetType === "schema" && sceneConfigDocument.directModel?.schemaReferenceId) {
-      const schemaReference = references.find(
-        (reference) => reference && reference.id === sceneConfigDocument.directModel.schemaReferenceId
-      );
-      if (schemaReference?.path) {
-        candidates.push(schemaReference.path);
-      }
     }
   }
 

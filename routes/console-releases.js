@@ -1,4 +1,8 @@
-const { getConsoleReleaseStatus, rollbackConsoleRelease } = require("../services/console-releases");
+const {
+  getConsoleReleaseStatus,
+  publishConsoleRelease,
+  rollbackConsoleRelease
+} = require("../services/console-releases");
 const { buildSuccessResponse } = require("../utils/errors");
 const { buildRequestId } = require("../utils/request-id");
 
@@ -30,7 +34,25 @@ async function rollbackConsoleReleaseRoute(releaseId, body = {}) {
   };
 }
 
+async function publishConsoleReleaseRoute(body = {}) {
+  const requestId = buildRequestId();
+  const data = await publishConsoleRelease({
+    environment: body.environment,
+    scopeType: body.scopeType,
+    scopeValue: body.scopeValue,
+    createdBy: body.createdBy || body.operator,
+    publishNote: body.publishNote,
+    publishedAt: body.publishedAt
+  });
+
+  return {
+    statusCode: 200,
+    payload: buildSuccessResponse(data, requestId)
+  };
+}
+
 module.exports = {
   getConsoleReleaseStatusRoute,
+  publishConsoleReleaseRoute,
   rollbackConsoleReleaseRoute
 };

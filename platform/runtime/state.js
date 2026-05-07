@@ -63,21 +63,19 @@ function normalizePermissions(permissions) {
 function pickRouteSnapshot(routePlan = null) {
   if (!isObject(routePlan)) {
     return {
-      requested_mode: null,
-      effective_mode: null,
-      execution_mode: null,
-      shadow_execution_enabled: false,
-      allowed_modes: null,
-      reason: null
+	      requested_mode: null,
+	      effective_mode: null,
+	      execution_mode: null,
+	      allowed_modes: null,
+	      reason: null
     };
   }
 
   return {
-    requested_mode: routePlan.requestedMode || null,
-    effective_mode: routePlan.effectiveMode || null,
-    execution_mode: routePlan.executionMode || null,
-    shadow_execution_enabled: Boolean(routePlan.shadowExecutionEnabled),
-    allowed_modes: Array.isArray(routePlan.allowedModes)
+	    requested_mode: routePlan.requestedMode || null,
+	    effective_mode: routePlan.effectiveMode || null,
+	    execution_mode: routePlan.executionMode || null,
+	    allowed_modes: Array.isArray(routePlan.allowedModes)
       ? cloneJsonValue(routePlan.allowedModes)
       : null,
     reason: routePlan.reason || null
@@ -140,11 +138,10 @@ function buildSceneContract({
       allowed_modes: Array.isArray(safeSceneConfig?.routing?.allowedModes)
         ? cloneJsonValue(safeSceneConfig.routing.allowedModes)
         : null,
-      requested_mode: routePlan?.requestedMode || null,
-      effective_mode: routePlan?.effectiveMode || null,
-      execution_mode: routePlan?.executionMode || null,
-      shadow_execution_enabled: Boolean(routePlan?.shadowExecutionEnabled)
-    },
+	      requested_mode: routePlan?.requestedMode || null,
+	      effective_mode: routePlan?.effectiveMode || null,
+	      execution_mode: routePlan?.executionMode || null
+	    },
     agent: cloneJsonValue(safeSceneConfig.agent || null),
     runtime: cloneJsonValue(safeSceneConfig.runtime || null),
     request_contract: cloneJsonValue(safeSceneConfig.request || null),
@@ -213,12 +210,10 @@ function createInitialWorkflowState({
       routePlan,
       workflowBinding
     }),
-    artifacts: {
-      node_runs: [],
-      outputs: {},
-      shadow: null,
-      compat: null
-    },
+	    artifacts: {
+	      node_runs: [],
+	      outputs: {}
+	    },
     result: null,
     error: null
   };

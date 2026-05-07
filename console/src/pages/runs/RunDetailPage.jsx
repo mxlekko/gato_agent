@@ -105,14 +105,6 @@ export function RunDetailPage() {
               </strong>
               <p>{formatDateTime(run.completedAt || run.startedAt)}</p>
             </article>
-            <article className="stat-card">
-              <span className="meta-label">影子运行</span>
-              <strong>{run.shadow?.available ? "已生成" : "未生成"}</strong>
-              <p>{run.shadow?.shadowRunId || "当前日志未识别到 shadow runId"}</p>
-              <Link className="inline-page-link" to={`/runs/${runId}/shadow`}>
-                查看影子对比
-              </Link>
-            </article>
           </section>
 
           <div className="detail-grid">
@@ -169,16 +161,12 @@ export function RunDetailPage() {
                     label: "生效模式",
                     value: run.route?.effectiveMode || "-"
                   },
-                  {
-                    label: "执行方式",
-                    value: run.route?.executionMode || "-"
-                  },
-                  {
-                    label: "触发回退",
-                    value: String(Boolean(run.route?.fallbackTriggered))
-                  }
-                ]}
-              />
+	                  {
+	                    label: "执行方式",
+	                    value: run.route?.executionMode || "-"
+	                  }
+	                ]}
+	              />
             </section>
           </div>
 

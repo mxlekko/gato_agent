@@ -1,4 +1,4 @@
-const { getConsoleRunDetail, getConsoleShadowDetail, listConsoleRuns } = require("../services/console-runs");
+const { getConsoleRunDetail, listConsoleRuns } = require("../services/console-runs");
 const { buildSuccessResponse } = require("../utils/errors");
 const { buildRequestId } = require("../utils/request-id");
 
@@ -34,18 +34,7 @@ async function getConsoleRunRoute(runId) {
   };
 }
 
-async function getConsoleShadowRoute(runId) {
-  const requestId = buildRequestId();
-  const data = getConsoleShadowDetail(runId);
-
-  return {
-    statusCode: 200,
-    payload: buildSuccessResponse(data, requestId)
-  };
-}
-
 module.exports = {
-  getConsoleShadowRoute,
   getConsoleRunRoute,
   listConsoleRunsRoute
 };

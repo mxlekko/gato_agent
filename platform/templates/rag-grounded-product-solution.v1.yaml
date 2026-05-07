@@ -12,6 +12,8 @@ spec:
     solution, validates the output, and returns a stable result envelope.
   compatibleScenes:
     - special-custom-product-solution
+  sceneCreation:
+    allowNewScenes: true
   engine:
     type: langgraph-stategraph
     runtimeRef: langgraph

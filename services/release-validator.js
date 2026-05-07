@@ -372,7 +372,6 @@ async function validateSceneConfigDocument({
   }
 
   const references = Array.isArray(document.references) ? document.references : [];
-  const referenceById = new Map();
   for (const [index, reference] of references.entries()) {
     const referenceId = toTrimmedString(reference?.id);
     const referenceField = `references[${index}].path`;
@@ -387,7 +386,6 @@ async function validateSceneConfigDocument({
       continue;
     }
 
-    referenceById.set(referenceId, reference);
     await ensureBundleReferencePath({
       reference: reference.path,
       bundleRoot,
@@ -404,7 +402,7 @@ async function validateSceneConfigDocument({
   const executionMode = toTrimmedString(document?.execution?.mode) || "agent-runtime";
 
   if (executionMode === "agent-runtime") {
-    const routingMode = toTrimmedString(document?.routing?.mode) || "legacy";
+    const routingMode = toTrimmedString(document?.routing?.mode) || "langgraph";
     if (routingMode !== "langgraph") {
       pushIssue(issues, {
         code: "RETIRED_AGENT_RUNTIME_LEGACY_ROUTING",
@@ -500,64 +498,12 @@ async function validateSceneConfigDocument({
       issues,
       missingCode: "MISSING_SKILL_ENTRY_FILE"
     });
-  } else if (executionMode === "direct-model") {
-    if (!toTrimmedString(document?.directModel?.provider) || !toTrimmedString(document?.directModel?.model)) {
-      pushIssue(issues, {
-        code: "MISSING_DIRECT_MODEL_PROVIDER",
-        file: relativeFilePath,
-        field: "directModel",
-        message: "Direct-model scene must define directModel.provider and directModel.model."
-      });
-    }
-
-    await ensureBundleReferencePath({
-      reference: document?.directModel?.promptFile,
-      bundleRoot,
-      runtimeRoot,
-      filePath,
-      field: "directModel.promptFile",
-      expectedType: "file",
-      issues,
-      missingCode: "MISSING_DIRECT_MODEL_PROMPT_FILE"
-    });
-
-    if (document?.directModel?.fallbackModelsFile) {
-      await ensureBundleReferencePath({
-        reference: document.directModel.fallbackModelsFile,
-        bundleRoot,
-        runtimeRoot,
-        filePath,
-        field: "directModel.fallbackModelsFile",
-        expectedType: "file",
-        issues
-      });
-    }
-
-    const schemaReferenceId = toTrimmedString(document?.directModel?.schemaReferenceId);
-    if (!schemaReferenceId) {
-      pushIssue(issues, {
-        code: "MISSING_DIRECT_MODEL_SCHEMA_REFERENCE",
-        file: relativeFilePath,
-        field: "directModel.schemaReferenceId",
-        message: "Direct-model scene must define directModel.schemaReferenceId."
-      });
-    } else {
-      const schemaReference = referenceById.get(schemaReferenceId);
-      if (!schemaReference) {
-        pushIssue(issues, {
-          code: "UNKNOWN_DIRECT_MODEL_SCHEMA_REFERENCE",
-          file: relativeFilePath,
-          field: "directModel.schemaReferenceId",
-          message: `schemaReferenceId=${schemaReferenceId} does not match any scene reference.`
-        });
-      }
-    }
   } else {
     pushIssue(issues, {
       code: "UNSUPPORTED_SCENE_EXECUTION_MODE",
       file: relativeFilePath,
       field: "execution.mode",
-      message: `Unsupported scene execution mode: ${executionMode}.`
+      message: `Unsupported scene execution mode: ${executionMode}; use agent-runtime.`
     });
   }
 
@@ -584,8 +530,7 @@ async function loadAndValidateSceneConfigs(bundleRoot, issues) {
   const seenScenes = new Map();
   const counts = {
     total: 0,
-    agentRuntime: 0,
-    directModel: 0
+    agentRuntime: 0
   };
 
   for (const filePath of files) {
@@ -625,8 +570,6 @@ async function loadAndValidateSceneConfigs(bundleRoot, issues) {
     counts.total += 1;
     if (validated.executionMode === "agent-runtime") {
       counts.agentRuntime += 1;
-    } else if (validated.executionMode === "direct-model") {
-      counts.directModel += 1;
     }
 
     sceneConfigs.push(validated);

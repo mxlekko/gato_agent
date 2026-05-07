@@ -204,16 +204,9 @@ async function main() {
       consistencyMatchRate: Number((consistencyMatchCount / total).toFixed(4)),
       strictBodyMatchRate: Number((strictBodyMatchCount / total).toFixed(4)),
       http2xxRate: Number((http2xxCount / total).toFixed(4))
-    },
-    cases: caseResults,
-    shadow: {
-      enabled: false,
-      reservedReportType: "shadow-diff",
-      shadowRunId: null,
-      baselineRunId: path.basename(outputDir),
-      diffSummary: null
-    }
-  };
+	    },
+	    cases: caseResults
+	  };
 
   writeJson(path.join(outputDir, "summary.json"), summary);
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

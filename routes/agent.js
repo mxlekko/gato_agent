@@ -1,15 +1,10 @@
 const { getSceneConfig, getSupportedScenes } = require("../services/scene-config");
 const { normalizeOpportunityId, validateSceneBizParams } = require("../services/request-validation");
-const { runLegacySceneExecution } = require("../services/runtime");
 const { runSceneThroughGateway } = require("../platform/gateway");
-const {
-  buildLangGraphFallbackSuppressedAudit,
-  resolveLangGraphFallbackDecision
-} = require("../platform/runtime/fallback");
 const { runCompiledSceneWorkflow } = require("../platform/runtime/graphs");
 const { createInitialWorkflowState } = require("../platform/runtime/state");
-const { buildHttpResponseFromState } = require("../platform/runtime/shadow");
-const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("../utils/errors");
+const { buildHttpResponseFromState } = require("../platform/runtime/http-response");
+const { buildErrorResponse, createAppError, normalizeError } = require("../utils/errors");
 const { info, error } = require("../utils/logger");
 const { buildRequestId, buildTraceId } = require("../utils/request-id");
 const { buildTraceContext } = require("../platform/trace/context");
@@ -74,75 +69,8 @@ function validateAgentRunRequest(body) {
   };
 }
 
-function buildHttpSuccessResponse(payload, requestId) {
-  return buildSuccessResponse(payload, requestId);
-}
-
 function buildHttpErrorResponse(appError, requestId) {
   return buildErrorResponse(appError, requestId);
-}
-
-function buildSceneExecutionHttpResponse(execution, requestId) {
-  const businessResult = execution?.businessResult;
-
-  if (businessResult?.success === false) {
-    return {
-      statusCode: businessResult.error.httpStatus,
-      payload: buildHttpErrorResponse(businessResult.error, businessResult.requestId || requestId)
-    };
-  }
-
-  return {
-    statusCode: 200,
-    payload: buildHttpSuccessResponse(businessResult?.payload, businessResult?.requestId || requestId)
-  };
-}
-
-async function runLegacyDirectModelRoute({ requestId, scene, sceneConfig, bizParams, routePlan, traceContext }) {
-  info("agent.run.start", {
-    ...traceContext,
-    platformManagedScene: routePlan?.platformManagedScene ?? null,
-    deprecatedLegacyExecutionRole: routePlan?.deprecatedLegacyRole || null
-  });
-
-  const execution = await runLegacySceneExecution({
-    requestId,
-    sceneConfig,
-    bizParams
-  });
-  const businessResult = execution.businessResult;
-  const responsePayload = buildHttpSuccessResponse(
-    businessResult.payload,
-    businessResult.requestId || requestId
-  );
-
-  info("agent.run.success", {
-    ...traceContext,
-    durationMs: execution.durationMs,
-    sceneExecutionType: execution.executionType,
-    responseEnvelope: responsePayload
-  });
-
-  return {
-    statusCode: 200,
-    payload: responsePayload
-  };
-}
-
-function buildSuppressedFallbackTraceContext(traceContext, fallbackSuppressedAudit) {
-  return {
-    ...traceContext,
-    legacyFallbackEnabled: false,
-    fallbackSuppressed: true,
-    routeReason: "langgraph_auto_fallback_disabled",
-    ...fallbackSuppressedAudit
-  };
-}
-
-function logSuppressedFallback(traceContext, fallbackSuppressedAudit) {
-  info("agent.langgraph.fallback.suppressed", {
-    ...buildSuppressedFallbackTraceContext(traceContext, fallbackSuppressedAudit)
-  });
 }
 
 function pickDraftExecution(finalState) {
@@ -181,16 +109,8 @@ async function runLangGraphAgentRuntimeRoute({
   executeLangGraph = runCompiledSceneWorkflow
 } = {}) {
   const startedAt = Date.now();
-  const langGraphRoutePlan = routePlan
-    ? {
-        ...routePlan,
-        legacyFallbackEnabled: false
-      }
-    : routePlan;
-  const langGraphTraceContext = {
-    ...traceContext,
-    legacyFallbackEnabled: false
-  };
+  const langGraphRoutePlan = routePlan;
+  const langGraphTraceContext = traceContext;
 
   info("agent.run.start", {
     ...langGraphTraceContext,
@@ -227,44 +147,9 @@ async function runLangGraphAgentRuntimeRoute({
       state: initialState
     });
   } catch (caughtError) {
-    const fallbackDecision = resolveLangGraphFallbackDecision({
-      error: caughtError,
-      legacyFallbackEnabled: false
-    });
-
-    const fallbackSuppressedAudit = buildLangGraphFallbackSuppressedAudit({
-      requestId,
-      traceId,
-      scene,
-      routePlan: langGraphRoutePlan,
-      fallbackDecision
-    });
-    logSuppressedFallback(langGraphTraceContext, fallbackSuppressedAudit);
-    const normalized = fallbackDecision.error || normalizeError(caughtError);
-    normalized.traceContext = buildSuppressedFallbackTraceContext(langGraphTraceContext, fallbackSuppressedAudit);
+    const normalized = normalizeError(caughtError);
+    normalized.traceContext = langGraphTraceContext;
     throw normalized;
-  }
-
-  const fallbackDecision = resolveLangGraphFallbackDecision({
-    finalState,
-    legacyFallbackEnabled: false
-  });
-
-  const fallbackSuppressedAudit = fallbackDecision.fallbackSuppressed
-    ? buildLangGraphFallbackSuppressedAudit({
-        requestId,
-        traceId,
-        scene,
-        routePlan: langGraphRoutePlan,
-        fallbackDecision
-      })
-    : null;
-  const completionTraceContext = fallbackSuppressedAudit
-    ? buildSuppressedFallbackTraceContext(langGraphTraceContext, fallbackSuppressedAudit)
-    : langGraphTraceContext;
-
-  if (fallbackSuppressedAudit) {
-    logSuppressedFallback(langGraphTraceContext, fallbackSuppressedAudit);
   }
 
   const response = buildHttpResponseFromState(finalState);
@@ -272,7 +157,7 @@ async function runLangGraphAgentRuntimeRoute({
 
   if (finalState?.result?.success === true) {
     info("agent.run.success", {
-      ...completionTraceContext,
+      ...langGraphTraceContext,
       durationMs: Date.now() - startedAt,
       sceneExecutionType: "langgraph-stategraph",
       draftExecution,
@@ -280,7 +165,7 @@ async function runLangGraphAgentRuntimeRoute({
     });
   } else {
     info("agent.run.completed", {
-      ...completionTraceContext,
+      ...langGraphTraceContext,
       sceneExecutionType: "langgraph-stategraph",
       success: false,
       code: finalState?.error?.code || null,
@@ -322,7 +207,6 @@ async function runAgentRoute(body) {
       tenantId,
       userId,
       handlers: {
-        runLegacyDirectModel: runLegacyDirectModelRoute,
         runLangGraphAgentRuntime: runLangGraphAgentRuntimeRoute
       }
     });
@@ -354,7 +238,6 @@ async function runAgentRoute(body) {
 
 module.exports = {
   buildHttpErrorResponse,
-  buildHttpSuccessResponse,
   normalizeOpportunityId,
   runLangGraphAgentRuntimeRoute,
   runAgentRoute,

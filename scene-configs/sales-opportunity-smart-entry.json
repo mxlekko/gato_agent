@@ -3,11 +3,12 @@
   "enabled": true,
   "title": "销售机会智能录入",
   "description": "通过 opportunityId 查询当前销售机会全部字段，结合 rawText 和字段字典，按销售场景输出基础字段加场景字段的结构化结果。",
+  "execution": {
+    "mode": "agent-runtime"
+  },
   "routing": {
     "mode": "langgraph",
     "allowedModes": [
-      "legacy",
-      "shadow",
       "langgraph"
     ],
     "langgraphCutover": {
