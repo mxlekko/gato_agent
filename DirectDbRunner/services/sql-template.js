@@ -4,17 +4,16 @@ const fsp = require("fs/promises");
 const path = require("path");
 const { createAppError } = require("../../utils/errors");
 const { resolvePathReference } = require("../../utils/path-resolver");
+const { getSceneConfig } = require("../../services/scene-config");
 const { getDbPool, sql } = require("../../ContextHelper/services/db");
 const { filterNonEmptyFields } = require("../../ContextHelper/providers/sales-opportunity/filter");
 const { normalizeOpportunityId } = require("../../ContextHelper/providers/sales-opportunity/schema");
 const { info } = require("../../utils/logger");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
-const SCENE_CONFIG_PATH = path.join(PROJECT_ROOT, "scene-configs", "sales-opportunity-advisor-directdb.json");
-const DICTIONARY_PATH = path.join(PROJECT_ROOT, "metadata", "sales_opportunity_advisor_directdb_dictionary.tsv");
+const DIRECTDB_SCENE = "sales-opportunity-advisor-directdb";
 const SQL_CACHE_DIR = path.join(PROJECT_ROOT, "DirectDbRunner", "sql-cache");
 const SQL_CACHE_FILE = path.join(SQL_CACHE_DIR, "sales-opportunity-advisor-directdb.sql.json");
-const RUNTIME_ROOT = path.join(PROJECT_ROOT, "runtime-assets");
 const SQL_DEFINITION_BEGIN = "<<<SQL_BUSINESS_DEFINITION_BEGIN>>>";
 const SQL_DEFINITION_END = "<<<SQL_BUSINESS_DEFINITION_END>>>";
 const DEFAULT_SQL_MODEL = process.env.DIRECTDB_SQL_TEMPLATE_MODEL || "kimi-k2-turbo-preview";
@@ -50,27 +49,26 @@ function extractSqlBusinessDefinition(skillContent) {
 async function loadSkillContext() {
   let sceneConfig;
   try {
-    sceneConfig = JSON.parse(await fsp.readFile(SCENE_CONFIG_PATH, "utf8"));
+    sceneConfig = getSceneConfig(DIRECTDB_SCENE);
   } catch (error) {
     throw createAppError("INVALID_SQL_TEMPLATE", "Failed to read directdb scene config for SQL template generation.", {
       details: {
-        filePath: SCENE_CONFIG_PATH,
+        scene: DIRECTDB_SCENE,
         cause: error?.message || "scene_config_read_failed"
       }
     });
   }
 
-  const skillPathRef = sceneConfig?.skill?.entryFile;
+  const skillPathRef = sceneConfig?.skill?.entryFileRef || sceneConfig?.skill?.entryFile;
   if (!skillPathRef) {
     throw createAppError("INVALID_SQL_TEMPLATE", "Directdb scene config is missing skill.entryFile.");
   }
 
   let skillPath;
   try {
-    skillPath = resolvePathReference(skillPathRef, {
-      projectRoot: PROJECT_ROOT,
-      runtimeRoot: RUNTIME_ROOT
-    }).resolvedPath;
+    skillPath = path.isAbsolute(sceneConfig?.skill?.entryFile || "")
+      ? sceneConfig.skill.entryFile
+      : resolvePathReference(skillPathRef).resolvedPath;
   } catch (error) {
     throw createAppError("INVALID_SQL_TEMPLATE", "Failed to resolve directdb skill.entryFile.", {
       details: {
@@ -80,14 +78,22 @@ async function loadSkillContext() {
     });
   }
 
+  const dictionaryReference = Array.isArray(sceneConfig.references)
+    ? sceneConfig.references.find((reference) => reference?.id === "sales-opportunity-dictionary")
+    : null;
+  const dictionaryPath = dictionaryReference?.path;
+  if (!dictionaryPath) {
+    throw createAppError("INVALID_SQL_TEMPLATE", "Directdb scene config is missing sales-opportunity-dictionary reference.");
+  }
+
   const [skillContent, dictionaryContent] = await Promise.all([
     fsp.readFile(skillPath, "utf8"),
-    fsp.readFile(DICTIONARY_PATH, "utf8")
+    fsp.readFile(dictionaryPath, "utf8")
   ]).catch((error) => {
     throw createAppError("INVALID_SQL_TEMPLATE", "Failed to read local files for SQL template generation.", {
       details: {
         skillPath,
-        dictionaryPath: DICTIONARY_PATH,
+        dictionaryPath,
         cause: error?.message || "local_file_read_failed"
       }
     });

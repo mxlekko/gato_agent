@@ -7,6 +7,8 @@ const { createConfigStore } = require("../services/config-store");
 const { createReleaseManager } = require("../services/release-manager");
 const { PROJECT_ROOT } = require("../utils/path-resolver");
 
+const VERIFY_ENV = "verifyrelease";
+
 async function readCurrentTarget(bundleRoot, environment) {
   try {
     return await fs.readlink(path.join(bundleRoot, environment, "current"));
@@ -23,14 +25,14 @@ async function main() {
   const verificationRoot = path.join(PROJECT_ROOT, ".tmp", `release-manager-verify-${Date.now()}`);
   const manager = createReleaseManager({
     bundleRoot: verificationRoot,
-    activeEnv: "local"
+    activeEnv: VERIFY_ENV
   });
   const store = createConfigStore({ driver: "mysql" });
   const createdReleaseIds = [];
 
   try {
     const first = await manager.publishRelease({
-      environment: "local",
+      environment: VERIFY_ENV,
       scopeType: "all",
       scopeValue: "*",
       createdBy: "codex-t3-01",
@@ -45,7 +47,7 @@ async function main() {
       throw new Error("First release did not become the active release pointer.");
     }
 
-    const firstCurrentTarget = await readCurrentTarget(verificationRoot, "local");
+    const firstCurrentTarget = await readCurrentTarget(verificationRoot, VERIFY_ENV);
     if (firstCurrentTarget !== first.release.releaseId) {
       throw new Error("Bundle current symlink did not point to the first release.");
     }
@@ -56,7 +58,7 @@ async function main() {
     }
 
     const second = await manager.publishRelease({
-      environment: "local",
+      environment: VERIFY_ENV,
       scopeType: "all",
       scopeValue: "*",
       createdBy: "codex-t3-01",
@@ -74,13 +76,13 @@ async function main() {
       throw new Error("Second release did not preserve the previous release pointer.");
     }
 
-    const secondCurrentTarget = await readCurrentTarget(verificationRoot, "local");
+    const secondCurrentTarget = await readCurrentTarget(verificationRoot, VERIFY_ENV);
     if (secondCurrentTarget !== second.release.releaseId) {
       throw new Error("Bundle current symlink did not point to the second release.");
     }
 
     const rollback = await manager.rollbackRelease({
-      environment: "local",
+      environment: VERIFY_ENV,
       scopeType: "all",
       scopeValue: "*",
       updatedBy: "codex-t3-01"
@@ -93,7 +95,7 @@ async function main() {
       throw new Error("Rollback did not keep the second release as previous.");
     }
 
-    const rollbackCurrentTarget = await readCurrentTarget(verificationRoot, "local");
+    const rollbackCurrentTarget = await readCurrentTarget(verificationRoot, VERIFY_ENV);
     if (rollbackCurrentTarget !== first.release.releaseId) {
       throw new Error("Bundle current symlink did not roll back to the first release.");
     }
@@ -119,7 +121,7 @@ async function main() {
       )
     );
   } finally {
-    await store.deleteReleasePointer("local", "all", "*").catch(() => null);
+    await store.deleteReleasePointer(VERIFY_ENV, "all", "*").catch(() => null);
 
     for (const releaseId of createdReleaseIds.reverse()) {
       await store.deleteRelease(releaseId).catch(() => null);

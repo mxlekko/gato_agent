@@ -29,7 +29,7 @@ POST /api/agent/run
 | `sales-opportunity-smart-entry` | `langgraph` | 项目内 LangGraph + GenericQueryRunner + Project Advisory LLM | `opportunityId`, `rawText` |
 | `special-custom-product-solution` | `langgraph` | 项目内 LangGraph + Local RAG + Project LLM + ModelTool | `specialCustomOrderNo`, `customRequirement` |
 
-对应配置在 [scene-configs](scene-configs) 中。运行时如果存在 active bundle，会优先读取 `.local/runtime-bundles/local/current/scene-configs`，否则回退到仓库内的 `scene-configs`。
+对应配置在 [scene-configs](scene-configs) 中。本地开发默认优先读取 `.local/runtime-bundles/local/current/scene-configs`，缺失时才回退到仓库内的 `scene-configs`；生产/prod 或 `CONFIG_REQUIRE_ACTIVE_BUNDLE=1` 会禁止仓库 fallback，必须存在 active bundle。
 
 ## 当前链路
 
@@ -93,7 +93,9 @@ POST /api/agent/run
 - `DASHSCOPE_API_KEY`, `EMBEDDING_MODEL`
 - `RAG_PROXY_TIMEOUT_MS`, `RAG_SYNC_DB_URL`
 - `CONFIG_STORE_DRIVER`
-- `CONFIG_CURRENT_BUNDLE`, `CONFIG_SCENE_CONFIG_DIR`, `CONFIG_PROJECT_ROOT`, `CONFIG_RUNTIME_ROOT`
+- `CONFIG_ACTIVE_ENV`, `CONFIG_BUNDLE_ROOT`, `CONFIG_CURRENT_BUNDLE`, `CONFIG_SCENE_CONFIG_DIR`, `CONFIG_PROJECT_ROOT`, `CONFIG_RUNTIME_ROOT`
+- `CONFIG_REQUIRE_ACTIVE_BUNDLE`
+- `CONSOLE_ADMIN_TOKEN`
 
 模型密钥只允许放在 `.env` 或环境变量里。`runtime-assets/model-profiles/*/models.json` 和 `auth-profiles.json` 只保留模型元数据和 `apiKeyEnv` / `keyEnv`，不能写真实 key。
 
@@ -104,11 +106,13 @@ POST /api/agent/run
 - `project://...`
   - 解析到当前 project root
   - active bundle 存在时解析到 `.local/runtime-bundles/local/current`
-  - 否则解析到仓库根目录
+  - 本地开发且未强制 active bundle 时，可回退到仓库根目录
 - `runtime://project-runtime/...`
   - 解析到当前 runtime root 下的 `project-runtime`
   - active bundle 存在时解析到 `.local/runtime-bundles/local/current/runtime-assets/project-runtime`
-  - 否则解析到 `runtime-assets/project-runtime`
+  - 本地开发且未强制 active bundle 时，可回退到 `runtime-assets/project-runtime`
+
+生产/prod 或 `CONFIG_REQUIRE_ACTIVE_BUNDLE=1` 时，`scene-configs` 和 `platform` 均不会回退到仓库目录；active bundle 缺失会直接启动/请求失败。
 
 历史 `runtime://project-runtime/...` namespace 已退役，运行时只接受 `runtime://project-runtime/...`。
 
@@ -206,6 +210,12 @@ npm run console:dev
 
 切换代理目标时，复制 [console/.env.local.example](console/.env.local.example) 为 `console/.env.local`，修改 `VITE_API_PROXY_TARGET` 后重启控制台。
 
+控制台写操作受访问保护：
+
+- 配置 `CONSOLE_ADMIN_TOKEN` 后，所有写入类 `/api/console/*` 请求必须带 `X-Console-Admin-Token` 或 `Authorization: Bearer ...`。
+- 未配置 token 时，仅本地开发允许 loopback 客户端执行写操作；生产/prod 或 `CONFIG_REQUIRE_ACTIVE_BUNDLE=1` 会强制要求 token。
+- 内网 V1 可以在浏览器 localStorage 写入 `agent-platform-console-admin-token`，或在 `console/.env.local` 设置 `VITE_CONSOLE_ADMIN_TOKEN`；公网部署不要把管理员 token 打进前端包。
+
 ## 配置中心
 
 控制台配置草稿默认写入 MySQL 配置中心，核心表包括：
@@ -217,7 +227,7 @@ npm run console:dev
 - `cfg_releases`
 - `cfg_release_pointers`
 
-运行时读取发布后的 active bundle。控制台草稿和当前发布版不一致时，页面会显示 unpublished changes。发布后 `.local/runtime-bundles/local/current` 会指向最新 release。
+运行时读取发布后的 active bundle。控制台草稿和当前发布版不一致时，页面会显示 unpublished changes。发布后 `.local/runtime-bundles/local/current` 会指向最新 release，并在指针切换后再次校验 current symlink、bundle manifest、场景配置和平台资源；校验失败会回滚 release pointer 与 current symlink。
 
 常用命令：
 

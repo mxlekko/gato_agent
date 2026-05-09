@@ -1,7 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const { CONFIG_CURRENT_BUNDLE } = require("../../services/scene-config");
+const { CONFIG_CURRENT_BUNDLE, CONFIG_REQUIRE_ACTIVE_BUNDLE } = require("../../services/scene-config");
+const { createAppError } = require("../../utils/errors");
 
 const PLATFORM_API_VERSION = "agent.platform/v1alpha1";
 const REPOSITORY_PLATFORM_BASE_DIR = path.resolve(__dirname, "..");
@@ -66,6 +67,17 @@ function getPlatformResourceSourceState() {
       platformBaseDir: PLATFORM_BASE_DIR,
       source: "active-bundle"
     };
+  }
+
+  if (CONFIG_REQUIRE_ACTIVE_BUNDLE) {
+    throw createAppError("INVALID_REQUEST", "Active runtime bundle platform directory is required; repository fallback is disabled.", {
+      stage: "platform-config",
+      details: {
+        platformBaseDir: PLATFORM_BASE_DIR,
+        currentBundle: CONFIG_CURRENT_BUNDLE,
+        configRequireActiveBundle: CONFIG_REQUIRE_ACTIVE_BUNDLE
+      }
+    });
   }
 
   return {

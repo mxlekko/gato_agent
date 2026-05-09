@@ -558,7 +558,13 @@ async function publishConsoleRelease(input = {}) {
       currentBundleTarget,
       renderedBundle: published.renderedBundle || null,
       policySync,
-      validation: summarizeValidation(published.activation?.preflightValidation || published.preflightValidation)
+      validation: summarizeValidation(published.activation?.preflightValidation || published.preflightValidation),
+      postActivationValidation: {
+        currentPath: published.activation?.postActivationValidation?.currentPath || null,
+        currentTarget: published.activation?.postActivationValidation?.currentTarget || null,
+        bundle: cloneJson(published.activation?.postActivationValidation?.bundleValidation || null),
+        release: summarizeValidation(published.activation?.postActivationValidation?.releaseValidation || null)
+      }
     };
   } finally {
     await manager.close().catch(() => null);

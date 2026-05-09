@@ -17,6 +17,17 @@ const CONFIG_RUNTIME_ROOT = path.resolve(process.env.CONFIG_RUNTIME_ROOT || path
 const SCENE_CONFIG_DIR = path.resolve(process.env.CONFIG_SCENE_CONFIG_DIR || path.join(CONFIG_CURRENT_BUNDLE, "scene-configs"));
 const BLOCKED_PATH_WARNING_CODES = new Set(["legacy-project-path", "shared-legacy-agent-path"]);
 
+function isTruthyEnv(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+function isProductionLikeMode() {
+  return [process.env.NODE_ENV, process.env.APP_ENV, process.env.CONFIG_ACTIVE_ENV]
+    .some((value) => ["production", "prod"].includes(String(value || "").trim().toLowerCase()));
+}
+
+const CONFIG_REQUIRE_ACTIVE_BUNDLE = isProductionLikeMode() || isTruthyEnv(process.env.CONFIG_REQUIRE_ACTIVE_BUNDLE);
+
 function getSceneConfigSourceState() {
   if (fs.existsSync(SCENE_CONFIG_DIR)) {
     const stat = fs.statSync(SCENE_CONFIG_DIR);
@@ -28,6 +39,18 @@ function getSceneConfigSourceState() {
         source: "active-bundle"
       };
     }
+  }
+
+  if (CONFIG_REQUIRE_ACTIVE_BUNDLE) {
+    throw createAppError("INVALID_REQUEST", "Active runtime bundle scene-configs directory is required; repository fallback is disabled.", {
+      stage: "scene-config",
+      details: {
+        sceneConfigDir: SCENE_CONFIG_DIR,
+        currentBundle: CONFIG_CURRENT_BUNDLE,
+        activeEnv: CONFIG_ACTIVE_ENV,
+        configRequireActiveBundle: CONFIG_REQUIRE_ACTIVE_BUNDLE
+      }
+    });
   }
 
   return {
@@ -454,6 +477,7 @@ module.exports = {
   CONFIG_BUNDLE_ROOT,
   CONFIG_CURRENT_BUNDLE,
   CONFIG_PROJECT_ROOT,
+  CONFIG_REQUIRE_ACTIVE_BUNDLE,
   CONFIG_RUNTIME_ROOT,
   REPOSITORY_SCENE_CONFIG_DIR,
   SCENE_CONFIG_DIR,

@@ -1,4 +1,18 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || "";
+const ADMIN_TOKEN_STORAGE_KEY = "agent-platform-console-admin-token";
+
+function getConsoleAdminToken() {
+  const envToken = import.meta.env.VITE_CONSOLE_ADMIN_TOKEN?.trim();
+  if (envToken) {
+    return envToken;
+  }
+
+  try {
+    return window.localStorage?.getItem(ADMIN_TOKEN_STORAGE_KEY)?.trim() || "";
+  } catch {
+    return "";
+  }
+}
 
 async function parseResponse(response) {
   const text = await response.text();
@@ -14,9 +28,11 @@ async function parseResponse(response) {
 }
 
 export async function requestJson(path, options = {}) {
+  const adminToken = getConsoleAdminToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(adminToken ? { "X-Console-Admin-Token": adminToken } : {}),
       ...(options.headers || {})
     },
     ...options

@@ -425,6 +425,70 @@ class ReleaseManager {
     });
   }
 
+  async validateActiveBundleAfterActivation(release, pointer = null) {
+    const entries = await this.store.listReleaseEntries(release.releaseId);
+    const activePointer = pointer || await this.store.getReleasePointer(
+      release.environment,
+      release.scopeType,
+      release.scopeValue
+    );
+
+    if (!activePointer || activePointer.activeReleaseId !== release.releaseId) {
+      throw createAppError("INVALID_REQUEST", "Active release pointer does not match the published release.", {
+        stage: "release-manager",
+        details: {
+          releaseId: release.releaseId,
+          pointerActiveReleaseId: activePointer?.activeReleaseId || null
+        }
+      });
+    }
+
+    let currentPath = null;
+    let currentTarget = null;
+    if (this.shouldUpdateCurrentLink(release.scopeType)) {
+      currentPath = this.getCurrentBundlePath(release.environment);
+      const currentStat = await safeLstat(currentPath);
+      if (!currentStat || !currentStat.isSymbolicLink()) {
+        throw createAppError("INVALID_REQUEST", "Current bundle pointer is missing or is not a symlink.", {
+          stage: "release-manager",
+          details: {
+            releaseId: release.releaseId,
+            currentPath,
+            exists: Boolean(currentStat)
+          }
+        });
+      }
+
+      currentTarget = await this.readCurrentLinkTarget(release.environment);
+      if (currentTarget !== release.releaseId) {
+        throw createAppError("INVALID_REQUEST", "Current bundle pointer does not target the published release.", {
+          stage: "release-manager",
+          details: {
+            releaseId: release.releaseId,
+            currentPath,
+            currentTarget
+          }
+        });
+      }
+    }
+
+    const activeBundleRelease = currentPath
+      ? {
+          ...release,
+          bundlePath: currentPath
+        }
+      : release;
+    const bundleValidation = await this.validateBundle(activeBundleRelease, entries);
+    const releaseValidation = await this.validateReleaseForPublish(activeBundleRelease, entries);
+
+    return {
+      currentPath,
+      currentTarget,
+      bundleValidation,
+      releaseValidation
+    };
+  }
+
   async saveDraftRelease(release, entries) {
     const persistedRelease = await this.store.saveRelease({
       releaseId: release.releaseId,
@@ -554,6 +618,7 @@ class ReleaseManager {
 
     let pointer = null;
     let currentPath = null;
+    let postActivationValidation = null;
     const nextPreviousReleaseId =
       previousPointer?.activeReleaseId && previousPointer.activeReleaseId !== releaseId
         ? previousPointer.activeReleaseId
@@ -573,6 +638,8 @@ class ReleaseManager {
       if (this.shouldUpdateCurrentLink(release.scopeType)) {
         currentPath = await this.setCurrentLink(release.environment, release.releaseId);
       }
+
+      postActivationValidation = await this.validateActiveBundleAfterActivation(release, pointer);
     } catch (error) {
       await this.store.saveRelease({
         ...release,
@@ -605,7 +672,8 @@ class ReleaseManager {
       release: await this.store.getRelease(release.releaseId),
       pointer,
       currentPath,
-      preflightValidation: releaseValidation
+      preflightValidation: releaseValidation,
+      postActivationValidation
     };
   }
 

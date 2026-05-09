@@ -1,6 +1,7 @@
 require("./utils/load-env").loadProjectEnv();
 
 const http = require("http");
+const crypto = require("crypto");
 const { runAgentRoute } = require("./routes/agent");
 const {
   createConsoleSceneRoute,
@@ -76,6 +77,8 @@ const { info, error } = require("./utils/logger");
 const API_HOST = process.env.API_HOST || "0.0.0.0";
 const API_PORT = Number(process.env.API_PORT || 3000);
 const HEALTH_PROBE_TIMEOUT_MS = Number(process.env.HEALTH_PROBE_TIMEOUT_MS || 1500);
+const CONSOLE_ADMIN_TOKEN = String(process.env.CONSOLE_ADMIN_TOKEN || "").trim();
+const MUTATING_HTTP_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const LANGGRAPH_HEALTH_SCENES = [
   "payment-info-split",
   "sales-opportunity-advisor",
@@ -83,6 +86,86 @@ const LANGGRAPH_HEALTH_SCENES = [
   "sales-opportunity-smart-entry",
   "special-custom-product-solution"
 ];
+
+function isProductionLikeMode() {
+  return [process.env.NODE_ENV, process.env.APP_ENV, process.env.CONFIG_ACTIVE_ENV]
+    .some((value) => ["production", "prod"].includes(String(value || "").trim().toLowerCase()))
+    || ["1", "true", "yes", "on"].includes(String(process.env.CONFIG_REQUIRE_ACTIVE_BUNDLE || "").trim().toLowerCase());
+}
+
+function isLoopbackAddress(address = "") {
+  const normalized = String(address || "").trim();
+  return normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "::ffff:127.0.0.1";
+}
+
+function extractConsoleAdminToken(req) {
+  const explicitHeader = req.headers["x-console-admin-token"] || req.headers["x-admin-token"];
+  if (Array.isArray(explicitHeader)) {
+    return String(explicitHeader[0] || "").trim();
+  }
+  if (explicitHeader) {
+    return String(explicitHeader).trim();
+  }
+
+  const authorization = req.headers.authorization;
+  const authorizationValue = Array.isArray(authorization)
+    ? authorization[0]
+    : authorization;
+  const bearerMatch = String(authorizationValue || "").match(/^Bearer\s+(.+)$/i);
+  return bearerMatch ? bearerMatch[1].trim() : "";
+}
+
+function safeTokenEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""), "utf8");
+  const rightBuffer = Buffer.from(String(right || ""), "utf8");
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function requireConsoleAdminAccess(req, operation) {
+  if (CONSOLE_ADMIN_TOKEN) {
+    const suppliedToken = extractConsoleAdminToken(req);
+    if (!suppliedToken || !safeTokenEquals(suppliedToken, CONSOLE_ADMIN_TOKEN)) {
+      throw createAppError("ACCESS_DENIED", "Console admin token is required for this operation.", {
+        stage: "authorize-console",
+        details: {
+          operation
+        }
+      });
+    }
+    return;
+  }
+
+  if (isProductionLikeMode()) {
+    throw createAppError("ACCESS_DENIED", "CONSOLE_ADMIN_TOKEN must be configured for mutating console operations in production mode.", {
+      stage: "authorize-console",
+      details: {
+        operation
+      }
+    });
+  }
+
+  if (!isLoopbackAddress(req.socket?.remoteAddress)) {
+    throw createAppError("ACCESS_DENIED", "Mutating console operations without CONSOLE_ADMIN_TOKEN are restricted to loopback clients.", {
+      stage: "authorize-console",
+      details: {
+        operation,
+        remoteAddress: req.socket?.remoteAddress || null
+      }
+    });
+  }
+}
+
+function protectMutatingConsoleRoute(req, method, pathname) {
+  if (MUTATING_HTTP_METHODS.has(method) && pathname.startsWith("/api/console/")) {
+    requireConsoleAdminAccess(req, `${method} ${pathname}`);
+  }
+}
 
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
@@ -297,6 +380,7 @@ const server = http.createServer(async (req, res) => {
     const method = req.method || "GET";
     const url = new URL(req.url, `http://${req.headers.host || `${API_HOST}:${API_PORT}`}`);
     const pathname = url.pathname;
+    protectMutatingConsoleRoute(req, method, pathname);
 
     if (method === "GET" && pathname === "/health") {
       await handleHealth(req, res);
