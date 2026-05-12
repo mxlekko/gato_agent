@@ -15,8 +15,8 @@ spec:
     networkPolicy: provider-only
     provider: moonshot
     model: kimi-k2-turbo-preview
-    temperature: 1
-    maxTokens: 1024
+    temperature: 0
+    maxTokens: 256
   requestContract:
     requiredFields:
       - prompt

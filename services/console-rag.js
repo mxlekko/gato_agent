@@ -3,7 +3,7 @@ const { createAppError } = require("../utils/errors");
 const DEFAULT_RAG_SERVICE_BASE_URL = "http://127.0.0.1:19104";
 const DEFAULT_RAG_PROXY_TIMEOUT_MS = 15000;
 const DEFAULT_RAG_CHUNK_UPDATE_TIMEOUT_MS = 180000;
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]", "rag"]);
 
 function getRagServiceBaseUrl() {
   const rawBaseUrl = process.env.RAG_SERVICE_BASE_URL || DEFAULT_RAG_SERVICE_BASE_URL;

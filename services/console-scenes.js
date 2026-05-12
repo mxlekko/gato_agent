@@ -45,6 +45,32 @@ const CONSOLE_SCENE_CONFIG_STORE_DRIVER = "mysql";
 const CONSOLE_SCENE_CONFIG_STORAGE_TABLE = "cfg_scene_configs";
 const CONSOLE_SCENE_CONFIG_UPDATED_BY = "console-scene";
 const CONSOLE_SCENE_PLATFORM_STORAGE_TABLE = "cfg_platform_resources";
+const MODEL_PROVIDER_OPTIONS = [
+  {
+    provider: "moonshot",
+    label: "Moonshot / Kimi",
+    defaultModel: "moonshot-v1-8k",
+    keyEnvNames: ["MOONSHOT_API_KEY"]
+  },
+  {
+    provider: "deepseek",
+    label: "DeepSeek",
+    defaultModel: "deepseek-chat",
+    keyEnvNames: ["DEEPSEEK_API_KEY"]
+  },
+  {
+    provider: "openai",
+    label: "OpenAI",
+    defaultModel: "gpt-4o-mini",
+    keyEnvNames: ["OPENAI_API_KEY"]
+  },
+  {
+    provider: "openai-compatible",
+    label: "OpenAI Compatible",
+    defaultModel: "gpt-4o-mini",
+    keyEnvNames: ["LANGGRAPH_LLM_API_KEY", "PROJECT_LLM_API_KEY"]
+  }
+];
 
 function cloneJson(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -135,6 +161,177 @@ function dumpYamlDocument(document) {
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function trimString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeModelProvider(value) {
+  const normalized = trimString(value).toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+
+  if (["openai_compatible", "openai-compatible", "compatible"].includes(normalized)) {
+    return "openai-compatible";
+  }
+
+  return normalized;
+}
+
+function uniqueStrings(values) {
+  return Array.from(
+    new Set(
+      values
+        .filter((value) => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function providerOptionFor(provider) {
+  return MODEL_PROVIDER_OPTIONS.find((option) => option.provider === provider) || null;
+}
+
+function normalizeOptionalNumber(value, fieldName, {
+  min = null,
+  max = null,
+  integer = false
+} = {}) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw createAppError("INVALID_REQUEST", `${fieldName} must be a number.`, {
+      stage: "console-scene-save"
+    });
+  }
+
+  if (integer && !Number.isInteger(parsed)) {
+    throw createAppError("INVALID_REQUEST", `${fieldName} must be an integer.`, {
+      stage: "console-scene-save"
+    });
+  }
+
+  if (min !== null && parsed < min) {
+    throw createAppError("INVALID_REQUEST", `${fieldName} must be greater than or equal to ${min}.`, {
+      stage: "console-scene-save"
+    });
+  }
+
+  if (max !== null && parsed > max) {
+    throw createAppError("INVALID_REQUEST", `${fieldName} must be less than or equal to ${max}.`, {
+      stage: "console-scene-save"
+    });
+  }
+
+  return parsed;
+}
+
+function normalizeSceneModelConfig(value = {}) {
+  if (!isObject(value)) {
+    throw createAppError("INVALID_REQUEST", "Scene model config must be an object.", {
+      stage: "console-scene-save"
+    });
+  }
+
+  const provider = normalizeModelProvider(value.provider);
+  const model = trimString(value.model);
+  const baseUrl = trimString(value.baseUrl);
+  const apiKeyEnv = trimString(value.apiKeyEnv);
+  const temperature = normalizeOptionalNumber(value.temperature, "temperature", {
+    min: 0,
+    max: 2
+  });
+  const maxTokens = normalizeOptionalNumber(value.maxTokens, "maxTokens", {
+    min: 1,
+    integer: true
+  });
+  const timeoutMs = normalizeOptionalNumber(value.timeoutMs, "timeoutMs", {
+    min: 1000,
+    integer: true
+  });
+
+  if (!provider && !model && !baseUrl && !apiKeyEnv && temperature === undefined && maxTokens === undefined && timeoutMs === undefined) {
+    return null;
+  }
+
+  if (!provider) {
+    throw createAppError("INVALID_REQUEST", "Scene model config requires provider.", {
+      stage: "console-scene-save"
+    });
+  }
+
+  if (!providerOptionFor(provider)) {
+    throw createAppError("INVALID_REQUEST", `Unsupported model provider: ${provider}.`, {
+      stage: "console-scene-save",
+      details: {
+        supportedProviders: MODEL_PROVIDER_OPTIONS.map((option) => option.provider)
+      }
+    });
+  }
+
+  if (!model) {
+    throw createAppError("INVALID_REQUEST", "Scene model config requires model.", {
+      stage: "console-scene-save"
+    });
+  }
+
+  const normalized = {
+    provider,
+    model
+  };
+
+  if (baseUrl) {
+    try {
+      new URL(baseUrl);
+    } catch {
+      throw createAppError("INVALID_REQUEST", "Scene model baseUrl must be a valid URL.", {
+        stage: "console-scene-save"
+      });
+    }
+    normalized.baseUrl = baseUrl.replace(/\/+$/, "");
+  }
+  if (apiKeyEnv) {
+    normalized.apiKeyEnv = apiKeyEnv;
+  }
+  if (temperature !== undefined) {
+    normalized.temperature = temperature;
+  }
+  if (maxTokens !== undefined) {
+    normalized.maxTokens = maxTokens;
+  }
+  if (timeoutMs !== undefined) {
+    normalized.timeoutMs = timeoutMs;
+  }
+
+  return normalized;
+}
+
+function normalizeSceneModelConfigForRead(value = null) {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  try {
+    return normalizeSceneModelConfig(value);
+  } catch {
+    return cloneJson(value);
+  }
+}
+
+function buildProviderKeyEnvNames(provider, apiKeyEnv = null) {
+  const option = providerOptionFor(provider);
+  return uniqueStrings([
+    apiKeyEnv,
+    "LANGGRAPH_LLM_API_KEY",
+    "PROJECT_LLM_API_KEY",
+    ...(option?.keyEnvNames || [])
+  ]);
 }
 
 function getExecutionMode(sceneConfig) {
@@ -1280,6 +1477,55 @@ function inferDataSource(toolRef, toolRecord = null) {
   };
 }
 
+function readAdvisoryToolDriver(scene, sceneConfig, platformIndex) {
+  const skillRecord = resolveSceneSkillRecord(scene, platformIndex, sceneConfig);
+  const skillSpec = skillRecord?.document?.spec || {};
+  const toolRef = skillSpec?.toolBindings?.advisory_llm?.toolRef || null;
+  const toolRecord = toolRef ? platformIndex.toolsByRef.get(toolRef) : null;
+  const driver = isObject(toolRecord?.document?.spec?.driver)
+    ? toolRecord.document.spec.driver
+    : {};
+
+  return {
+    toolRef,
+    provider: normalizeModelProvider(driver.provider) || null,
+    model: trimString(driver.model) || null,
+    baseUrl: trimString(driver.baseUrl) || null,
+    apiKeyEnv: trimString(driver.apiKeyEnv) || null,
+    temperature: driver.temperature ?? null,
+    maxTokens: driver.maxTokens ?? null,
+    timeoutMs: toolRecord?.document?.spec?.limits?.timeoutMsDefault ?? null
+  };
+}
+
+function buildSceneModelBinding(scene, sceneConfig, platformIndex, publishedSceneConfig = null) {
+  const configured = normalizeSceneModelConfigForRead(sceneConfig?.model || null);
+  const toolDefault = readAdvisoryToolDriver(scene, sceneConfig, platformIndex);
+  const envProvider = normalizeModelProvider(process.env.LANGGRAPH_LLM_PROVIDER || process.env.PROJECT_LLM_PROVIDER || process.env.CHAT_PROVIDER) || null;
+  const envModel = trimString(process.env.LANGGRAPH_LLM_MODEL || process.env.PROJECT_LLM_MODEL || process.env.CHAT_MODEL) || null;
+  const effectiveProvider = configured?.provider || toolDefault.provider || envProvider;
+  const providerOption = providerOptionFor(effectiveProvider);
+  const effectiveModel = configured?.model || toolDefault.model || (!toolDefault.provider ? envModel : null) || providerOption?.defaultModel || null;
+  const effectiveApiKeyEnv = configured?.apiKeyEnv || toolDefault.apiKeyEnv || null;
+
+  return {
+    configured,
+    publishedConfigured: normalizeSceneModelConfigForRead(publishedSceneConfig?.model || null),
+    toolDefault,
+    effective: {
+      provider: effectiveProvider,
+      model: effectiveModel,
+      baseUrl: configured?.baseUrl || toolDefault.baseUrl || null,
+      temperature: configured?.temperature ?? toolDefault.temperature ?? null,
+      maxTokens: configured?.maxTokens ?? toolDefault.maxTokens ?? null,
+      timeoutMs: configured?.timeoutMs ?? toolDefault.timeoutMs ?? null,
+      source: configured ? "scene" : (toolDefault.provider || toolDefault.model ? "tool" : "env"),
+      keyEnvNames: buildProviderKeyEnvNames(effectiveProvider, effectiveApiKeyEnv)
+    },
+    providerOptions: cloneJson(MODEL_PROVIDER_OPTIONS)
+  };
+}
+
 function buildSkillBindingOption(record) {
   const document = record?.document || {};
   const metadata = document.metadata || {};
@@ -1399,6 +1645,7 @@ function buildPlatformManagedWorkflow(scene, sceneConfig, platformIndex) {
   const rulesAsset = selectSceneRulesRef(skillSpec)
     ? resolveRulesAsset(scene, sceneConfig, platformIndex)
     : null;
+  const modelBinding = buildSceneModelBinding(scene, sceneConfig, platformIndex);
 
   return {
     scene,
@@ -1437,6 +1684,7 @@ function buildPlatformManagedWorkflow(scene, sceneConfig, platformIndex) {
     nodesById: cloneJson(graph.nodesById || {}),
     defaultNextByNodeId: cloneJson(graph.defaultNextByNodeId || {}),
     toolBindings: cloneJson(skillSpec?.toolBindings || {}),
+    modelBinding,
     queryProfileRef,
     conditionalEdges: cloneJson(graph.conditionalEdges || []),
     nodeOverrides: cloneJson(skillSpec?.nodeOverrides || {}),
@@ -1760,6 +2008,76 @@ async function updateConsoleSceneSkillBinding(scene, body = {}) {
         : 0
     }
   };
+}
+
+async function getConsoleSceneModelBinding(scene) {
+  const draftSceneConfigRecord = await getDraftSceneConfigRecord(scene);
+  const sceneConfig = cloneJson(draftSceneConfigRecord.document || {});
+  const platformIndex = await loadDraftPlatformIndex();
+  const publishedSceneConfig = getPublishedSceneConfigSnapshot(scene);
+  const configState = buildSceneConfigState(
+    scene,
+    draftSceneConfigRecord,
+    publishedSceneConfig,
+    platformIndex
+  );
+
+  return {
+    scene,
+    editable: true,
+    storageDriver: CONSOLE_SCENE_CONFIG_STORE_DRIVER,
+    storageTable: CONSOLE_SCENE_CONFIG_STORAGE_TABLE,
+    storagePath: buildSceneConfigStoragePath(scene),
+    ...buildSceneModelBinding(scene, sceneConfig, platformIndex, publishedSceneConfig?.document || null),
+    hasUnpublishedChanges: configState.hasUnpublishedChanges,
+    updatedAt: configState.draft.updatedAt
+  };
+}
+
+async function updateConsoleSceneModelBinding(scene, body = {}) {
+  const draftSceneConfigRecord = await getDraftSceneConfigRecord(scene);
+  const currentSceneConfig = cloneJson(draftSceneConfigRecord.document || {});
+  const nextModelConfig = body?.clear === true
+    ? null
+    : normalizeSceneModelConfig(body);
+  const nextDocument = cloneJson(currentSceneConfig);
+
+  if (nextModelConfig) {
+    nextDocument.model = nextModelConfig;
+  } else {
+    delete nextDocument.model;
+  }
+
+  const platformIndex = await loadDraftPlatformIndex();
+  resolveSceneSkillRecord(scene, platformIndex, nextDocument);
+
+  const nextContent = `${JSON.stringify(nextDocument, null, 2)}\n`;
+  await withConsoleSceneDraftStore((store) => {
+    if (String(draftSceneConfigRecord.sourceText || "") === nextContent) {
+      return draftSceneConfigRecord;
+    }
+
+    return store.saveSceneConfigDraft(
+      {
+        scene,
+        title: nextDocument.title || currentSceneConfig.title || scene,
+        enabled: nextDocument.enabled === true,
+        executionMode: nextDocument.execution?.mode || currentSceneConfig.execution?.mode || "agent-runtime",
+        status: nextDocument.status || draftSceneConfigRecord.status || "draft",
+        document: nextDocument,
+        sourceText: nextContent,
+        updatedBy: CONSOLE_SCENE_CONFIG_UPDATED_BY
+      },
+      {
+        operator: CONSOLE_SCENE_CONFIG_UPDATED_BY,
+        changeNote: `console scene draft update for ${scene}:model-binding`
+      }
+    );
+  });
+
+  CONSOLE_SCENE_CACHE.signature = null;
+
+  return getConsoleSceneModelBinding(scene);
 }
 
 async function getConsoleSceneCatalog() {
@@ -2305,6 +2623,7 @@ module.exports = {
   getConsoleSceneCatalog,
   getConsoleSceneDictionaryAssetContent,
   getConsoleSceneInputMappingContent,
+  getConsoleSceneModelBinding,
   getConsoleScenePromptAssetContent,
   getConsoleSceneQueryProfileContent,
   getConsoleSceneRulesAssetContent,
@@ -2314,6 +2633,7 @@ module.exports = {
   getConsoleSceneWorkflow,
   updateConsoleSceneDictionaryAssetContent,
   updateConsoleSceneInputMappingContent,
+  updateConsoleSceneModelBinding,
   updateConsoleScenePromptAssetContent,
   updateConsoleSceneQueryProfileContent,
   updateConsoleSceneRulesAssetContent,

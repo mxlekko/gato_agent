@@ -4,7 +4,7 @@ The runtime field dictionary source for `sales-opportunity-smart-entry` is no lo
 
 Use the local TSV file instead:
 
-`/Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_smart_entry_dictionary.tsv`
+`project://metadata/sales_opportunity_smart_entry_dictionary.tsv`
 
 The main skill is responsible for:
 

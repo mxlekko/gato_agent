@@ -144,6 +144,7 @@ function buildSceneContract({
 	    },
     agent: cloneJsonValue(safeSceneConfig.agent || null),
     runtime: cloneJsonValue(safeSceneConfig.runtime || null),
+    model: cloneJsonValue(safeSceneConfig.model || null),
     request_contract: cloneJsonValue(safeSceneConfig.request || null),
     skill: cloneJsonValue(safeSceneConfig.skill || null),
     tools: cloneJsonValue(safeSceneConfig.tools || []),

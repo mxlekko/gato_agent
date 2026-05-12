@@ -4,6 +4,7 @@ const {
   getConsoleSceneCatalog,
   getConsoleSceneDictionaryAssetContent,
   getConsoleSceneInputMappingContent,
+  getConsoleSceneModelBinding,
   getConsoleScenePromptAssetContent,
   getConsoleSceneQueryProfileContent,
   getConsoleSceneRulesAssetContent,
@@ -13,6 +14,7 @@ const {
   getConsoleSceneWorkflow,
   updateConsoleSceneDictionaryAssetContent,
   updateConsoleSceneInputMappingContent,
+  updateConsoleSceneModelBinding,
   updateConsoleScenePromptAssetContent,
   updateConsoleSceneQueryProfileContent,
   updateConsoleSceneRulesAssetContent,
@@ -212,11 +214,32 @@ async function updateConsoleSceneSkillBindingRoute(scene, body = {}) {
   };
 }
 
+async function getConsoleSceneModelBindingRoute(scene) {
+  const requestId = buildRequestId();
+  const data = await getConsoleSceneModelBinding(scene);
+
+  return {
+    statusCode: 200,
+    payload: buildSuccessResponse(data, requestId)
+  };
+}
+
+async function updateConsoleSceneModelBindingRoute(scene, body = {}) {
+  const requestId = buildRequestId();
+  const data = await updateConsoleSceneModelBinding(scene, body);
+
+  return {
+    statusCode: 200,
+    payload: buildSuccessResponse(data, requestId)
+  };
+}
+
 module.exports = {
   createConsoleSceneRoute,
   deleteConsoleSceneRoute,
   getConsoleSceneDictionaryAssetRoute,
   getConsoleSceneInputMappingRoute,
+  getConsoleSceneModelBindingRoute,
   getConsoleScenePromptAssetRoute,
   getConsoleSceneQueryProfileRoute,
   getConsoleSceneRulesAssetRoute,
@@ -227,6 +250,7 @@ module.exports = {
   listConsoleScenesRoute,
   updateConsoleSceneDictionaryAssetRoute,
   updateConsoleSceneInputMappingRoute,
+  updateConsoleSceneModelBindingRoute,
   updateConsoleScenePromptAssetRoute,
   updateConsoleSceneQueryProfileRoute,
   updateConsoleSceneRulesAssetRoute,

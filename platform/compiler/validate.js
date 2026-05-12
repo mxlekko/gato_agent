@@ -24,6 +24,7 @@ const RAW_SQL_KEY_NAMES = new Set(["sql", "rawSql", "querySql"]);
 const INLINE_SCRIPT_KEY_NAMES = new Set(["script", "scriptBody", "command", "shell"]);
 const ABSOLUTE_SCRIPT_PATH_KEY_NAMES = new Set(["scriptPath", "helperScriptPath"]);
 const ABSOLUTE_PATH_WHITELIST_CONTAINERS = new Set(["source", "migrationSource"]);
+const platformResourceCache = new Map();
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -59,6 +60,15 @@ function listYamlFiles(directoryPath) {
     .filter((entry) => entry.isFile() && entry.name.endsWith(".yaml"))
     .map((entry) => path.join(directoryPath, entry.name))
     .sort();
+}
+
+function buildYamlFileSignature(filePaths) {
+  return filePaths
+    .map((filePath) => {
+      const stat = fs.statSync(filePath);
+      return `${filePath}:${stat.mtimeMs}:${stat.size}`;
+    })
+    .join("|");
 }
 
 function getPlatformResourceSourceState() {
@@ -109,6 +119,17 @@ function loadPlatformResources(baseDir) {
   const templateFiles = listYamlFiles(directories.templates);
   const toolFiles = listYamlFiles(directories.tools);
   const skillFiles = listYamlFiles(directories.skills);
+  const signature = buildYamlFileSignature([
+    ...templateFiles,
+    ...toolFiles,
+    ...skillFiles
+  ]);
+  const cached = platformResourceCache.get(effectiveBaseDir);
+
+  if (cached?.signature === signature) {
+    return cached.resources;
+  }
+
   const resources = {
     templates: templateFiles.map((filePath) => ({ filePath, document: loadYamlFile(filePath) })),
     tools: [],
@@ -132,6 +153,11 @@ function loadPlatformResources(baseDir) {
 
     resources.tools.push(record);
   }
+
+  platformResourceCache.set(effectiveBaseDir, {
+    signature,
+    resources
+  });
 
   return resources;
 }

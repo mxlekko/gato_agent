@@ -14,11 +14,54 @@ const NODE_ID = "draft-output";
 const OVERRIDE_NODE_ID = "draft_business_output";
 const DEFAULT_TOOL_ROLE = "advisory_llm";
 const DRAFT_MODE_ENV = "LANGGRAPH_DRAFT_MODE";
+const PAYMENT_INFO_LOCAL_FAST_PATH_MODE = "local-rule";
 const SUPPORTED_DRAFT_MODES = new Set([
   "compat",
   "mock",
   "project-llm"
 ]);
+const PAYMENT_FIELD_LABELS = Object.freeze({
+  payeeName: [
+    "收款方",
+    "收款人",
+    "户名",
+    "公司名称",
+    "单位名称",
+    "账户名称",
+    "账号名称"
+  ],
+  payeeAccount: [
+    "收款账号",
+    "银行账号",
+    "银行帐号",
+    "收款账户",
+    "银行账户",
+    "账号",
+    "帐号",
+    "卡号"
+  ],
+  bankName: [
+    "开户银行",
+    "开户行",
+    "开户支行",
+    "开户网点",
+    "银行名称",
+    "银行",
+    "支行",
+    "分行",
+    "营业部",
+    "行"
+  ]
+});
+const PAYMENT_LABEL_TO_FIELD = new Map(
+  Object.entries(PAYMENT_FIELD_LABELS).flatMap(([fieldName, labels]) => (
+    labels.map((label) => [label, fieldName])
+  ))
+);
+const PAYMENT_LABEL_PATTERN = Array.from(PAYMENT_LABEL_TO_FIELD.keys())
+  .sort((left, right) => right.length - left.length)
+  .map(escapeRegex)
+  .join("|");
 const SMART_ENTRY_BASE_FIELDS = Object.freeze([
   "opportunityName",
   "tenderType",
@@ -136,6 +179,10 @@ function toStateError(error) {
     retryable: error.retryable,
     details: error.details || null
   };
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function summarizeInput(state) {
@@ -259,30 +306,138 @@ function extractPaymentField(rawText, patterns) {
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match?.[1]) {
-      return match[1]
-        .replace(/[；;，,。.\s]+$/u, "")
-        .trim();
+      return normalizePaymentFieldValue(match[1]);
     }
   }
   return "";
 }
 
+function normalizePaymentFieldValue(value) {
+  return String(value || "")
+    .replace(/^[\s:：]+/u, "")
+    .replace(/[；;，,。.\s]+$/u, "")
+    .trim();
+}
+
+function normalizePaymentAccountValue(value) {
+  return normalizePaymentFieldValue(value).replace(/[\s-]+/g, "");
+}
+
+function findPaymentLabelMatches(rawText) {
+  const text = String(rawText || "");
+  if (!PAYMENT_LABEL_PATTERN) {
+    return [];
+  }
+
+  const labelRegex = new RegExp(`(^|[\\s；;,，。.])(${PAYMENT_LABEL_PATTERN})\\s*[:：]\\s*`, "gu");
+  const matches = [];
+  let match;
+
+  while ((match = labelRegex.exec(text)) !== null) {
+    const prefix = match[1] || "";
+    const label = match[2];
+    const fieldName = PAYMENT_LABEL_TO_FIELD.get(label);
+    if (!fieldName) {
+      continue;
+    }
+
+    matches.push({
+      fieldName,
+      label,
+      labelStart: match.index + prefix.length,
+      valueStart: labelRegex.lastIndex
+    });
+  }
+
+  return matches;
+}
+
+function parsePaymentLabeledFields(rawText) {
+  const text = String(rawText || "");
+  const labelMatches = findPaymentLabelMatches(text);
+  const fields = {};
+
+  for (let index = 0; index < labelMatches.length; index += 1) {
+    const current = labelMatches[index];
+    const next = labelMatches[index + 1];
+    const valueEnd = next ? next.labelStart : text.length;
+    const value = normalizePaymentFieldValue(text.slice(current.valueStart, valueEnd));
+    if (value && !fields[current.fieldName]) {
+      fields[current.fieldName] = value;
+    }
+  }
+
+  return fields;
+}
+
+function containsPaymentLabelMarker(value) {
+  const text = String(value || "");
+  if (!text || !PAYMENT_LABEL_PATTERN) {
+    return false;
+  }
+
+  const labelRegex = new RegExp(`(^|[\\s；;,，。.])(?:${PAYMENT_LABEL_PATTERN})\\s*[:：]`, "u");
+  return labelRegex.test(text);
+}
+
+function hasCompletePaymentInfoPayload(payload) {
+  return isObject(payload)
+    && typeof payload.payeeName === "string"
+    && payload.payeeName.trim().length > 0
+    && typeof payload.payeeAccount === "string"
+    && payload.payeeAccount.trim().length > 0
+    && typeof payload.bankName === "string"
+    && payload.bankName.trim().length > 0
+    && !containsPaymentLabelMarker(payload.payeeName)
+    && !containsPaymentLabelMarker(payload.payeeAccount)
+    && !containsPaymentLabelMarker(payload.bankName);
+}
+
+function shouldUsePaymentInfoLocalFastPath({
+  state,
+  compatPayload,
+  draftMode
+} = {}) {
+  return state?.request?.scene === "payment-info-split"
+    && draftMode === "project-llm"
+    && hasCompletePaymentInfoPayload(compatPayload);
+}
+
 function createPaymentInfoCompatDraftPayload(state) {
   const bizParams = state?.request?.normalized?.biz_params || state?.request?.biz_params || {};
   const rawText = String(bizParams.rawText || "");
-  const payeeAccount = extractPaymentField(rawText, [
-    /(?:收款账号|银行账号|账号|卡号)[:：\s]*([A-Za-z0-9][A-Za-z0-9\s-]{2,80})/u,
+  const labeledFields = parsePaymentLabeledFields(rawText);
+  const payeeAccount = normalizePaymentAccountValue(labeledFields.payeeAccount)
+    || normalizePaymentAccountValue(extractPaymentField(rawText, [
     /([0-9][0-9\s-]{8,80})/u
-  ]).replace(/[\s-]+/g, "");
+  ]));
 
   return {
-    payeeName: extractPaymentField(rawText, [
-      /(?:收款方|收款人|户名|公司名称|单位名称)[:：\s]*([^；;，,。.\n]+)/u
-    ]),
+    payeeName: normalizePaymentFieldValue(labeledFields.payeeName),
     payeeAccount,
-    bankName: extractPaymentField(rawText, [
-      /(?:开户行|开户银行|银行名称)[:：\s]*([^；;，,。.\n]+)/u
-    ])
+    bankName: normalizePaymentFieldValue(labeledFields.bankName)
+  };
+}
+
+function mergePaymentInfoProjectLlmPayload(payload, compatPayload) {
+  if (!isObject(payload) || !isObject(compatPayload)) {
+    return payload;
+  }
+
+  const llmPayeeName = containsPaymentLabelMarker(payload.payeeName)
+    ? ""
+    : normalizePaymentFieldValue(payload.payeeName);
+  const llmPayeeAccount = containsPaymentLabelMarker(payload.payeeAccount)
+    ? ""
+    : normalizePaymentAccountValue(payload.payeeAccount);
+  const llmBankName = containsPaymentLabelMarker(payload.bankName)
+    ? ""
+    : normalizePaymentFieldValue(payload.bankName);
+
+  return {
+    payeeName: normalizePaymentFieldValue(compatPayload.payeeName) || llmPayeeName,
+    payeeAccount: normalizePaymentAccountValue(compatPayload.payeeAccount) || llmPayeeAccount,
+    bankName: normalizePaymentFieldValue(compatPayload.bankName) || llmBankName
   };
 }
 
@@ -686,6 +841,17 @@ async function executeDraftTool({
   }
 
   const draftMode = resolveDraftMode();
+  if (shouldUsePaymentInfoLocalFastPath({
+    state,
+    compatPayload,
+    draftMode
+  })) {
+    return {
+      payload: compatPayload,
+      mode: PAYMENT_INFO_LOCAL_FAST_PATH_MODE
+    };
+  }
+
   if (draftMode === "mock") {
     return {
       payload: compatPayload,
@@ -698,7 +864,8 @@ async function executeDraftTool({
       toolDocument,
       requestPayload: enrichedRequestPayload,
       promptRef,
-      scene: state?.request?.scene || null
+      scene: state?.request?.scene || null,
+      modelConfig: state?.scene_contract?.model || null
     });
   }
 
@@ -765,6 +932,9 @@ async function runDraftOutputNode({
     });
     let payload = isObject(execution?.payload) ? execution.payload : compatPayload;
     const mode = execution?.mode || "compat";
+    if (state?.request?.scene === "payment-info-split" && mode === "project-llm") {
+      payload = mergePaymentInfoProjectLlmPayload(payload, compatPayload);
+    }
     if (state?.request?.scene === "sales-opportunity-smart-entry" && mode === "project-llm") {
       payload = mergeSmartEntryProjectLlmPayload(payload, compatPayload);
     }

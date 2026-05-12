@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ShellLayout } from "./components/ShellLayout";
+import { LoginPage } from "./pages/auth/LoginPage";
 import { ConfigCatalogPage } from "./pages/configs/ConfigCatalogPage";
 import { CompilePreviewPage } from "./pages/configs/CompilePreviewPage";
 import { ValidateConfigPage } from "./pages/configs/ValidateConfigPage";
@@ -19,13 +20,46 @@ import { NewScenePage } from "./pages/scenes/NewScenePage";
 import { SceneWorkflowPage } from "./pages/scenes/SceneWorkflowPage";
 import { ScenesPage } from "./pages/scenes/ScenesPage";
 import { TraceDetailPage } from "./pages/traces/TraceDetailPage";
+import { authClient } from "./services/authClient";
+
+function RequireConsoleAuth({ children }) {
+  const location = useLocation();
+
+  if (!authClient.hasSession()) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return children;
+}
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/rag/library/:docId/edit" element={<RagLibraryEditPage />} />
-      <Route path="/rag/library/:docId" element={<RagLibraryDetailPage />} />
-      <Route path="/" element={<ShellLayout />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/rag/library/:docId/edit"
+        element={(
+          <RequireConsoleAuth>
+            <RagLibraryEditPage />
+          </RequireConsoleAuth>
+        )}
+      />
+      <Route
+        path="/rag/library/:docId"
+        element={(
+          <RequireConsoleAuth>
+            <RagLibraryDetailPage />
+          </RequireConsoleAuth>
+        )}
+      />
+      <Route
+        path="/"
+        element={(
+          <RequireConsoleAuth>
+            <ShellLayout />
+          </RequireConsoleAuth>
+        )}
+      >
         <Route index element={<Navigate to="/scenes" replace />} />
         <Route path="scenes" element={<ScenesPage />} />
         <Route path="scenes/new" element={<NewScenePage />} />

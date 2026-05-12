@@ -109,6 +109,15 @@ export const apiClient = {
       body: JSON.stringify(body)
     });
   },
+  getSceneModelBinding(scene) {
+    return requestJson(`/api/console/scenes/${scene}/bindings/model`);
+  },
+  updateSceneModelBinding(scene, body) {
+    return requestJson(`/api/console/scenes/${scene}/bindings/model`, {
+      method: "PATCH",
+      body: JSON.stringify(body)
+    });
+  },
   runAgent(body) {
     return requestJson("/api/agent/run", {
       method: "POST",

@@ -357,6 +357,20 @@ function selectSkillAssetRef(skillSpec, assetType) {
   }
 }
 
+function formatChineseList(values = []) {
+  const normalized = values.filter(Boolean);
+
+  if (normalized.length <= 1) {
+    return normalized[0] || "";
+  }
+
+  if (normalized.length === 2) {
+    return normalized.join("和");
+  }
+
+  return `${normalized.slice(0, -1).join("、")}和${normalized.at(-1)}`;
+}
+
 function buildSkillAssetItems(resource) {
   const skillSpec = resource?.document?.spec || {};
   const definitions = [
@@ -379,6 +393,7 @@ function buildSkillAssetItems(resource) {
       label: "数据字典",
       categoryName: "dictionaries",
       refKey: "dictionaryRef",
+      optional: true,
       note: "当前业务技能清洗和映射事实时使用的数据字典。"
     },
     {
@@ -386,6 +401,7 @@ function buildSkillAssetItems(resource) {
       label: "规则",
       categoryName: "rules",
       refKey: "rulesRef",
+      optional: true,
       note: "当前业务技能生成业务建议时参考的业务规则。"
     }
   ];
@@ -394,6 +410,10 @@ function buildSkillAssetItems(resource) {
     const entries = readSkillAssetCatalogEntries(skillSpec, definition.categoryName, definition.refKey);
     const selectedRef = selectSkillAssetRef(skillSpec, definition.type);
     const selectedEntry = entries.find((entry) => entry.ref === selectedRef) || entries[0] || null;
+
+    if (definition.optional && !selectedRef && entries.length === 0) {
+      return null;
+    }
 
     return {
       type: definition.type,
@@ -406,7 +426,7 @@ function buildSkillAssetItems(resource) {
       storageDriver: "mysql",
       storageTable: "cfg_scene_assets"
     };
-  });
+  }).filter(Boolean);
 }
 
 function buildQueryStructuredItems(resource) {
@@ -916,6 +936,9 @@ export function ConfigCatalogPage({ kind = null, sectionLabel = "配置目录" }
       ? buildSkillAssetItems(selectedResource)
       : []
   ), [selectedResource]);
+  const skillAssetLabelSummary = useMemo(() => (
+    formatChineseList(skillAssetItems.map((item) => item.label))
+  ), [skillAssetItems]);
   const activeSkillAssetConfig = useMemo(() => (
     skillAssetEditorType ? getSkillAssetEditorConfig(skillAssetEditorType) : null
   ), [skillAssetEditorType]);
@@ -1587,7 +1610,7 @@ export function ConfigCatalogPage({ kind = null, sectionLabel = "配置目录" }
                       </div>
                     </div>
                     <p className="section-text">
-                      这里直接编辑当前业务技能绑定的提示词、结构定义、数据字典和规则内容，保存后会写入配置中心草稿，不会立即回写对应文件。
+                      这里直接编辑当前业务技能绑定的{skillAssetLabelSummary || "资产"}内容，保存后会写入配置中心草稿，不会立即回写对应文件。
                     </p>
                     <div className="asset-grid">
                       {skillAssetItems.map((item) => {

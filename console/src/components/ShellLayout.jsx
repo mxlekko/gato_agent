@@ -1,5 +1,6 @@
-import { Layout, Menu } from "@arco-design/web-react";
+import { Button, Layout, Menu } from "@arco-design/web-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { authClient } from "../services/authClient";
 
 const { Content, Sider } = Layout;
 const MenuItem = Menu.Item;
@@ -103,6 +104,7 @@ function renderMenuItem(item, groupLabel) {
 export function ShellLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const adminUser = authClient.getUser() || "管理员";
   const navLeaves = flattenNavItems(navGroups.flatMap((group) => group.items));
   const selectedItem = navLeaves
     .slice()
@@ -141,8 +143,17 @@ export function ShellLayout() {
         </Menu>
 
         <div className="sidebar-footer">
-          <p>当前阶段：FE3-T3</p>
-          <p>灰度报告、路由摘要和变更预检已接入，前端 FE3 范围已闭合。</p>
+          <p>当前账号：{adminUser}</p>
+          <Button
+            long
+            onClick={() => {
+              authClient.clearSession();
+              navigate("/login", { replace: true });
+            }}
+            size="small"
+          >
+            退出登录
+          </Button>
         </div>
       </Sider>
 

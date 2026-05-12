@@ -181,6 +181,50 @@ function createSmartEntryDraftState() {
   };
 }
 
+function createPaymentInfoDraftState(rawText = "收款方：上海某某科技有限公司；开户行：中国银行上海浦东分行；账号：1234567890123456789") {
+  return {
+    request: {
+      scene: "payment-info-split",
+      normalized: {
+        biz_params: {
+          rawText
+        }
+      },
+      biz_params: {
+        rawText
+      }
+    },
+    runtime_context: {
+      request_id: "req_payment_info_split_test"
+    },
+    artifacts: {
+      references: {
+        prompt: "请输出收款信息 JSON。",
+        output_schema: {
+          type: "object",
+          required: ["payeeName", "payeeAccount", "bankName"],
+          properties: {
+            payeeName: {
+              type: "string"
+            },
+            payeeAccount: {
+              type: "string"
+            },
+            bankName: {
+              type: "string"
+            }
+          }
+        }
+      },
+      reference_meta: {
+        prompt: {
+          ref: "prompt://payment-info-split/draft-business-output@v1"
+        }
+      }
+    }
+  };
+}
+
 async function testProjectLlmClientParsesJsonPayload() {
   const calls = [];
   const fetchImpl = async (url, options) => {
@@ -241,6 +285,122 @@ async function testProjectLlmClientParsesJsonPayload() {
   assert.strictEqual(calls.length, 1);
   assert.strictEqual(calls[0].url, "https://api.moonshot.cn/v1/chat/completions");
   assert.strictEqual(calls[0].options.headers.Authorization, "Bearer test-key");
+}
+
+async function testSceneModelConfigOverridesGlobalEnvModel() {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({
+      url,
+      options
+    });
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                summary: "场景模型生效",
+                adviceText: "继续推进",
+                nextActions: ["确认模型配置"]
+              })
+            }
+          }
+        ]
+      })
+    };
+  };
+
+  const result = await invokeProjectAdvisoryLlm({
+    toolDocument: createToolDocument(),
+    requestPayload: {
+      prompt: "请输出 JSON。",
+      request: {},
+      facts: {},
+      rules: "只基于事实。",
+      schema: {
+        type: "object"
+      }
+    },
+    modelConfig: {
+      provider: "moonshot",
+      model: "moonshot-v1-8k",
+      maxTokens: 256
+    },
+    env: {
+      LANGGRAPH_LLM_PROVIDER: "deepseek",
+      LANGGRAPH_LLM_MODEL: "deepseek-v4-flash",
+      DEEPSEEK_API_KEY: "deepseek-key",
+      MOONSHOT_API_KEY: "moonshot-key"
+    },
+    fetchImpl
+  });
+
+  assert.strictEqual(result.provider, "moonshot");
+  assert.strictEqual(result.model, "moonshot-v1-8k");
+  assert.strictEqual(result.apiKeySource, "MOONSHOT_API_KEY");
+  assert.strictEqual(calls[0].url, "https://api.moonshot.cn/v1/chat/completions");
+  assert.strictEqual(calls[0].options.headers.Authorization, "Bearer moonshot-key");
+  assert.strictEqual(JSON.parse(calls[0].options.body).model, "moonshot-v1-8k");
+  assert.strictEqual(JSON.parse(calls[0].options.body).max_tokens, 256);
+}
+
+async function testToolDriverModelOverridesGlobalEnvModel() {
+  const calls = [];
+  await invokeProjectAdvisoryLlm({
+    toolDocument: {
+      spec: {
+        ref: "tool://llm/project-payment-info-split@v1",
+        driver: {
+          type: "project-llm",
+          provider: "moonshot",
+          model: "moonshot-v1-8k"
+        }
+      }
+    },
+    requestPayload: {
+      prompt: "请输出 JSON。",
+      request: {},
+      facts: {},
+      rules: "只基于事实。",
+      schema: {
+        type: "object"
+      }
+    },
+    env: {
+      LANGGRAPH_LLM_PROVIDER: "deepseek",
+      LANGGRAPH_LLM_MODEL: "deepseek-v4-flash",
+      DEEPSEEK_API_KEY: "deepseek-key",
+      MOONSHOT_API_KEY: "moonshot-key"
+    },
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url,
+        options
+      });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: "工具默认生效"
+                })
+              }
+            }
+          ]
+        })
+      };
+    }
+  });
+
+  assert.strictEqual(calls[0].url, "https://api.moonshot.cn/v1/chat/completions");
+  assert.strictEqual(calls[0].options.headers.Authorization, "Bearer moonshot-key");
+  assert.strictEqual(JSON.parse(calls[0].options.body).model, "moonshot-v1-8k");
 }
 
 async function testProjectLlmMissingKeyReturnsClearError() {
@@ -360,6 +520,43 @@ async function testDraftOutputProjectLlmModeCanBeInjected() {
   });
 }
 
+async function testDraftOutputPassesSceneModelConfig() {
+  await withEnv({
+    LANGGRAPH_DRAFT_MODE: "project-llm"
+  }, async () => {
+    const state = createDraftState();
+    state.scene_contract = {
+      model: {
+        provider: "moonshot",
+        model: "moonshot-v1-8k"
+      }
+    };
+
+    await runDraftOutputNode({
+      state,
+      invokeProjectLlm: async ({ modelConfig }) => {
+        assert.deepStrictEqual(modelConfig, {
+          provider: "moonshot",
+          model: "moonshot-v1-8k"
+        });
+        return {
+          mode: "project-llm",
+          provider: "moonshot",
+          model: "moonshot-v1-8k",
+          apiKeySource: "MOONSHOT_API_KEY",
+          payload: {
+            opportunityId: "2041340312877535232",
+            summary: "测试机会处于招标与投标阶段。",
+            adviceText: "准备投标材料。",
+            nextActions: ["确认投标节点"],
+            basisFields: ["opportunityName", "salesStage"]
+          }
+        };
+      }
+    });
+  });
+}
+
 async function testDraftOutputDefaultCompatModeUsesCompatPayload() {
   await withEnv({
     LANGGRAPH_DRAFT_MODE: undefined
@@ -387,6 +584,80 @@ async function testDraftOutputMockModeUsesCompatPayload() {
     assert.strictEqual(nextState.artifacts.draft.mode, "mock");
     assert.strictEqual(nextState.artifacts.draft.tool_ref, "tool://llm/project-advisory@v1");
     assert.strictEqual(nextState.artifacts.draft.payload.opportunityId, "2041340312877535232");
+  });
+}
+
+async function testPaymentInfoSplitProjectLlmModeUsesLocalFastPathWhenComplete() {
+  await withEnv({
+    LANGGRAPH_DRAFT_MODE: "project-llm"
+  }, async () => {
+    let projectLlmCalled = false;
+    const nextState = await runDraftOutputNode({
+      state: createPaymentInfoDraftState(),
+      invokeProjectLlm: async () => {
+        projectLlmCalled = true;
+        throw new Error("payment-info-split should not call project llm for complete labeled input");
+      }
+    });
+
+    assert.strictEqual(projectLlmCalled, false);
+    assert.strictEqual(nextState.error, null);
+    assert.strictEqual(nextState.artifacts.draft.mode, "local-rule");
+    assert.strictEqual(nextState.artifacts.draft.payload.payeeName, "上海某某科技有限公司");
+    assert.strictEqual(nextState.artifacts.draft.payload.payeeAccount, "1234567890123456789");
+    assert.strictEqual(nextState.artifacts.draft.payload.bankName, "中国银行上海浦东分行");
+  });
+}
+
+async function testPaymentInfoSplitHandlesSpaceSeparatedShortBankLabel() {
+  await withEnv({
+    LANGGRAPH_DRAFT_MODE: "project-llm"
+  }, async () => {
+    let projectLlmCalled = false;
+    const nextState = await runDraftOutputNode({
+      state: createPaymentInfoDraftState("户名：上海雪游信息科技有限公司 行：上海浦东发展银行南桥支行 银行账号：97330154740005453"),
+      invokeProjectLlm: async () => {
+        projectLlmCalled = true;
+        throw new Error("payment-info-split should parse complete space-separated labeled input locally");
+      }
+    });
+
+    assert.strictEqual(projectLlmCalled, false);
+    assert.strictEqual(nextState.error, null);
+    assert.strictEqual(nextState.artifacts.draft.mode, "local-rule");
+    assert.strictEqual(nextState.artifacts.draft.payload.payeeName, "上海雪游信息科技有限公司");
+    assert.strictEqual(nextState.artifacts.draft.payload.payeeAccount, "97330154740005453");
+    assert.strictEqual(nextState.artifacts.draft.payload.bankName, "上海浦东发展银行南桥支行");
+  });
+}
+
+async function testPaymentInfoSplitProjectLlmModeFallsBackWhenLocalPayloadIncomplete() {
+  await withEnv({
+    LANGGRAPH_DRAFT_MODE: "project-llm"
+  }, async () => {
+    let projectLlmCalled = false;
+    const nextState = await runDraftOutputNode({
+      state: createPaymentInfoDraftState("账号：1234567890123456789"),
+      invokeProjectLlm: async () => {
+        projectLlmCalled = true;
+        return {
+          mode: "project-llm",
+          provider: "mock-provider",
+          model: "mock-model",
+          apiKeySource: "MOCK_API_KEY",
+          payload: {
+            payeeName: "",
+            payeeAccount: "1234567890123456789",
+            bankName: ""
+          }
+        };
+      }
+    });
+
+    assert.strictEqual(projectLlmCalled, true);
+    assert.strictEqual(nextState.error, null);
+    assert.strictEqual(nextState.artifacts.draft.mode, "project-llm");
+    assert.strictEqual(nextState.artifacts.draft.payload.payeeAccount, "1234567890123456789");
   });
 }
 
@@ -470,11 +741,17 @@ async function testSmartEntryProjectLlmUsesCompactContextAndMergesPayload() {
 
 async function main() {
   await testProjectLlmClientParsesJsonPayload();
+  await testSceneModelConfigOverridesGlobalEnvModel();
+  await testToolDriverModelOverridesGlobalEnvModel();
   await testProjectLlmMissingKeyReturnsClearError();
   await testProjectLlmInvalidJsonUsesDedicatedCode();
   await testDraftOutputProjectLlmModeCanBeInjected();
+  await testDraftOutputPassesSceneModelConfig();
   await testDraftOutputDefaultCompatModeUsesCompatPayload();
   await testDraftOutputMockModeUsesCompatPayload();
+  await testPaymentInfoSplitProjectLlmModeUsesLocalFastPathWhenComplete();
+  await testPaymentInfoSplitHandlesSpaceSeparatedShortBankLabel();
+  await testPaymentInfoSplitProjectLlmModeFallsBackWhenLocalPayloadIncomplete();
   await testSmartEntryCompatModeUsesRawTextAndSchemaShape();
   await testSmartEntryProjectLlmUsesCompactContextAndMergesPayload();
   process.stdout.write("project llm draft mode tests passed\n");

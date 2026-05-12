@@ -24,6 +24,19 @@ coverage/
 dist/
 console/dist/
 
+# Docker deployment files and generated image packages
+.dockerignore
+docker-compose*.yml
+deploy/docker/
+release-packages/
+docker-images-*/
+docs/engineering/*Docker*.md
+docs/engineering/*docker*.md
+docs/engineering/服务器部署*.md
+*.tar
+*.tar.gz
+*.tgz
+
 # local caches
 .local/
 .npm-cache/

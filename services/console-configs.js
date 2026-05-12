@@ -25,7 +25,7 @@ const RAG_SETTINGS_RESOURCE_ID = `${RAG_SETTINGS_KIND}:${RAG_SETTINGS_NAME}@${RA
 const RAG_SETTINGS_UPDATED_BY = "console-rag-settings";
 const RAG_SETTINGS_API_VERSION = "agent.console/v1";
 const RAG_SETTINGS_DEFAULT_EMBEDDING_MODEL = "text-embedding-v4";
-const RAG_SETTINGS_LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+const RAG_SETTINGS_LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]", "rag"]);
 
 const KIND_META = {
   WorkflowTemplate: {

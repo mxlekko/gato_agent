@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+
 const SENSITIVE_KEYS = new Set([
   "authorization",
   "password",
@@ -14,6 +17,49 @@ const LARGE_PAYLOAD_KEYS = new Set([
   "message",
   "content"
 ]);
+
+const FILE_LOG_ERROR_LIMIT = 3;
+let fileLogErrorCount = 0;
+
+function resolveFileLogPath(level) {
+  const levelSpecificEnv = level === "error"
+    ? process.env.APP_LOG_STDERR_FILE
+    : process.env.APP_LOG_STDOUT_FILE;
+  const filePath = String(levelSpecificEnv || process.env.APP_LOG_FILE || "").trim();
+
+  return filePath || null;
+}
+
+function appendFileLog(level, line) {
+  const filePath = resolveFileLogPath(level);
+  if (!filePath) {
+    return;
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(filePath), {
+      recursive: true
+    });
+    fs.appendFileSync(filePath, `${line}\n`, "utf8");
+  } catch (error) {
+    if (fileLogErrorCount >= FILE_LOG_ERROR_LIMIT) {
+      return;
+    }
+
+    fileLogErrorCount += 1;
+    process.stderr.write(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        level: "error",
+        message: "logger.file_append_failed",
+        context: {
+          filePath,
+          cause: error.message
+        }
+      }) + "\n"
+    );
+  }
+}
 
 function sanitizeString(value, key) {
   const lowerKey = key.toLowerCase();
@@ -84,6 +130,8 @@ function write(level, message, context = {}) {
   };
 
   const line = JSON.stringify(entry);
+  appendFileLog(level, line);
+
   if (level === "error") {
     console.error(line);
     return;

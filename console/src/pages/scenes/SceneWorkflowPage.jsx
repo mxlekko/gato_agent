@@ -146,6 +146,71 @@ function formatPublishState(configState = {}) {
   return configState.hasUnpublishedChanges ? "草稿未发布" : "已发布";
 }
 
+function buildEmptyModelDraft() {
+  return {
+    provider: "",
+    model: "",
+    baseUrl: "",
+    temperature: "",
+    maxTokens: "",
+    timeoutMs: ""
+  };
+}
+
+const DEFAULT_MODEL_PROVIDER_OPTIONS = [
+  {
+    provider: "moonshot",
+    label: "Moonshot / Kimi",
+    defaultModel: "moonshot-v1-8k",
+    keyEnvNames: ["MOONSHOT_API_KEY"]
+  },
+  {
+    provider: "deepseek",
+    label: "DeepSeek",
+    defaultModel: "deepseek-chat",
+    keyEnvNames: ["DEEPSEEK_API_KEY"]
+  }
+];
+
+function buildModelDraftFromBinding(binding = {}) {
+  const configured = binding?.configured || {};
+  const effective = binding?.effective || {};
+
+  return {
+    provider: configured.provider || effective.provider || "",
+    model: configured.model || effective.model || "",
+    baseUrl: configured.baseUrl || "",
+    temperature: configured.temperature ?? "",
+    maxTokens: configured.maxTokens ?? "",
+    timeoutMs: configured.timeoutMs ?? ""
+  };
+}
+
+function buildModelPayloadFromDraft(draft = {}) {
+  const payload = {
+    provider: String(draft.provider || "").trim(),
+    model: String(draft.model || "").trim(),
+    baseUrl: String(draft.baseUrl || "").trim()
+  };
+
+  for (const field of ["temperature", "maxTokens", "timeoutMs"]) {
+    const value = String(draft[field] ?? "").trim();
+    if (value) {
+      payload[field] = Number(value);
+    }
+  }
+
+  return payload;
+}
+
+function formatModelSource(source) {
+  return {
+    scene: "场景配置",
+    tool: "工具默认",
+    env: "环境兜底"
+  }[source] || source || "-";
+}
+
 export function SceneWorkflowPage() {
   const { scene } = useParams();
   const [workflow, setWorkflow] = useState(null);
@@ -156,6 +221,11 @@ export function SceneWorkflowPage() {
   const [skillBindingDraft, setSkillBindingDraft] = useState("");
   const [skillBindingStatus, setSkillBindingStatus] = useState("idle");
   const [skillBindingMessage, setSkillBindingMessage] = useState("");
+  const [modelBindingEditorOpen, setModelBindingEditorOpen] = useState(false);
+  const [modelBinding, setModelBinding] = useState(null);
+  const [modelDraft, setModelDraft] = useState(buildEmptyModelDraft);
+  const [modelBindingStatus, setModelBindingStatus] = useState("idle");
+  const [modelBindingMessage, setModelBindingMessage] = useState("");
   const [workflowView, setWorkflowView] = useState("ivr");
   const [publishStatus, setPublishStatus] = useState("idle");
   const [publishMessage, setPublishMessage] = useState("");
@@ -190,6 +260,11 @@ export function SceneWorkflowPage() {
         setSkillBindingDraft("");
         setSkillBindingStatus("idle");
         setSkillBindingMessage("");
+        setModelBindingEditorOpen(false);
+        setModelBinding(response?.payload?.data?.modelBinding || null);
+        setModelDraft(buildModelDraftFromBinding(response?.payload?.data?.modelBinding || null));
+        setModelBindingStatus("idle");
+        setModelBindingMessage("");
         setPublishStatus("idle");
         setPublishMessage("");
         setPublishResult(null);
@@ -214,7 +289,10 @@ export function SceneWorkflowPage() {
   async function reloadWorkflow() {
     const workflowResponse = await consoleClient.getSceneWorkflow(scene);
     if (workflowResponse?.ok && workflowResponse?.payload?.success !== false) {
-      setWorkflow(workflowResponse?.payload?.data || null);
+      const nextWorkflow = workflowResponse?.payload?.data || null;
+      setWorkflow(nextWorkflow);
+      setModelBinding(nextWorkflow?.modelBinding || null);
+      setModelDraft(buildModelDraftFromBinding(nextWorkflow?.modelBinding || null));
       setStatus("ready");
       setErrorMessage("");
       return;
@@ -320,6 +398,108 @@ export function SceneWorkflowPage() {
     }
   }
 
+  async function handleOpenModelBindingEditor() {
+    if (!workflow?.platformManagedScene) {
+      return;
+    }
+
+    setModelBindingEditorOpen(true);
+    setModelBindingMessage("");
+
+    if (modelBinding?.scene === scene) {
+      setModelDraft(buildModelDraftFromBinding(modelBinding));
+      setModelBindingStatus("ready");
+      return;
+    }
+
+    setModelBindingStatus("loading");
+
+    try {
+      const response = await consoleClient.getSceneModelBinding(scene);
+      if (!response?.ok || response?.payload?.success === false) {
+        setModelBindingStatus("error");
+        setModelBindingMessage(response?.payload?.error?.message || "模型配置读取失败。");
+        return;
+      }
+
+      const nextModelBinding = response?.payload?.data || null;
+      setModelBinding(nextModelBinding);
+      setModelDraft(buildModelDraftFromBinding(nextModelBinding));
+      setModelBindingStatus("ready");
+    } catch (error) {
+      setModelBindingStatus("error");
+      setModelBindingMessage(error.message || "模型配置读取失败。");
+    }
+  }
+
+  function handleCancelModelBindingEdit() {
+    setModelBindingEditorOpen(false);
+    setModelBindingStatus("idle");
+    setModelBindingMessage("");
+    setModelDraft(buildModelDraftFromBinding(modelBinding));
+  }
+
+  async function handleSaveModelBinding(event) {
+    event.preventDefault();
+    const payload = buildModelPayloadFromDraft(modelDraft);
+
+    if (!payload.provider || !payload.model) {
+      setModelBindingStatus("error");
+      setModelBindingMessage("请选择模型供应商并填写模型名称。");
+      return;
+    }
+
+    setModelBindingStatus("saving");
+    setModelBindingMessage("");
+
+    try {
+      const response = await consoleClient.updateSceneModelBinding(scene, payload);
+      if (!response?.ok || response?.payload?.success === false) {
+        setModelBindingStatus("error");
+        setModelBindingMessage(response?.payload?.error?.message || "模型配置保存失败。");
+        return;
+      }
+
+      const nextModelBinding = response?.payload?.data || null;
+      setModelBinding(nextModelBinding);
+      setModelDraft(buildModelDraftFromBinding(nextModelBinding));
+      setModelBindingStatus("ready");
+      setModelBindingMessage(`已保存模型配置草稿：${nextModelBinding?.effective?.provider || "-"} / ${nextModelBinding?.effective?.model || "-"}。`);
+
+      await reloadWorkflow();
+    } catch (error) {
+      setModelBindingStatus("error");
+      setModelBindingMessage(error.message || "模型配置保存失败。");
+    }
+  }
+
+  async function handleClearModelBinding() {
+    setModelBindingStatus("saving");
+    setModelBindingMessage("");
+
+    try {
+      const response = await consoleClient.updateSceneModelBinding(scene, {
+        clear: true
+      });
+      if (!response?.ok || response?.payload?.success === false) {
+        setModelBindingStatus("error");
+        setModelBindingMessage(response?.payload?.error?.message || "模型配置清除失败。");
+        return;
+      }
+
+      const nextModelBinding = response?.payload?.data || null;
+      setModelBinding(nextModelBinding);
+      setModelDraft(buildModelDraftFromBinding(nextModelBinding));
+      setModelBindingStatus("ready");
+      setModelBindingMessage("已清除场景模型配置，运行时会使用工具默认或环境兜底。");
+
+      await reloadWorkflow();
+    } catch (error) {
+      setModelBindingStatus("error");
+      setModelBindingMessage(error.message || "模型配置清除失败。");
+    }
+  }
+
   async function handlePublishCurrentDraft() {
     setPublishStatus("publishing");
     setPublishMessage("");
@@ -361,6 +541,19 @@ export function SceneWorkflowPage() {
     || workflow?.configState?.publishState === "unpublished"
     || workflow?.configState?.hasPublishedSnapshot === false
   );
+  const activeModelBinding = modelBinding || workflow?.modelBinding || null;
+  const effectiveModel = activeModelBinding?.effective || {};
+  const configuredModel = activeModelBinding?.configured || null;
+  const modelProviderOptions = activeModelBinding?.providerOptions?.length
+    ? activeModelBinding.providerOptions
+    : DEFAULT_MODEL_PROVIDER_OPTIONS;
+  const selectedModelProviderOption = modelProviderOptions
+    .find((option) => option.provider === modelDraft.provider);
+  const selectedModelKeyEnvNames = Array.from(new Set([
+    "LANGGRAPH_LLM_API_KEY",
+    "PROJECT_LLM_API_KEY",
+    ...(selectedModelProviderOption?.keyEnvNames || effectiveModel.keyEnvNames || [])
+  ]));
 
   return (
     <PageFrame hideHeader>
@@ -497,7 +690,7 @@ export function SceneWorkflowPage() {
                 <AssetCard
                   label="业务技能"
                   value={currentSkillLabel}
-                  note="场景页只负责切换当前草稿绑定的业务技能；提示词、结构定义、数据字典和规则等具体内容请到“配置目录 / 业务技能”里编辑。"
+                  note="场景页只负责切换当前草稿绑定的业务技能；提示词、结构定义等具体内容请到“配置目录 / 业务技能”里编辑。"
                   detail={`草稿：${currentSkillRef} | 当前发布：${workflow.configState?.published?.skillRef || "未发布"}`}
                   action={workflow.platformManagedScene ? (
 	                    <button
@@ -509,7 +702,198 @@ export function SceneWorkflowPage() {
                     </button>
                   ) : null}
                 />
+                <AssetCard
+                  label="生成模型"
+                  value={
+                    effectiveModel.provider && effectiveModel.model
+                      ? `${effectiveModel.provider} / ${effectiveModel.model}`
+                      : "-"
+                  }
+                  note={`当前来源：${formatModelSource(effectiveModel.source)}。密钥只从服务端 .env 读取，场景配置不保存 key。`}
+                  detail={
+                    configuredModel
+                      ? "草稿已指定场景模型"
+                      : `继承工具默认：${activeModelBinding?.toolDefault?.provider || "-"} / ${activeModelBinding?.toolDefault?.model || "-"}`
+                  }
+                  action={workflow.platformManagedScene ? (
+                    <button
+                      className="button-secondary button-inline"
+                      onClick={handleOpenModelBindingEditor}
+                      type="button"
+                    >
+                      编辑
+                    </button>
+                  ) : null}
+                />
               </div>
+              {workflow.platformManagedScene && modelBindingEditorOpen ? (
+                <form className="asset-editor" onSubmit={handleSaveModelBinding}>
+                  <div className="section-header">
+                    <div>
+                      <p className="eyebrow">模型</p>
+                      <h4>场景模型配置</h4>
+                    </div>
+                    <span className="pill">
+                      {modelBindingStatus === "loading"
+                        ? "读取中"
+                        : modelBindingStatus === "saving"
+                          ? "保存中"
+                          : "写入草稿"}
+                    </span>
+                  </div>
+                  <p className="section-text">
+                    保存后写入配置中心场景草稿；运行时会优先使用这里配置的 provider 和 model，API key 继续从 .env 的供应商密钥读取。
+                  </p>
+                  {modelBindingMessage ? (
+                    <div
+                      className={`callout ${
+                        modelBindingStatus === "error"
+                          ? "callout-error"
+                          : "callout-success"
+                      }`}
+                    >
+                      <strong>
+                        {modelBindingStatus === "error" ? "保存失败" : "已完成"}
+                      </strong>
+                      <p>{modelBindingMessage}</p>
+                    </div>
+                  ) : null}
+                  {modelBindingStatus === "loading" ? (
+                    <p className="muted-text">正在读取模型配置...</p>
+                  ) : (
+                    <>
+                      <label className="field-label" htmlFor="scene-model-provider">
+                        模型供应商
+                      </label>
+                      <select
+                        className="field-input"
+                        id="scene-model-provider"
+                        onChange={(event) => {
+                          const provider = event.target.value;
+                          const option = modelProviderOptions.find((item) => item.provider === provider);
+                          setModelDraft((currentDraft) => ({
+                            ...currentDraft,
+                            provider,
+                            model: currentDraft.provider === provider
+                              ? currentDraft.model
+                              : option?.defaultModel || ""
+                          }));
+                        }}
+                        value={modelDraft.provider}
+                      >
+                        <option value="">请选择供应商</option>
+                        {modelProviderOptions.map((option) => (
+                          <option key={option.provider} value={option.provider}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="field-label" htmlFor="scene-model-name">
+                        模型名称
+                      </label>
+                      <input
+                        className="field-input"
+                        id="scene-model-name"
+                        onChange={(event) => setModelDraft((currentDraft) => ({
+                          ...currentDraft,
+                          model: event.target.value
+                        }))}
+                        placeholder="moonshot-v1-8k"
+                        value={modelDraft.model}
+                      />
+                      <label className="field-label" htmlFor="scene-model-base-url">
+                        Base URL
+                      </label>
+                      <input
+                        className="field-input"
+                        id="scene-model-base-url"
+                        onChange={(event) => setModelDraft((currentDraft) => ({
+                          ...currentDraft,
+                          baseUrl: event.target.value
+                        }))}
+                        placeholder="留空使用供应商默认地址"
+                        value={modelDraft.baseUrl}
+                      />
+                      <div className="form-grid-two">
+                        <label className="field-label" htmlFor="scene-model-temperature">
+                          Temperature
+                          <input
+                            className="field-input"
+                            id="scene-model-temperature"
+                            max="2"
+                            min="0"
+                            onChange={(event) => setModelDraft((currentDraft) => ({
+                              ...currentDraft,
+                              temperature: event.target.value
+                            }))}
+                            placeholder="0"
+                            step="0.1"
+                            type="number"
+                            value={modelDraft.temperature}
+                          />
+                        </label>
+                        <label className="field-label" htmlFor="scene-model-max-tokens">
+                          Max Tokens
+                          <input
+                            className="field-input"
+                            id="scene-model-max-tokens"
+                            min="1"
+                            onChange={(event) => setModelDraft((currentDraft) => ({
+                              ...currentDraft,
+                              maxTokens: event.target.value
+                            }))}
+                            placeholder="1200"
+                            type="number"
+                            value={modelDraft.maxTokens}
+                          />
+                        </label>
+                        <label className="field-label" htmlFor="scene-model-timeout">
+                          Timeout MS
+                          <input
+                            className="field-input"
+                            id="scene-model-timeout"
+                            min="1000"
+                            onChange={(event) => setModelDraft((currentDraft) => ({
+                              ...currentDraft,
+                              timeoutMs: event.target.value
+                            }))}
+                            placeholder="30000"
+                            type="number"
+                            value={modelDraft.timeoutMs}
+                          />
+                        </label>
+                      </div>
+                      <p className="detail-note">
+                        当前供应商会尝试读取这些环境变量：{selectedModelKeyEnvNames.join(", ") || "-"}。
+                      </p>
+                      <div className="button-row">
+                        <button
+                          className="button-primary"
+                          disabled={modelBindingStatus === "saving"}
+                          type="submit"
+                        >
+                          {modelBindingStatus === "saving" ? "保存中..." : "保存到草稿"}
+                        </button>
+                        <button
+                          className="button-secondary"
+                          disabled={modelBindingStatus === "saving"}
+                          onClick={handleClearModelBinding}
+                          type="button"
+                        >
+                          使用默认
+                        </button>
+                        <button
+                          className="button-secondary"
+                          onClick={handleCancelModelBindingEdit}
+                          type="button"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </form>
+              ) : null}
               {workflow.platformManagedScene && skillBindingEditorOpen ? (
                 <form className="asset-editor" onSubmit={handleSaveSkillBinding}>
                   <div className="section-header">

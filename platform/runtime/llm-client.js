@@ -47,6 +47,17 @@ function firstEnvValue(env, names) {
   return null;
 }
 
+function uniqueStrings(values) {
+  return Array.from(
+    new Set(
+      values
+        .filter((value) => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 function normalizeProviderName(rawValue) {
   const normalized = trimString(rawValue).toLowerCase();
   if (!normalized) {
@@ -60,34 +71,99 @@ function normalizeProviderName(rawValue) {
   return normalized;
 }
 
-function inferProvider(env = process.env, driver = {}) {
-  const explicit = normalizeProviderName(
+function resolveModelConfig(modelConfig = null) {
+  return isObject(modelConfig) ? modelConfig : {};
+}
+
+function firstConfigValue(values, fallback = null) {
+  for (const value of values) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (typeof value === "string" && value.trim() === "") {
+      continue;
+    }
+
+    return value;
+  }
+
+  return fallback;
+}
+
+function resolveProviderSelection(env = process.env, driver = {}, modelConfig = null) {
+  const sceneModelConfig = resolveModelConfig(modelConfig);
+  const sceneProvider = normalizeProviderName(sceneModelConfig.provider);
+  if (sceneProvider) {
+    return {
+      provider: sceneProvider,
+      source: "scene"
+    };
+  }
+
+  const driverProvider = normalizeProviderName(driver.provider);
+  if (driverProvider) {
+    return {
+      provider: driverProvider,
+      source: "driver"
+    };
+  }
+
+  const envProvider = normalizeProviderName(
     env.LANGGRAPH_LLM_PROVIDER
       || env.PROJECT_LLM_PROVIDER
       || env.CHAT_PROVIDER
-      || driver.provider
   );
-  if (explicit) {
-    return explicit;
+  if (envProvider) {
+    return {
+      provider: envProvider,
+      source: "env"
+    };
+  }
+
+  if (trimString(sceneModelConfig.baseUrl) || trimString(driver.baseUrl)) {
+    return {
+      provider: "openai-compatible",
+      source: "driver"
+    };
   }
 
   if (trimString(env.CHAT_BASE_URL) || trimString(env.CHAT_MODEL)) {
-    return "openai-compatible";
+    return {
+      provider: "openai-compatible",
+      source: "env"
+    };
   }
 
   if (trimString(env.MOONSHOT_API_KEY)) {
-    return "moonshot";
+    return {
+      provider: "moonshot",
+      source: "env-key"
+    };
   }
 
   if (trimString(env.DEEPSEEK_API_KEY)) {
-    return "deepseek";
+    return {
+      provider: "deepseek",
+      source: "env-key"
+    };
   }
 
   if (trimString(env.OPENAI_API_KEY)) {
-    return "openai";
+    return {
+      provider: "openai",
+      source: "env-key"
+    };
   }
 
-  return "openai-compatible";
+  return {
+    provider: "openai-compatible",
+    source: "default"
+  };
+}
+
+function inferProvider(env = process.env, driver = {}, modelConfig = null) {
+  return resolveProviderSelection(env, driver, modelConfig).provider;
 }
 
 function normalizeBaseUrl(rawBaseUrl) {
@@ -114,23 +190,28 @@ function normalizeBaseUrl(rawBaseUrl) {
 
 function resolveProjectLlmConfig({
   toolDocument = null,
-  env = process.env
+  env = process.env,
+  modelConfig = null
 } = {}) {
+  const sceneModelConfig = resolveModelConfig(modelConfig);
   const driver = isObject(toolDocument?.spec?.driver) ? toolDocument.spec.driver : {};
-  const provider = inferProvider(env, driver);
+  const providerSelection = resolveProviderSelection(env, driver, sceneModelConfig);
+  const provider = providerSelection.provider;
   const defaults = PROVIDER_DEFAULTS[provider] || PROVIDER_DEFAULTS["openai-compatible"];
   const baseUrl = normalizeBaseUrl(
-    env.LANGGRAPH_LLM_BASE_URL
+    sceneModelConfig.baseUrl
+      || driver.baseUrl
+      || env.LANGGRAPH_LLM_BASE_URL
       || env.PROJECT_LLM_BASE_URL
       || env.CHAT_BASE_URL
-      || driver.baseUrl
       || defaults.baseUrl
   );
   const model = trimString(
-    env.LANGGRAPH_LLM_MODEL
-      || env.PROJECT_LLM_MODEL
-      || env.CHAT_MODEL
+    sceneModelConfig.model
       || driver.model
+      || (providerSelection.source === "env" || providerSelection.source === "env-key" || providerSelection.source === "default"
+        ? (env.LANGGRAPH_LLM_MODEL || env.PROJECT_LLM_MODEL || env.CHAT_MODEL)
+        : null)
       || defaults.model
   );
 
@@ -144,11 +225,13 @@ function resolveProjectLlmConfig({
     });
   }
 
-  const keyEnvNames = [
+  const keyEnvNames = uniqueStrings([
+    sceneModelConfig.apiKeyEnv,
+    driver.apiKeyEnv,
     "LANGGRAPH_LLM_API_KEY",
     "PROJECT_LLM_API_KEY",
     ...(defaults.keyEnvNames || [])
-  ];
+  ]);
   const apiKey = firstEnvValue(env, keyEnvNames);
   if (!apiKey) {
     throw createAppError("MODEL_INVOCATION_FAILED", `Missing API key for project LLM provider ${provider}.`, {
@@ -163,10 +246,12 @@ function resolveProjectLlmConfig({
 
   const timeoutMax = Number(toolDocument?.spec?.limits?.timeoutMsMax || 0);
   const requestedTimeout = Number(
-    env.LANGGRAPH_LLM_TIMEOUT_MS
-      || env.PROJECT_LLM_TIMEOUT_MS
-      || toolDocument?.spec?.limits?.timeoutMsDefault
-      || DEFAULT_TIMEOUT_MS
+    firstConfigValue([
+      sceneModelConfig.timeoutMs,
+      env.LANGGRAPH_LLM_TIMEOUT_MS,
+      env.PROJECT_LLM_TIMEOUT_MS,
+      toolDocument?.spec?.limits?.timeoutMsDefault
+    ], DEFAULT_TIMEOUT_MS)
   );
   const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
     ? timeoutMax > 0
@@ -181,8 +266,22 @@ function resolveProjectLlmConfig({
     apiKey: apiKey.value,
     apiKeySource: apiKey.name,
     timeoutMs,
-    temperature: Number(env.LANGGRAPH_LLM_TEMPERATURE || env.PROJECT_LLM_TEMPERATURE || driver.temperature || 0),
-    maxTokens: Number(env.LANGGRAPH_LLM_MAX_TOKENS || env.PROJECT_LLM_MAX_TOKENS || driver.maxTokens || 1200)
+    temperature: Number(
+      firstConfigValue([
+        sceneModelConfig.temperature,
+        env.LANGGRAPH_LLM_TEMPERATURE,
+        env.PROJECT_LLM_TEMPERATURE,
+        driver.temperature
+      ], 0)
+    ),
+    maxTokens: Number(
+      firstConfigValue([
+        sceneModelConfig.maxTokens,
+        env.LANGGRAPH_LLM_MAX_TOKENS,
+        env.PROJECT_LLM_MAX_TOKENS,
+        driver.maxTokens
+      ], 1200)
+    )
   };
 }
 
@@ -491,12 +590,14 @@ async function invokeProjectAdvisoryLlm({
   requestPayload,
   promptRef = null,
   scene = null,
+  modelConfig = null,
   env = process.env,
   fetchImpl = globalThis.fetch
 } = {}) {
   const config = resolveProjectLlmConfig({
     toolDocument,
-    env
+    env,
+    modelConfig
   });
   const messages = buildProjectAdvisoryMessages({
     requestPayload,

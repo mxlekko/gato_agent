@@ -8,6 +8,7 @@ const {
   deleteConsoleSceneRoute,
   getConsoleSceneDictionaryAssetRoute,
   getConsoleSceneInputMappingRoute,
+  getConsoleSceneModelBindingRoute,
   getConsoleScenePromptAssetRoute,
   getConsoleSceneQueryProfileRoute,
   getConsoleSceneRulesAssetRoute,
@@ -18,6 +19,7 @@ const {
   listConsoleScenesRoute,
   updateConsoleSceneDictionaryAssetRoute,
   updateConsoleSceneInputMappingRoute,
+  updateConsoleSceneModelBindingRoute,
   updateConsoleScenePromptAssetRoute,
   updateConsoleSceneQueryProfileRoute,
   updateConsoleSceneRulesAssetRoute,
@@ -77,8 +79,19 @@ const { info, error } = require("./utils/logger");
 const API_HOST = process.env.API_HOST || "0.0.0.0";
 const API_PORT = Number(process.env.API_PORT || 3000);
 const HEALTH_PROBE_TIMEOUT_MS = Number(process.env.HEALTH_PROBE_TIMEOUT_MS || 1500);
-const CONSOLE_ADMIN_TOKEN = String(process.env.CONSOLE_ADMIN_TOKEN || "").trim();
+const DEFAULT_CONSOLE_ADMIN_USERNAME = "gato";
+const DEFAULT_CONSOLE_ADMIN_PASSWORD = "gatoadmin123321";
+const CONSOLE_ADMIN_USERNAME = String(process.env.CONSOLE_ADMIN_USERNAME || DEFAULT_CONSOLE_ADMIN_USERNAME).trim();
+const CONSOLE_ADMIN_PASSWORD = String(process.env.CONSOLE_ADMIN_PASSWORD || DEFAULT_CONSOLE_ADMIN_PASSWORD).trim();
+const CONFIGURED_CONSOLE_ADMIN_TOKEN = String(process.env.CONSOLE_ADMIN_TOKEN || "").trim();
+const CONSOLE_ADMIN_TOKEN = CONFIGURED_CONSOLE_ADMIN_TOKEN || crypto
+  .createHash("sha256")
+  .update(`console-admin:${CONSOLE_ADMIN_USERNAME}:${CONSOLE_ADMIN_PASSWORD}`)
+  .digest("hex");
 const MUTATING_HTTP_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const PUBLIC_CONSOLE_AUTH_PATHS = new Set([
+  "/api/console/auth/login"
+]);
 const LANGGRAPH_HEALTH_SCENES = [
   "payment-info-split",
   "sales-opportunity-advisor",
@@ -162,6 +175,10 @@ function requireConsoleAdminAccess(req, operation) {
 }
 
 function protectMutatingConsoleRoute(req, method, pathname) {
+  if (PUBLIC_CONSOLE_AUTH_PATHS.has(pathname)) {
+    return;
+  }
+
   if (MUTATING_HTTP_METHODS.has(method) && pathname.startsWith("/api/console/")) {
     requireConsoleAdminAccess(req, `${method} ${pathname}`);
   }
@@ -198,6 +215,25 @@ async function readJsonBody(req) {
   } catch {
     throw createAppError("INVALID_REQUEST", "Request body must be valid JSON.");
   }
+}
+
+async function handleConsoleLogin(req, res) {
+  const body = await readJsonBody(req);
+  const username = String(body.username || "").trim();
+  const password = String(body.password || "").trim();
+
+  if (!safeTokenEquals(username, CONSOLE_ADMIN_USERNAME) || !safeTokenEquals(password, CONSOLE_ADMIN_PASSWORD)) {
+    throw createAppError("ACCESS_DENIED", "Invalid console username or password.", {
+      httpStatus: 401,
+      stage: "authorize-console"
+    });
+  }
+
+  sendJson(res, 200, buildSuccessResponse({
+    username: CONSOLE_ADMIN_USERNAME,
+    token: CONSOLE_ADMIN_TOKEN,
+    tokenType: "console-admin-token"
+  }, "console-login"));
 }
 
 function buildHealthUrl(port, pathname = "/health") {
@@ -384,6 +420,11 @@ const server = http.createServer(async (req, res) => {
 
     if (method === "GET" && pathname === "/health") {
       await handleHealth(req, res);
+      return;
+    }
+
+    if (method === "POST" && pathname === "/api/console/auth/login") {
+      await handleConsoleLogin(req, res);
       return;
     }
 
@@ -720,6 +761,25 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const result = await updateConsoleSceneSkillBindingRoute(
         decodeURIComponent(sceneSkillBindingMatch[1]),
+        body
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    const sceneModelBindingMatch = pathname.match(/^\/api\/console\/scenes\/([^/]+)\/bindings\/model$/);
+    if (method === "GET" && sceneModelBindingMatch) {
+      const result = await getConsoleSceneModelBindingRoute(
+        decodeURIComponent(sceneModelBindingMatch[1])
+      );
+      sendJson(res, result.statusCode, result.payload);
+      return;
+    }
+
+    if (method === "PATCH" && sceneModelBindingMatch) {
+      const body = await readJsonBody(req);
+      const result = await updateConsoleSceneModelBindingRoute(
+        decodeURIComponent(sceneModelBindingMatch[1]),
         body
       );
       sendJson(res, result.statusCode, result.payload);

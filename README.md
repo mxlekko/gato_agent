@@ -86,7 +86,7 @@ POST /api/agent/run
 
 - `API_HOST`, `API_PORT`
 - `CONTEXT_HELPER_PORT`, `DIRECTDB_RUNNER_PORT`, `MODEL_TOOL_PORT`
-- `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`
+- `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`
 - `SQLSERVER_HOST`, `SQLSERVER_PORT`, `SQLSERVER_DATABASE`, `SQLSERVER_USER`, `SQLSERVER_PASSWORD`
 - `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`
 - `RAG_SERVICE_BASE_URL`, `RAG_SEARCH_HOST`, `RAG_SEARCH_PORT`, `RAG_COLLECTION_NAME`
@@ -95,7 +95,9 @@ POST /api/agent/run
 - `CONFIG_STORE_DRIVER`
 - `CONFIG_ACTIVE_ENV`, `CONFIG_BUNDLE_ROOT`, `CONFIG_CURRENT_BUNDLE`, `CONFIG_SCENE_CONFIG_DIR`, `CONFIG_PROJECT_ROOT`, `CONFIG_RUNTIME_ROOT`
 - `CONFIG_REQUIRE_ACTIVE_BUNDLE`
-- `CONSOLE_ADMIN_TOKEN`
+- `CONSOLE_ADMIN_USERNAME`, `CONSOLE_ADMIN_PASSWORD`, `CONSOLE_ADMIN_TOKEN`
+
+具体场景使用哪个 provider/model 可以在控制台场景详情页配置；`.env` 只保存密钥和全局兜底默认值。
 
 模型密钥只允许放在 `.env` 或环境变量里。`runtime-assets/model-profiles/*/models.json` 和 `auth-profiles.json` 只保留模型元数据和 `apiKeyEnv` / `keyEnv`，不能写真实 key。
 
@@ -212,9 +214,9 @@ npm run console:dev
 
 控制台写操作受访问保护：
 
-- 配置 `CONSOLE_ADMIN_TOKEN` 后，所有写入类 `/api/console/*` 请求必须带 `X-Console-Admin-Token` 或 `Authorization: Bearer ...`。
-- 未配置 token 时，仅本地开发允许 loopback 客户端执行写操作；生产/prod 或 `CONFIG_REQUIRE_ACTIVE_BUNDLE=1` 会强制要求 token。
-- 内网 V1 可以在浏览器 localStorage 写入 `agent-platform-console-admin-token`，或在 `console/.env.local` 设置 `VITE_CONSOLE_ADMIN_TOKEN`；公网部署不要把管理员 token 打进前端包。
+- 控制台页面默认显示登录页，默认管理员账号 `gato`，默认密码 `gatoadmin123321`。
+- 登录成功后前端会保存控制台 token，所有写入类 `/api/console/*` 请求会自动带 `X-Console-Admin-Token`。
+- 公网部署建议在 `.env` 中修改 `CONSOLE_ADMIN_USERNAME` / `CONSOLE_ADMIN_PASSWORD`，并配置高强度 `CONSOLE_ADMIN_TOKEN`；不要把管理员 token 打进前端包。
 
 ## 配置中心
 

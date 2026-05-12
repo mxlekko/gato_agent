@@ -115,12 +115,12 @@ curl -sS -X POST http://127.0.0.1:19102/internal/directdb/sales-opportunity \
 
 本场景使用独立维护的本地 TSV 字典文件：
 
-`/Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_advisor_directdb_dictionary.tsv`
+`project://metadata/sales_opportunity_advisor_directdb_dictionary.tsv`
 
 需要时通过 `exec` 工具直接读取，例如：
 
 ```bash
-cat /Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_advisor_directdb_dictionary.tsv
+cat project://metadata/sales_opportunity_advisor_directdb_dictionary.tsv
 ```
 
 尽量直接读取本地文件，不要增加不必要的 shell 包装。
@@ -140,7 +140,7 @@ cat /Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_advisor_directd
 
 平台可编辑提示词文件位于：
 
-`/Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md`
+`project://platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md`
 
 在草拟最终业务 payload 前，先读取该文件，并按其中字段目标与输出要求生成 payload。
 
@@ -154,7 +154,7 @@ cat /Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_advisor_directd
 
 输出 schema 文件位于：
 
-`/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/output_schema.json`
+`project://references/sales-opportunity-advisor/output_schema.json`
 
 在草拟完候选 payload 后，使用 `exec` 工具按下面这种固定模式调用：
 
@@ -203,14 +203,14 @@ curl -sS -X POST http://127.0.0.1:19003/internal/model/validate-structured-outpu
    - `amount`
    - `budgetConfirmed`
    - `predictTenderDate`
-11. 读取并应用 `/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/decision_rules.md` 中的业务规则。
-12. 读取并应用 `/Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md`。
+11. 读取并应用 `project://references/sales-opportunity-advisor/decision_rules.md` 中的业务规则。
+12. 读取并应用 `project://platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md`。
 13. 草拟最终业务 payload，字段以提示词文件与 output schema 为准，至少包含：
     - `opportunityId`
     - `summary`
     - `adviceText`
     - `nextActions`
-14. 读取 `/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/output_schema.json`。
+14. 读取 `project://references/sales-opportunity-advisor/output_schema.json`。
 15. 调用本地 model tool 校验草拟的 payload。
 16. 如果 model tool 返回成功，则使用 `data.payload` 作为最终 payload。
 17. 最终只返回 wrapped JSON 结果块。
@@ -298,7 +298,7 @@ curl -sS -X POST http://127.0.0.1:19003/internal/model/validate-structured-outpu
 
 1. 基于 `rawRow` 和本地 TSV 字典静默整理映射后的事实。
 2. 只选出真正决定建议方向的少数字段。
-3. 应用 `/Users/gato-pm/Desktop/API_副本/references/sales-opportunity-advisor/decision_rules.md` 中匹配的阶段、状态、预算、招标、竞争规则。
+3. 应用 `project://references/sales-opportunity-advisor/decision_rules.md` 中匹配的阶段、状态、预算、招标、竞争规则。
 4. 静默草拟业务 payload。
 5. 使用本地 model tool 做校验。
 6. 然后只输出最终 wrapped JSON。

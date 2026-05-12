@@ -231,7 +231,7 @@ export function RagSettingsPage() {
                   onChange={(event) => updateForm("ragServiceBaseUrl", event.target.value)}
                   value={form.ragServiceBaseUrl}
                 />
-                <p className="field-help">仅允许本机 http loopback 地址。</p>
+                <p className="field-help">仅允许本机 http loopback 地址；Docker 部署允许 rag 服务名。</p>
               </label>
               <label className="field-group">
                 <span>请求超时 ms</span>

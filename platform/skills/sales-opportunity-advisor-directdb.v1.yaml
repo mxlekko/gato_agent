@@ -42,7 +42,7 @@ spec:
         promptRef: prompt://sales-opportunity-advisor-directdb/draft-business-output@v1
         source:
           type: local-file
-          path: /Users/gato-pm/Desktop/API_副本/platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md
+          path: project://platform/assets/prompts/sales-opportunity-advisor-directdb.draft-business-output.v1.md
     schemas:
       output:
         schemaRef: schema://sales-opportunity-advisor/output@v1
@@ -54,7 +54,7 @@ spec:
         dictionaryRef: dictionary://sales-opportunity-advisor-directdb/fields@v1
         source:
           type: local-file
-          path: /Users/gato-pm/Desktop/API_副本/metadata/sales_opportunity_advisor_directdb_dictionary.tsv
+          path: project://metadata/sales_opportunity_advisor_directdb_dictionary.tsv
     rules:
       decisionRules:
         rulesRef: rules://sales-opportunity-advisor/decision-rules@v1

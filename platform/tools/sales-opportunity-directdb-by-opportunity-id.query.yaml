@@ -50,8 +50,8 @@ spec:
     retryMaxAttempts: 1
   migrationSource:
     skillPath: project://references/sales-opportunity-advisor-directdb/sql_definition.md
-    runnerServicePath: /Users/gato-pm/Desktop/API_副本/DirectDbRunner/services/sql-template.js
-    sqlCacheFile: /Users/gato-pm/Desktop/API_副本/DirectDbRunner/sql-cache/sales-opportunity-advisor-directdb.sql.json
+    runnerServicePath: project://DirectDbRunner/services/sql-template.js
+    sqlCacheFile: project://DirectDbRunner/sql-cache/sales-opportunity-advisor-directdb.sql.json
     definitionHash: directdb-sales-opportunity-advisor-v1
     queryDefinition: >
       Query table t_sales_opportunity for the single record where opportunityId
