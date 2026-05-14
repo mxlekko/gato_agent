@@ -54,7 +54,7 @@ function getToolBindingRemark(role, binding = {}) {
   }
 
   if (role === "advisory_llm") {
-    return "建议生成：结合提示词、规则、字典和事实信息起草业务建议。";
+    return "结构化生成：按当前场景提示词、输入上下文和输出结构起草业务结果，可用于建议生成、字段抽取等生成节点。";
   }
 
   if (role === "output_validator") {

@@ -75,8 +75,8 @@ function buildToolRemark(item) {
 
   if (toolRole === "advisory_llm") {
     return driverType === "agent-runtime"
-      ? "建议生成：调用受控 Agent Runtime 生成结构化业务建议。"
-      : "建议生成：调用受控大模型生成结构化业务建议。";
+      ? "结构化生成：调用受控 Agent Runtime，按当前场景契约生成业务结果。"
+      : "结构化生成：调用受控大模型，按当前场景提示词与输出结构生成业务结果。";
   }
 
   if (toolRole === "output_validator") {
@@ -524,7 +524,7 @@ function describeToolRole(role) {
   return {
     context_fetcher: "取数 / 上下文获取",
     knowledge_retriever: "知识检索 / RAG",
-    advisory_llm: "建议生成",
+    advisory_llm: "结构化生成",
     output_validator: "结果校验"
   }[role] || role || "未命名职责";
 }
