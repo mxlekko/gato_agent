@@ -3,12 +3,14 @@ require("../utils/load-env").loadProjectEnv();
 const http = require("http");
 const { getStructuredOutputValidationRoute } = require("./routes/structured-output");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("../utils/errors");
+const { attachHttpAccessLog, setHttpResponseLogContext } = require("../utils/http-access-log");
 const { info, error } = require("../utils/logger");
 
 const MODEL_TOOL_PORT = Number(process.env.MODEL_TOOL_PORT || 19003);
 const MODEL_TOOL_HOST = process.env.MODEL_TOOL_HOST || "127.0.0.1";
 
 function sendJson(res, statusCode, payload) {
+  setHttpResponseLogContext(res, payload);
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8"
   });
@@ -37,6 +39,8 @@ async function readJsonBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  attachHttpAccessLog(req, res, { service: "model-tool" });
+
   try {
     const method = req.method || "GET";
     const pathname = new URL(req.url, `http://${req.headers.host || MODEL_TOOL_HOST}`).pathname;

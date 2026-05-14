@@ -4,12 +4,14 @@ const http = require("http");
 const { getSalesOpportunityContextRoute } = require("./routes/sales-opportunity");
 const { getDbClient } = require("./services/db");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("../utils/errors");
+const { attachHttpAccessLog, setHttpResponseLogContext } = require("../utils/http-access-log");
 const { info, error } = require("../utils/logger");
 
 const HELPER_PORT = Number(process.env.CONTEXT_HELPER_PORT || 19001);
 const HELPER_HOST = process.env.CONTEXT_HELPER_HOST || "127.0.0.1";
 
 function sendJson(res, statusCode, payload) {
+  setHttpResponseLogContext(res, payload);
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8"
   });
@@ -38,6 +40,8 @@ async function readJsonBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  attachHttpAccessLog(req, res, { service: "context-helper" });
+
   try {
     const method = req.method || "GET";
     const pathname = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`).pathname;

@@ -74,6 +74,7 @@ const {
 } = require("./routes/console-rag");
 const { compileWorkflowGraphForScene } = require("./platform/compiler/compile-workflow");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("./utils/errors");
+const { attachHttpAccessLog, setHttpResponseLogContext } = require("./utils/http-access-log");
 const { info, error } = require("./utils/logger");
 
 const API_HOST = process.env.API_HOST || "0.0.0.0";
@@ -185,6 +186,7 @@ function protectMutatingConsoleRoute(req, method, pathname) {
 }
 
 function sendJson(res, statusCode, payload) {
+  setHttpResponseLogContext(res, payload);
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8"
   });
@@ -412,6 +414,8 @@ async function handleHealth(_req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
+  attachHttpAccessLog(req, res, { service: "api" });
+
   try {
     const method = req.method || "GET";
     const url = new URL(req.url, `http://${req.headers.host || `${API_HOST}:${API_PORT}`}`);

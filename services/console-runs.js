@@ -382,10 +382,12 @@ function sortRunSummaries(summaries) {
 
 function loadRunBundles({ entries = null } = {}) {
   const records = groupEntriesByRequestId(entries || loadRunEntries());
-  return records.map((record) => ({
-    record,
-    summary: summarizeRunRecord(record)
-  }));
+  return records
+    .filter((record) => record.startEvent || record.finalEvent)
+    .map((record) => ({
+      record,
+      summary: summarizeRunRecord(record)
+    }));
 }
 
 function findRunBundle(runId, options = {}) {

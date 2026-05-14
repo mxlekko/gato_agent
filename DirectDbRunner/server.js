@@ -4,12 +4,14 @@ const http = require("http");
 const { getDbClient } = require("../ContextHelper/services/db");
 const { getDirectDbSalesOpportunityRoute } = require("./routes/sales-opportunity");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("../utils/errors");
+const { attachHttpAccessLog, setHttpResponseLogContext } = require("../utils/http-access-log");
 const { info, error } = require("../utils/logger");
 
 const DIRECTDB_RUNNER_PORT = Number(process.env.DIRECTDB_RUNNER_PORT || 19002);
 const DIRECTDB_RUNNER_HOST = process.env.DIRECTDB_RUNNER_HOST || "127.0.0.1";
 
 function sendJson(res, statusCode, payload) {
+  setHttpResponseLogContext(res, payload);
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8"
   });
@@ -38,6 +40,8 @@ async function readJsonBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  attachHttpAccessLog(req, res, { service: "directdb-runner" });
+
   try {
     const method = req.method || "GET";
     const pathname = new URL(req.url, `http://${req.headers.host || DIRECTDB_RUNNER_HOST}`).pathname;
