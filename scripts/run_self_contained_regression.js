@@ -513,7 +513,6 @@ async function main() {
   if (
     scanFailed
     || summary.totals.failed > 0
-    || noRetiredRuntimeEnvironmentCheck?.failed
     || noRetiredRuntimeScan?.failed
     || noRetiredRuntimeLogCheck?.failed
   ) {

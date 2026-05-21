@@ -1,0 +1,113 @@
+apiVersion: agent.platform/v1alpha1
+kind: BusinessSkill
+metadata:
+  name: non-standard-contract-risk-review
+  version: v1
+  title: 非标合同风险审查
+  status: draft
+spec:
+  scene: non-standard-contract-risk-review
+  templateRef:
+    name: document-structured-review
+    version: v1
+  runtimeContract:
+    requestKind: non_standard_contract_risk_review_request
+    messageVersion: "1.0"
+    requestMarkers:
+      begin: "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_REQUEST_JSON_BEGIN>>>"
+      end: "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_REQUEST_JSON_END>>>"
+    resultMarkers:
+      begin: "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_RESULT_JSON_BEGIN>>>"
+      end: "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_RESULT_JSON_END>>>"
+    responseFormat:
+      type: json
+      schemaVersion: "1.0"
+  inputContract:
+    bizParams:
+      baseFile:
+        type: fileObject
+        required: false
+        trim: true
+        maxLength: 255
+        maxBytes: 52428800
+        allowedExtensions:
+          - .bmp
+          - .jpg
+          - .jpeg
+          - .png
+          - .tif
+          - .tiff
+          - .doc
+          - .docx
+          - .wps
+          - .pdf
+          - .ofd
+          - .xlsx
+        sourcePath: request.bizParams.baseFile
+      baseFileURL:
+        type: fileUrl
+        required: false
+        trim: true
+        maxLength: 2000
+        sourcePath: request.bizParams.baseFileURL
+  outputContract:
+    envelope:
+      successField: success
+      sceneField: scene
+      requestIdField: requestId
+      payloadField: payload
+      errorField: error
+    schemaRef: schema://non-standard-contract-risk-review/output@v1
+  assetRefs:
+    prompts:
+      draftBusinessOutput:
+        promptRef: prompt://non-standard-contract-risk-review/draft-business-output@v1
+        source:
+          type: local-file
+          path: project://references/non-standard-contract-risk-review/prompt.md
+    schemas:
+      output:
+        schemaRef: schema://non-standard-contract-risk-review/output@v1
+        source:
+          type: local-file
+          path: project://references/non-standard-contract-risk-review/output_schema.json
+  toolBindings:
+    advisory_llm:
+      toolRef: tool://llm/project-contract-risk-review@v1
+      purpose: review extracted contract text and draft approval advice JSON
+    output_validator:
+      toolRef: tool://validation/model-tool-structured-output@v1
+      purpose: validate contract review JSON structure
+  nodeOverrides:
+    extract_contract_document:
+      timeoutMs: 30000
+    load_reference_bundle:
+      enabled: true
+      timeoutMs: 1000
+      assetRefs:
+        prompts:
+          - prompt://non-standard-contract-risk-review/draft-business-output@v1
+        schemas:
+          - schema://non-standard-contract-risk-review/output@v1
+    draft_business_output:
+      toolRole: advisory_llm
+      promptRef: prompt://non-standard-contract-risk-review/draft-business-output@v1
+      timeoutMs: 60000
+      retry:
+        maxAttempts: 1
+    validate_output:
+      toolRole: output_validator
+      timeoutMs: 30000
+      retry:
+        maxAttempts: 2
+  security:
+    mode: controlled
+    deny:
+      inlineSql: true
+      inlineScript: true
+      inlinePromptText: true
+      inlineSchemaText: true
+      unregisteredToolRef: true
+      externalNetworkEndpoint: true
+      crossPhaseReorder: true
+      arbitraryNodeInsertion: true

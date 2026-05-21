@@ -1,0 +1,10 @@
+{
+  "scene": "non-standard-contract-risk-review",
+  "bizParams": {
+    "baseFile": {
+      "fileName": "contract-risk-review.docx",
+      "fileContentBase64": "UEsDBBQAAAAIAOFUtVzHHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgA4VS1XB74VG6lAAAAvwAAABEAAAB3b3JkL2RvY3VtZW50LnhtbLMpt0rJTy7NTc0rUajIzckrtiq3VcooKSmw0tcvTs5IzU0s1ssvSM0DyqXlF+UmlgC5Ren65flFKQVF+cmpxcWZeem5OfpGBgZm+rmJmXlKdjblVkn5KZUgugBEFIGIEruXq3qeTdn2dELfk90znq3Z935Pz4v9c5/vWvZiy+Inu3c/2dH7Yt2+Jzu6Xs6c8LihyUYfpAVEFoHJAjAJMVYf4WQ7AFBLAQIUAxQAAAAIAOFUtVzHHBc8CgAAAAgAAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgA4VS1XB74VG6lAAAAvwAAABEAAAAAAAAAAAAAAIABOwAAAHdvcmQvZG9jdW1lbnQueG1sUEsFBgAAAAACAAIAgAAAAA8BAAAAAA==",
+      "fileMimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
+  }
+}

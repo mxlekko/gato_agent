@@ -76,3 +76,23 @@ export async function requestJson(path, options = {}) {
     payload
   };
 }
+
+export async function requestFormData(path, formData, options = {}) {
+  const adminToken = getConsoleAdminToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    method: options.method || "POST",
+    headers: {
+      ...(adminToken ? { "X-Console-Admin-Token": adminToken } : {}),
+      ...(options.headers || {})
+    },
+    body: formData
+  });
+
+  const payload = await parseResponse(response);
+  return {
+    ok: response.ok,
+    status: response.status,
+    payload
+  };
+}

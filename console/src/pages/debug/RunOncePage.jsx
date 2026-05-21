@@ -1,6 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageFrame } from "../../components/PageFrame";
 import { apiClient } from "../../services/apiClient";
+
+const CONTRACT_REVIEW_SCENE = "non-standard-contract-risk-review";
+const CONTRACT_FILE_ACCEPT = [
+  ".bmp",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".tif",
+  ".tiff",
+  ".doc",
+  ".docx",
+  ".wps",
+  ".pdf",
+  ".ofd",
+  ".xlsx",
+  "image/bmp",
+  "image/jpeg",
+  "image/png",
+  "image/tiff",
+  "application/msword",
+  "application/pdf",
+  "application/ofd",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+].join(",");
 
 const scenePresets = {
   "payment-info-split": {
@@ -19,7 +44,7 @@ const scenePresets = {
     tenantId: "tenant-a",
     userId: "user-a",
     bizParams: {
-      opportunityId: "2041340312877535232"
+      opportunityId: "2052956605598666752"
     }
   },
   "sales-opportunity-smart-entry": {
@@ -28,7 +53,7 @@ const scenePresets = {
     tenantId: "tenant-a",
     userId: "user-a",
     bizParams: {
-      opportunityId: "2041340312877535232",
+      opportunityId: "2052956605598666752",
       rawText:
         "客户确认这单属于招标已设计场景，推荐品牌可以替换，核心参数满足，投标时间改为2026-04-30，采购时间预计2026-05-20。"
     }
@@ -39,7 +64,7 @@ const scenePresets = {
     tenantId: "tenant-a",
     userId: "user-a",
     bizParams: {
-      opportunityId: "2041340312877535232"
+      opportunityId: "2052956605598666752"
     }
   },
   "special-custom-product-solution": {
@@ -52,6 +77,13 @@ const scenePresets = {
       customRequirement:
         "客户需要基于现有销售画像能力做一个特殊定制方案：支持按行业、区域和客户等级组合筛选，输出重点客户清单，并在页面展示推荐理由、最近拜访记录和下一步跟进建议。"
     }
+  },
+  [CONTRACT_REVIEW_SCENE]: {
+    label: "非标合同风险审查",
+    note: "该场景使用 baseFile/baseFileURL 二选一。单次调试可直接上传合同文件，页面会按 multipart/form-data 发送。",
+    tenantId: "tenant-a",
+    userId: "user-a",
+    bizParams: {}
   }
 };
 
@@ -79,11 +111,15 @@ function sampleValueForBizParam(fieldName) {
   }
 
   if (lowerName === "opportunityid" || lowerName.endsWith("opportunityid")) {
-    return "2041340312877535232";
+    return "2052956605598666752";
   }
 
   if (lowerName === "rawtext" || lowerName.endsWith("text")) {
     return "客户确认这单属于招标已设计场景，核心参数满足，预计 2026-05-20 完成采购。";
+  }
+
+  if (lowerName === "basefileurl") {
+    return "https://example.com/contracts/contract.pdf";
   }
 
   if (lowerName.includes("requirement") || lowerName.includes("需求")) {
@@ -229,6 +265,75 @@ function buildRequestBody({ scene, tenantId, userId, bizParams }) {
   return body;
 }
 
+function formatFileSize(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "-";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function buildContractReviewFormData({ scene, tenantId, userId, file, baseFileURL }) {
+  const formData = new FormData();
+  formData.append("scene", scene);
+
+  if (file) {
+    formData.append("baseFile", file, file.name);
+  } else {
+    formData.append("baseFileURL", baseFileURL.trim());
+  }
+
+  const normalizedTenantId = tenantId.trim();
+  const normalizedUserId = userId.trim();
+  if (normalizedTenantId || normalizedUserId) {
+    formData.append("runtimeContext", JSON.stringify({
+      tenantId: normalizedTenantId || undefined,
+      userId: normalizedUserId || undefined
+    }));
+  }
+
+  return formData;
+}
+
+function buildContractReviewPreview({ scene, tenantId, userId, file, baseFileURL }) {
+  const preview = {
+    contentType: "multipart/form-data",
+    scene,
+    fields: {}
+  };
+
+  if (file) {
+    preview.fields.baseFile = {
+      fileName: file.name,
+      fileMimeType: file.type || null,
+      sizeBytes: file.size,
+      size: formatFileSize(file.size)
+    };
+  } else if (baseFileURL.trim()) {
+    preview.fields.baseFileURL = baseFileURL.trim();
+  } else {
+    preview.fields.baseFile = null;
+    preview.fields.baseFileURL = null;
+  }
+
+  const normalizedTenantId = tenantId.trim();
+  const normalizedUserId = userId.trim();
+  if (normalizedTenantId || normalizedUserId) {
+    preview.runtimeContext = {
+      tenantId: normalizedTenantId || undefined,
+      userId: normalizedUserId || undefined
+    };
+  }
+
+  return preview;
+}
+
 export function RunOncePage() {
   const [formState, setFormState] = useState(() =>
     buildInitialFormState("payment-info-split")
@@ -242,6 +347,9 @@ export function RunOncePage() {
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState("");
   const [lastRun, setLastRun] = useState(null);
+  const [contractFile, setContractFile] = useState(null);
+  const [contractFileURL, setContractFileURL] = useState("");
+  const contractFileInputRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -359,8 +467,19 @@ export function RunOncePage() {
   const selectedOption = sceneOptions.find((item) => item.scene === formState.scene);
   const selectedPreset = scenePresets[formState.scene];
   const selectedSceneCanRun = selectedOption?.runnable !== false;
+  const isContractReviewScene = formState.scene === CONTRACT_REVIEW_SCENE;
 
   const requestPreview = useMemo(() => {
+    if (isContractReviewScene) {
+      return prettyJson(buildContractReviewPreview({
+        scene: formState.scene,
+        tenantId: formState.tenantId,
+        userId: formState.userId,
+        file: contractFile,
+        baseFileURL: contractFileURL
+      }));
+    }
+
     try {
       const bizParams = JSON.parse(formState.bizParamsText);
       return prettyJson(
@@ -374,7 +493,7 @@ export function RunOncePage() {
     } catch {
       return "bizParams 不是合法 JSON，当前无法生成请求预览。";
     }
-  }, [formState]);
+  }, [contractFile, contractFileURL, formState, isContractReviewScene]);
 
   function updateField(field, value) {
     setFormState((current) => ({
@@ -385,6 +504,11 @@ export function RunOncePage() {
 
   function applyPreset(scene) {
     setFormState(buildInitialFormState(scene));
+    setContractFile(null);
+    setContractFileURL("");
+    if (contractFileInputRef.current) {
+      contractFileInputRef.current.value = "";
+    }
     setLocalError("");
     setSceneExampleMessage("");
     setSceneExampleStatus(scenePresets[scene] ? "idle" : "loading");
@@ -402,26 +526,53 @@ export function RunOncePage() {
       return;
     }
 
-    let bizParams = null;
-    try {
-      bizParams = JSON.parse(formState.bizParamsText);
-    } catch (error) {
-      setLocalError(`bizParams JSON 解析失败：${error.message}`);
-      return;
-    }
+    let requestBody = null;
+    let submitRequest = null;
 
-    const requestBody = buildRequestBody({
-      scene: formState.scene,
-      tenantId: formState.tenantId,
-      userId: formState.userId,
-      bizParams
-    });
+    if (isContractReviewScene) {
+      if (!contractFile && !contractFileURL.trim()) {
+        setLocalError("请上传合同文件，或填写 baseFileURL。");
+        return;
+      }
+
+      const formData = buildContractReviewFormData({
+        scene: formState.scene,
+        tenantId: formState.tenantId,
+        userId: formState.userId,
+        file: contractFile,
+        baseFileURL: contractFileURL
+      });
+      requestBody = buildContractReviewPreview({
+        scene: formState.scene,
+        tenantId: formState.tenantId,
+        userId: formState.userId,
+        file: contractFile,
+        baseFileURL: contractFileURL
+      });
+      submitRequest = () => apiClient.runAgentFormData(formData);
+    } else {
+      let bizParams = null;
+      try {
+        bizParams = JSON.parse(formState.bizParamsText);
+      } catch (error) {
+        setLocalError(`bizParams JSON 解析失败：${error.message}`);
+        return;
+      }
+
+      requestBody = buildRequestBody({
+        scene: formState.scene,
+        tenantId: formState.tenantId,
+        userId: formState.userId,
+        bizParams
+      });
+      submitRequest = () => apiClient.runAgent(requestBody);
+    }
 
     setSubmitting(true);
     const startedAt = Date.now();
 
     try {
-      const response = await apiClient.runAgent(requestBody);
+      const response = await submitRequest();
       setLastRun({
         requestBody,
         response,
@@ -546,24 +697,72 @@ export function RunOncePage() {
               </div>
             </div>
 
-            <div className="field-group">
-              <label htmlFor="bizParams">业务参数 JSON</label>
-              <textarea
-                className="field-input field-textarea"
-                id="bizParams"
-                onChange={(event) => updateField("bizParamsText", event.target.value)}
-                spellCheck="false"
-                value={formState.bizParamsText}
-              />
-              <p className="field-help">
-                这里直接编辑业务参数对象，页面会自动拼成统一请求包。
-              </p>
-              {sceneExampleMessage ? (
-                <p className={`field-help ${sceneExampleStatus === "error" ? "field-help-warning" : ""}`}>
-                  {sceneExampleMessage}
+            {isContractReviewScene ? (
+              <div className="contract-debug-panel">
+                <div className="field-group">
+                  <label htmlFor="contractBaseFile">合同文件 baseFile</label>
+                  <input
+                    accept={CONTRACT_FILE_ACCEPT}
+                    className="field-input"
+                    id="contractBaseFile"
+                    onChange={(event) => {
+                      const nextFile = event.target.files?.[0] || null;
+                      setContractFile(nextFile);
+                      if (nextFile) {
+                        setContractFileURL("");
+                      }
+                    }}
+                    ref={contractFileInputRef}
+                    type="file"
+                  />
+                  <p className="field-help">
+                    支持 bmp/jpg/jpeg/png/tif/tiff、doc/docx/wps/pdf/ofd/xlsx；选择文件后会按 multipart/form-data 的 baseFile 字段直接上传。
+                  </p>
+                  {contractFile ? (
+                    <div className="rag-upload-selected-file">
+                      <span>已选择</span>
+                      <strong>{contractFile.name}</strong>
+                      <em>{formatFileSize(contractFile.size)}</em>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="field-group">
+                  <label htmlFor="contractBaseFileURL">baseFileURL</label>
+                  <input
+                    className="field-input"
+                    disabled={Boolean(contractFile)}
+                    id="contractBaseFileURL"
+                    onChange={(event) => setContractFileURL(event.target.value)}
+                    placeholder="https://example.com/contracts/contract.pdf"
+                    type="url"
+                    value={contractFileURL}
+                  />
+                  <p className="field-help">
+                    和 baseFile 二选一；已选择 baseFile 时，baseFileURL 不会提交。
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="field-group">
+                <label htmlFor="bizParams">业务参数 JSON</label>
+                <textarea
+                  className="field-input field-textarea"
+                  id="bizParams"
+                  onChange={(event) => updateField("bizParamsText", event.target.value)}
+                  spellCheck="false"
+                  value={formState.bizParamsText}
+                />
+                <p className="field-help">
+                  这里直接编辑业务参数对象，页面会自动拼成统一请求包。
                 </p>
-              ) : null}
-            </div>
+                {sceneExampleMessage ? (
+                  <p className={`field-help ${sceneExampleStatus === "error" ? "field-help-warning" : ""}`}>
+                    {sceneExampleMessage}
+                  </p>
+                ) : null}
+              </div>
+            )}
 
             {localError ? (
               <div className="callout callout-error">

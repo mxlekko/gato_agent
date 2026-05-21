@@ -3,6 +3,7 @@ const { createAppError, normalizeError } = require("../../../utils/errors");
 const { mergeWorkflowState, recordNodeRun } = require("../state");
 const { runAuthorizeScopeNode } = require("../../nodes/authorize-scope");
 const { runDraftOutputNode } = require("../../nodes/draft-output");
+const { runExtractContractDocumentNode } = require("../../nodes/extract-contract-document");
 const { runFetchContextNode } = require("../../nodes/fetch-context");
 const { runLoadAssetsNode } = require("../../nodes/load-assets");
 const { runNormalizeFactsNode } = require("../../nodes/normalize-facts");
@@ -305,6 +306,14 @@ async function executeGraphNode({ state, nodeId, graph, executors }) {
         await runAuthorizeScopeNode({
           state,
           policyProfile: graph?.workflowBinding?.policy_profile || null
+        }),
+        nodeId
+      );
+    case "extract_contract_document":
+      return renameLatestNodeRun(
+        await runExtractContractDocumentNode({
+          state,
+          timeoutMs: graph?.nodesById?.extract_contract_document?.timeoutMs || null
         }),
         nodeId
       );

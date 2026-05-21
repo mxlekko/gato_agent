@@ -1,0 +1,140 @@
+{
+  "scene": "non-standard-contract-risk-review",
+  "enabled": true,
+  "title": "非标合同风险审查",
+  "description": "接收图片、doc/docx/wps/pdf/ofd/xlsx 非标合同文件，解析文本后由大模型输出审批建议和风险点。",
+  "execution": {
+    "mode": "agent-runtime"
+  },
+  "routing": {
+    "mode": "langgraph",
+    "allowedModes": [
+      "langgraph"
+    ],
+    "langgraphCutover": {
+      "requestPercentage": 100
+    }
+  },
+  "agent": {
+    "id": "project-non-standard-contract-risk-review",
+    "gatewayModel": "project/non-standard-contract-risk-review",
+    "sessionKeyPrefix": "agent:project-non-standard-contract-risk-review:api"
+  },
+  "runtime": {
+    "requestKind": "non_standard_contract_risk_review_request",
+    "messageVersion": "1.0",
+    "requestMarkers": {
+      "begin": "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_REQUEST_JSON_BEGIN>>>",
+      "end": "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_REQUEST_JSON_END>>>"
+    },
+    "resultMarkers": {
+      "begin": "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_RESULT_JSON_BEGIN>>>",
+      "end": "<<<NON_STANDARD_CONTRACT_RISK_REVIEW_RESULT_JSON_END>>>"
+    },
+    "responseFormat": {
+      "type": "json",
+      "schemaVersion": "1.0"
+    }
+  },
+  "request": {
+    "bizParams": {
+      "baseFile": {
+        "type": "fileObject",
+        "required": false,
+        "trim": true,
+        "maxLength": 255,
+        "maxBytes": 52428800,
+        "allowedExtensions": [
+          ".bmp",
+          ".jpg",
+          ".jpeg",
+          ".png",
+          ".tif",
+          ".tiff",
+          ".doc",
+          ".docx",
+          ".wps",
+          ".pdf",
+          ".ofd",
+          ".xlsx"
+        ],
+        "label": "合同文件"
+      },
+      "baseFileURL": {
+        "type": "fileUrl",
+        "required": false,
+        "trim": true,
+        "maxLength": 2000,
+        "label": "合同文件 URL"
+      }
+    }
+  },
+  "skill": {
+    "id": "non-standard-contract-risk-review",
+    "type": "project-document-structured-review",
+    "workspacePath": "project://references/non-standard-contract-risk-review",
+    "entryFile": "project://references/non-standard-contract-risk-review/skill_contract.md",
+    "responsibility": "提供非标合同风险审查输入输出契约；业务编排由 platform BusinessSkill 与项目内 LangGraph 执行。"
+  },
+  "tools": [
+    {
+      "id": "project-contract-risk-review-llm",
+      "type": "model-tool",
+      "binding": "project-llm",
+      "responseContract": "draftPayload",
+      "params": [
+        "requestId",
+        "document",
+        "prompt",
+        "schema"
+      ]
+    },
+    {
+      "id": "sales-opportunity-model-tool",
+      "type": "model-tool",
+      "binding": "http",
+      "endpoint": "http://127.0.0.1:19103/internal/model/validate-structured-output",
+      "responseContract": "validatedPayload",
+      "params": [
+        "requestId",
+        "scene",
+        "payload",
+        "schema"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "schema://non-standard-contract-risk-review/output@v1",
+      "type": "local-file",
+      "path": "project://references/non-standard-contract-risk-review/output_schema.json",
+      "purpose": "非标合同风险审查结构化输出 schema"
+    },
+    {
+      "id": "prompt://non-standard-contract-risk-review/draft-business-output@v1",
+      "type": "local-file",
+      "path": "project://references/non-standard-contract-risk-review/prompt.md",
+      "purpose": "非标合同风险审查提示词"
+    }
+  ],
+  "orchestration": [
+    {
+      "order": 1,
+      "step": "extract-contract-document",
+      "owner": "langgraph:extract_contract_document",
+      "description": "将图片、doc/docx/wps/pdf/ofd/xlsx 合同文件解析为模型可审查文本。"
+    },
+    {
+      "order": 2,
+      "step": "generate-contract-risk-review",
+      "owner": "langgraph:draft_business_output",
+      "description": "调用项目 LLM，基于合同文本生成审批建议和风险点 JSON。"
+    },
+    {
+      "order": 3,
+      "step": "validate-output",
+      "owner": "langgraph:validate_output",
+      "description": "运行时校验结构化输出，确保 payload 只包含 approvalAdvice 和 riskPoints。"
+    }
+  ]
+}

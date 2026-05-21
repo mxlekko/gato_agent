@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "required": [
+    "approvalAdvice",
+    "riskPoints"
+  ],
+  "properties": {
+    "approvalAdvice": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 2000
+    },
+    "riskPoints": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      },
+      "maxItems": 20
+    }
+  },
+  "additionalProperties": false
+}

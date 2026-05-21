@@ -73,6 +73,7 @@ const {
   uploadConsoleRagDocumentRoute
 } = require("./routes/console-rag");
 const { compileWorkflowGraphForScene } = require("./platform/compiler/compile-workflow");
+const { getSupportedScenes } = require("./services/scene-config");
 const { buildErrorResponse, buildSuccessResponse, createAppError, normalizeError } = require("./utils/errors");
 const { attachHttpAccessLog, setHttpResponseLogContext } = require("./utils/http-access-log");
 const { info, error } = require("./utils/logger");
@@ -94,12 +95,14 @@ const PUBLIC_CONSOLE_AUTH_PATHS = new Set([
   "/api/console/auth/login"
 ]);
 const LANGGRAPH_HEALTH_SCENES = [
+  "non-standard-contract-risk-review",
   "payment-info-split",
   "sales-opportunity-advisor",
   "sales-opportunity-advisor-directdb",
   "sales-opportunity-smart-entry",
   "special-custom-product-solution"
 ];
+const DEFAULT_AGENT_RUN_MULTIPART_MAX_BYTES = 60 * 1024 * 1024;
 
 function isProductionLikeMode() {
   return [process.env.NODE_ENV, process.env.APP_ENV, process.env.CONFIG_ACTIVE_ENV]
@@ -217,6 +220,299 @@ async function readJsonBody(req) {
   } catch {
     throw createAppError("INVALID_REQUEST", "Request body must be valid JSON.");
   }
+}
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function getContentType(req) {
+  const raw = req.headers["content-type"];
+  return Array.isArray(raw) ? String(raw[0] || "") : String(raw || "");
+}
+
+async function readRawBody(req, {
+  maxBytes = DEFAULT_AGENT_RUN_MULTIPART_MAX_BYTES
+} = {}) {
+  const chunks = [];
+  let totalBytes = 0;
+
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buffer.length;
+    if (totalBytes > maxBytes) {
+      throw createAppError("INVALID_REQUEST", "Request body is too large.", {
+        stage: "request-body",
+        details: {
+          maxBytes,
+          actualBytes: totalBytes
+        }
+      });
+    }
+    chunks.push(buffer);
+  }
+
+  return Buffer.concat(chunks);
+}
+
+function parseMultipartBoundary(contentType) {
+  const boundaryMatch = String(contentType || "").match(/(?:^|;)\s*boundary=(?:"([^"]+)"|([^;]+))/i);
+  const boundary = boundaryMatch ? String(boundaryMatch[1] || boundaryMatch[2] || "").trim() : "";
+  if (!boundary) {
+    throw createAppError("INVALID_REQUEST", "multipart/form-data boundary is required.", {
+      stage: "request-body"
+    });
+  }
+  return boundary;
+}
+
+function parseMultipartHeaders(headerText) {
+  const headers = {};
+  for (const line of String(headerText || "").split(/\r\n/u)) {
+    const separatorIndex = line.indexOf(":");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+    const key = line.slice(0, separatorIndex).trim().toLowerCase();
+    const value = line.slice(separatorIndex + 1).trim();
+    if (key) {
+      headers[key] = value;
+    }
+  }
+  return headers;
+}
+
+function unquoteMultipartHeaderValue(value) {
+  const raw = String(value || "").trim();
+  if (raw.startsWith("\"") && raw.endsWith("\"")) {
+    return raw
+      .slice(1, -1)
+      .replace(/\\(["\\])/gu, "$1");
+  }
+  return raw;
+}
+
+function parseMultipartDisposition(value) {
+  const disposition = {
+    type: "",
+    params: {}
+  };
+  const raw = String(value || "");
+  const firstSeparator = raw.indexOf(";");
+  disposition.type = (firstSeparator >= 0 ? raw.slice(0, firstSeparator) : raw).trim().toLowerCase();
+
+  const parameterPattern = /;\s*([^=;\s]+)=("(?:[^"\\]|\\.)*"|[^;]*)/gu;
+  for (const match of raw.matchAll(parameterPattern)) {
+    const key = String(match[1] || "").trim().toLowerCase();
+    const parameterValue = unquoteMultipartHeaderValue(match[2]);
+    if (key) {
+      disposition.params[key] = parameterValue;
+    }
+  }
+
+  if (disposition.params["filename*"]) {
+    const filenameStar = disposition.params["filename*"];
+    const encodedMatch = String(filenameStar).match(/^UTF-8''(.+)$/i);
+    if (encodedMatch) {
+      try {
+        disposition.params.filename = decodeURIComponent(encodedMatch[1]);
+      } catch {
+        disposition.params.filename = encodedMatch[1];
+      }
+    }
+  }
+
+  return disposition;
+}
+
+function stripTrailingCrlf(buffer) {
+  if (buffer.length >= 2 && buffer[buffer.length - 2] === 13 && buffer[buffer.length - 1] === 10) {
+    return buffer.subarray(0, buffer.length - 2);
+  }
+  return buffer;
+}
+
+function parseMultipartParts(rawBody, boundary) {
+  const delimiter = Buffer.from(`--${boundary}`, "utf8");
+  const headerSeparator = Buffer.from("\r\n\r\n", "utf8");
+  const parts = [];
+  let cursor = rawBody.indexOf(delimiter);
+
+  if (cursor < 0) {
+    throw createAppError("INVALID_REQUEST", "multipart/form-data body is malformed.", {
+      stage: "request-body"
+    });
+  }
+
+  while (cursor >= 0 && cursor < rawBody.length) {
+    cursor += delimiter.length;
+    if (rawBody[cursor] === 45 && rawBody[cursor + 1] === 45) {
+      break;
+    }
+    if (rawBody[cursor] === 13 && rawBody[cursor + 1] === 10) {
+      cursor += 2;
+    }
+
+    const nextDelimiter = rawBody.indexOf(delimiter, cursor);
+    if (nextDelimiter < 0) {
+      break;
+    }
+
+    const partBuffer = stripTrailingCrlf(rawBody.subarray(cursor, nextDelimiter));
+    const separatorIndex = partBuffer.indexOf(headerSeparator);
+    if (separatorIndex >= 0) {
+      const headerText = partBuffer.subarray(0, separatorIndex).toString("utf8");
+      const body = partBuffer.subarray(separatorIndex + headerSeparator.length);
+      parts.push({
+        headers: parseMultipartHeaders(headerText),
+        body
+      });
+    }
+
+    cursor = nextDelimiter;
+  }
+
+  return parts;
+}
+
+function safeUploadedFileName(fileName) {
+  const raw = String(fileName || "").trim();
+  const baseName = raw.split(/[\\/]/u).filter(Boolean).pop();
+  return baseName || "uploaded-file";
+}
+
+function parseJsonFormField(value, fieldName) {
+  try {
+    return JSON.parse(String(value || "").trim() || "{}");
+  } catch {
+    throw createAppError("INVALID_REQUEST", `${fieldName} must be valid JSON.`, {
+      stage: "request-body"
+    });
+  }
+}
+
+function assignMultipartTextField(body, bizParams, fieldName, value) {
+  const textValue = String(value || "");
+  const trimmedValue = textValue.trim();
+
+  if (fieldName === "scene") {
+    body.scene = trimmedValue;
+    return;
+  }
+
+  if (fieldName === "runtimeContext") {
+    body.runtimeContext = parseJsonFormField(textValue, "runtimeContext");
+    return;
+  }
+
+  if (fieldName === "tenantId" || fieldName === "userId") {
+    body.runtimeContext = {
+      ...(body.runtimeContext || {}),
+      [fieldName]: trimmedValue
+    };
+    return;
+  }
+
+  if (fieldName === "bizParams") {
+    const parsedBizParams = parseJsonFormField(textValue, "bizParams");
+    if (!parsedBizParams || typeof parsedBizParams !== "object" || Array.isArray(parsedBizParams)) {
+      throw createAppError("INVALID_REQUEST", "bizParams must be a JSON object.", {
+        stage: "request-body"
+      });
+    }
+    Object.assign(bizParams, parsedBizParams);
+    return;
+  }
+
+  if (fieldName === "baseFileURL") {
+    bizParams.baseFileURL = trimmedValue;
+    return;
+  }
+
+  if (fieldName.startsWith("bizParams.")) {
+    const bizFieldName = fieldName.slice("bizParams.".length);
+    if (bizFieldName) {
+      bizParams[bizFieldName] = textValue;
+    }
+    return;
+  }
+
+  body[fieldName] = textValue;
+}
+
+function normalizeAgentRunBodyObject(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return body;
+  }
+
+  if (
+    !body.bizParams &&
+    (Object.prototype.hasOwnProperty.call(body, "baseFile") ||
+      Object.prototype.hasOwnProperty.call(body, "baseFileURL"))
+  ) {
+    return {
+      ...body,
+      bizParams: {
+        ...(body.baseFile ? { baseFile: body.baseFile } : {}),
+        ...(body.baseFileURL ? { baseFileURL: body.baseFileURL } : {})
+      }
+    };
+  }
+
+  return body;
+}
+
+async function readMultipartAgentRunBody(req) {
+  const maxBytes = parsePositiveInteger(
+    process.env.AGENT_RUN_MULTIPART_MAX_BYTES,
+    DEFAULT_AGENT_RUN_MULTIPART_MAX_BYTES
+  );
+  const rawBody = await readRawBody(req, { maxBytes });
+  const parts = parseMultipartParts(rawBody, parseMultipartBoundary(getContentType(req)));
+  const body = {};
+  const bizParams = {};
+
+  for (const part of parts) {
+    const disposition = parseMultipartDisposition(part.headers["content-disposition"]);
+    const fieldName = disposition.params.name || "";
+    if (!fieldName) {
+      continue;
+    }
+
+    const hasFileName = Object.prototype.hasOwnProperty.call(disposition.params, "filename");
+    if (hasFileName) {
+      if (fieldName !== "baseFile") {
+        continue;
+      }
+      bizParams.baseFile = {
+        fileName: safeUploadedFileName(disposition.params.filename),
+        fileContentBase64: part.body.toString("base64"),
+        fileMimeType: String(part.headers["content-type"] || "").trim()
+      };
+      continue;
+    }
+
+    assignMultipartTextField(body, bizParams, fieldName, part.body.toString("utf8"));
+  }
+
+  if (bizParams.baseFile) {
+    delete bizParams.baseFileURL;
+  }
+  body.bizParams = {
+    ...(body.bizParams || {}),
+    ...bizParams
+  };
+
+  return normalizeAgentRunBodyObject(body);
+}
+
+async function readAgentRunBody(req) {
+  if (/^multipart\/form-data\b/i.test(getContentType(req))) {
+    return readMultipartAgentRunBody(req);
+  }
+
+  return normalizeAgentRunBodyObject(await readJsonBody(req));
 }
 
 async function handleConsoleLogin(req, res) {
@@ -341,7 +637,16 @@ async function probeHealthTarget(target) {
 }
 
 function checkLangGraphRuntime() {
-  const sceneResults = LANGGRAPH_HEALTH_SCENES.map((scene) => {
+  let supportedScenes = [];
+  try {
+    supportedScenes = getSupportedScenes();
+  } catch {
+    supportedScenes = [];
+  }
+  const scenesToCheck = supportedScenes.length > 0
+    ? Array.from(new Set(supportedScenes))
+    : LANGGRAPH_HEALTH_SCENES;
+  const sceneResults = scenesToCheck.map((scene) => {
     try {
       const graph = compileWorkflowGraphForScene({ scene });
       return {
@@ -921,7 +1226,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (method === "POST" && pathname === "/api/agent/run") {
-      const body = await readJsonBody(req);
+      const body = await readAgentRunBody(req);
       const result = await runAgentRoute(body);
       sendJson(res, result.statusCode, result.payload);
       return;

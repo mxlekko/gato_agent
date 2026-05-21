@@ -204,6 +204,14 @@ function validateObject(value, schema, path) {
       }
       normalized[key] = fieldValue;
     }
+  } else {
+    const extraFields = Object.keys(value).filter((key) => !schema.properties[key]);
+    if (extraFields.length > 0) {
+      throw modelOutputError("Unexpected additional properties.", {
+        path: stringifyPath(path),
+        extraFields
+      });
+    }
   }
 
   return normalized;

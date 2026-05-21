@@ -419,6 +419,39 @@ function createPaymentInfoCompatDraftPayload(state) {
   };
 }
 
+function createContractRiskReviewCompatDraftPayload(state) {
+  const documentText = String(state?.artifacts?.document?.text || "").trim();
+  const riskPoints = [];
+
+  if (/付款|回款|开票|尾款|预付款|结算/u.test(documentText)) {
+    riskPoints.push("付款、回款或开票条款需要重点复核，避免付款触发条件不清导致回款延迟。");
+  }
+
+  if (/验收|交付|交货|交付周期|工期/u.test(documentText)) {
+    riskPoints.push("交付或验收安排需要明确标准、期限和逾期处理机制，避免履约边界不清。");
+  }
+
+  if (/违约|赔偿|损失|责任|罚款/u.test(documentText)) {
+    riskPoints.push("违约责任和赔偿范围需要确认是否设置合理上限，避免责任暴露过高。");
+  }
+
+  if (/解除|终止|争议|仲裁|诉讼|管辖/u.test(documentText)) {
+    riskPoints.push("合同解除、终止或争议解决条款需要复核，确保审批后具备可执行的争议处理路径。");
+  }
+
+  const uniqueRiskPoints = uniqueStrings(riskPoints).slice(0, 8);
+  if (uniqueRiskPoints.length === 0) {
+    uniqueRiskPoints.push("当前合同解析文本未命中明确风险关键词，仍建议审批前由业务和法务复核关键商务条款。");
+  }
+
+  return {
+    approvalAdvice: uniqueRiskPoints.length > 0
+      ? "建议有条件通过审批：请在签署前复核并完善风险点所涉条款，确认付款、验收、交付和违约责任边界清晰。"
+      : "建议通过审批：当前解析文本未发现明显合同风险，仍需保留常规法务复核。",
+    riskPoints: uniqueRiskPoints
+  };
+}
+
 function mergePaymentInfoProjectLlmPayload(payload, compatPayload) {
   if (!isObject(payload) || !isObject(compatPayload)) {
     return payload;
@@ -681,6 +714,10 @@ function createCompatDraftPayload({
 
   if (state?.request?.scene === "payment-info-split") {
     return createPaymentInfoCompatDraftPayload(state);
+  }
+
+  if (state?.request?.scene === "non-standard-contract-risk-review") {
+    return createContractRiskReviewCompatDraftPayload(state);
   }
 
   const factItems = Array.isArray(state?.artifacts?.facts?.items)

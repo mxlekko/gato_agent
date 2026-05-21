@@ -1,0 +1,295 @@
+apiVersion: agent.platform/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: document-structured-review
+  version: v1
+  title: Document Structured Review
+  status: draft
+spec:
+  description: >
+    Template for single-document review workflows that validate request
+    parameters, extract readable document text, load prompt and schema assets,
+    draft a JSON payload with a project LLM, validate it, and return a stable
+    result envelope.
+  compatibleScenes:
+    - non-standard-contract-risk-review
+  sceneCreation:
+    allowNewScenes: true
+  engine:
+    type: langgraph-stategraph
+    runtimeRef: langgraph
+  stateSlices:
+    - id: request
+      required: true
+      description: normalized inbound request and uploaded document metadata
+    - id: runtime
+      required: true
+      description: request_id, trace_id, route plan, and execution metadata
+    - id: workflow_contract
+      required: true
+      description: merged template contract and scene-level workflow binding
+    - id: document
+      required: true
+      description: extracted document text and parser warnings
+    - id: references
+      required: true
+      description: prompt and output schema assets
+    - id: draft
+      required: false
+      description: structured review draft payload
+    - id: validation
+      required: false
+      description: schema validation result
+    - id: result
+      required: false
+      description: final success or business failure payload
+    - id: error
+      required: false
+      description: normalized runtime error for failure path handling
+  phases:
+    - id: bootstrap
+      description: initialize runtime context and workflow envelope
+    - id: contract
+      description: load template contract and workflow metadata
+    - id: policy
+      description: input validation and authorization checks
+    - id: extraction
+      description: extract readable document text
+    - id: reference
+      description: load prompt and output schema
+    - id: generation
+      description: generate structured JSON
+    - id: validation
+      description: validate structured output
+    - id: finalize
+      description: finalize response
+    - id: observe
+      description: emit trace and audit records
+  nodes:
+    - id: bootstrap_runtime
+      phase: bootstrap
+      category: system
+      handlerRef: platform.node.bootstrap_runtime
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - request.raw
+      outputs:
+        - runtime.request_id
+        - runtime.trace_id
+      allowedConfig:
+        - timeoutMs
+    - id: load_workflow_contract
+      phase: contract
+      category: system
+      handlerRef: platform.node.load_workflow_contract
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - runtime.request_id
+        - request.scene
+      outputs:
+        - workflow_contract.template_ref
+        - workflow_contract.scene_ref
+        - workflow_contract.output_schema_ref
+      allowedConfig:
+        - timeoutMs
+    - id: validate_input
+      phase: policy
+      category: validation
+      handlerRef: platform.node.validate_input
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - request.biz_params
+        - workflow_contract.input_contract
+      outputs:
+        - request.normalized
+      allowedConfig:
+        - timeoutMs
+    - id: authorize_scope
+      phase: policy
+      category: policy
+      handlerRef: platform.node.authorize_scope
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - request.normalized
+        - workflow_contract.policy_profile
+      outputs:
+        - policy.scope
+        - policy.allowed_fields
+      allowedConfig:
+        - timeoutMs
+    - id: extract_contract_document
+      phase: extraction
+      category: document
+      handlerRef: platform.node.extract_contract_document
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - request.normalized
+      outputs:
+        - document.text
+        - document.fileName
+        - document.sourceType
+        - document.warnings
+      allowedConfig:
+        - timeoutMs
+    - id: load_reference_bundle
+      phase: reference
+      category: asset
+      handlerRef: platform.node.load_reference_bundle
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: true
+      inputs:
+        - workflow_contract.reference_bundle
+      outputs:
+        - references.prompt
+        - references.output_schema
+      allowedConfig:
+        - enabled
+        - timeoutMs
+        - assetRefs
+    - id: draft_business_output
+      phase: generation
+      category: llm
+      handlerRef: platform.node.draft_business_output
+      toolRole: advisory_llm
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: true
+      inputs:
+        - document
+        - references.prompt
+        - references.output_schema
+      outputs:
+        - draft.payload
+      allowedConfig:
+        - timeoutMs
+        - retry
+        - toolRole
+        - promptRef
+    - id: validate_output
+      phase: validation
+      category: validation
+      handlerRef: platform.node.validate_output
+      toolRole: output_validator
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: true
+      inputs:
+        - draft.payload
+        - references.output_schema
+      outputs:
+        - validation.status
+        - validation.payload
+        - validation.error
+      allowedConfig:
+        - timeoutMs
+        - retry
+        - toolRole
+    - id: finalize_result
+      phase: finalize
+      category: finalize
+      handlerRef: platform.node.finalize_result
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - validation.payload
+        - validation.status
+        - error
+      outputs:
+        - result
+      allowedConfig:
+        - timeoutMs
+    - id: observe_run
+      phase: observe
+      category: observe
+      handlerRef: platform.node.observe_run
+      required: true
+      defaultEnabled: true
+      skipAllowed: false
+      reorderable: false
+      replaceable: false
+      inputs:
+        - runtime
+        - request
+        - result
+        - error
+      outputs:
+        - runtime.observed
+      allowedConfig:
+        - timeoutMs
+  edges:
+    - from: bootstrap_runtime
+      to: load_workflow_contract
+    - from: load_workflow_contract
+      to: validate_input
+    - from: validate_input
+      to: authorize_scope
+    - from: authorize_scope
+      to: extract_contract_document
+    - from: extract_contract_document
+      to: load_reference_bundle
+    - from: load_reference_bundle
+      to: draft_business_output
+    - from: draft_business_output
+      to: validate_output
+    - from: validate_output
+      to: finalize_result
+    - from: finalize_result
+      to: observe_run
+  conditionalEdges:
+    - from: authorize_scope
+      when: "policy.denied == true"
+      to: finalize_result
+      description: stop early when authorization fails
+    - from: any
+      when: "error != null"
+      to: finalize_result
+      description: normalize fatal node errors into a standard failure result
+  constraints:
+    entryNode: bootstrap_runtime
+    exitNode: observe_run
+    protectedNodes:
+      - bootstrap_runtime
+      - load_workflow_contract
+      - validate_input
+      - authorize_scope
+      - extract_contract_document
+      - load_reference_bundle
+      - validate_output
+      - finalize_result
+      - observe_run
+    maxRepairLoops: 0
+    allowCrossPhaseReorder: false
+    allowArbitraryNodeInsertion: false
+    compatibilityNotes:
+      - this template extracts document text before LLM generation
+      - draft output should return a JSON object that matches the scene schema

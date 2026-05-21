@@ -26,10 +26,9 @@ Content-Type: application/json
 联调示例：
 
 ```text
-http://192.168.9.162:3100/api/agent/run
+http://192.168.9.163/api/agent/run
 ```
 
-当前文档中的联调地址按内网调用地址编写；如果后续网关地址变化，请统一替换为新的内网服务地址。
 
 ## 3. 请求参数
 
@@ -202,15 +201,16 @@ HTTP `400`
 - 鉴权失败
 - 固定配置错误
 
-#### 4) 上游模型超时
+#### 4) 上游模型或内部工具调用超时
 
 可能返回：
 
 - HTTP `504`
-- 错误码 `RUNTIME_TIMEOUT`
+- 错误码 `MODEL_TIMEOUT`：项目 LLM 调用超时
+- 错误码 `RUNTIME_TIMEOUT`：内部 HTTP 工具调用超时，例如结构化校验工具超时
 - `retryable=true`
 
-当前场景内部模型超时时间为 `30000ms`。建议调用方客户端超时时间设置为 `35s` 到 `40s`。
+当前场景项目 LLM 默认超时时间为 `30000ms`，结构化校验工具调用超时时间也为 `30000ms`。建议调用方客户端超时时间设置为 `65s` 到 `75s`，避免服务端仍在处理时客户端过早断开。
 
 ## 6. HTTP 状态码说明
 
@@ -231,7 +231,7 @@ HTTP `400`
 ## 8. `curl` 调用示例
 
 ```bash
-curl -sS -X POST http://192.168.9.162:3100/api/agent/run \
+curl -sS -X POST http://192.168.9.163/api/agent/run \
   -H 'Content-Type: application/json' \
   -d '{
     "scene": "payment-info-split",

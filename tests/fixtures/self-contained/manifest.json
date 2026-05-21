@@ -35,6 +35,19 @@
       }
     },
     {
+      "id": "non-standard-contract-risk-review.smoke",
+      "scene": "non-standard-contract-risk-review",
+      "route": "POST /api/agent/run",
+      "requestFile": "non-standard-contract-risk-review.smoke.request.json",
+      "expectation": {
+        "type": "success",
+        "requiredDataFields": [
+          "data.approvalAdvice",
+          "data.riskPoints"
+        ]
+      }
+    },
+    {
       "id": "sales-opportunity-advisor.smoke",
       "scene": "sales-opportunity-advisor",
       "route": "POST /api/agent/run",

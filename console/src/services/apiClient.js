@@ -1,4 +1,4 @@
-import { requestJson } from "./httpClient";
+import { requestFormData, requestJson } from "./httpClient";
 
 function buildQueryString(params = {}) {
   const query = new URLSearchParams();
@@ -123,6 +123,9 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify(body)
     });
+  },
+  runAgentFormData(formData) {
+    return requestFormData("/api/agent/run", formData);
   },
   listRuns() {
     return requestJson("/api/console/runs");
